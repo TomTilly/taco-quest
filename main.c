@@ -194,12 +194,18 @@ int32_t main (int argc, char** argv) {
     for (int32_t y = 0; y < level.height; y++) {
         for (int32_t x = 0; x < level.width; x++) {
             if (x == 0 || x == level.width - 1) {
-                Cell wall = {CELL_TYPE_WALL};
+                Cell wall = {
+                    .type = CELL_TYPE_WALL,
+                    .data = {}
+                };
                 level_set_cell(&level, x, y, &wall);
             }
 
             if (y == 0 || y == level.height - 1) {
-                Cell wall = {CELL_TYPE_WALL};
+                Cell wall = {
+                    .type = CELL_TYPE_WALL,
+                    .data = {}
+                };
                 level_set_cell(&level, x, y, &wall);
             }
         }
