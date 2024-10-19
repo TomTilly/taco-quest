@@ -8,7 +8,7 @@
 #define LEVEL_WIDTH 20
 #define LEVEL_HEIGHT 15
 #define CELL_SIZE 32
-#define GAME_SIMULATE_TIME_INTERVAL_US 1000000
+#define GAME_SIMULATE_TIME_INTERVAL_US 500000
 
 typedef enum {
     CELL_TYPE_EMPTY,
@@ -57,6 +57,12 @@ typedef struct {
     int32_t height;
 } Level;
 
+typedef struct {
+    Cell cell;
+    int32_t x;
+    int32_t y;
+} FoundSnakeHead;
+
 void adjacent_cell(Direction direction, int32_t* x, int32_t* y) {
     switch(direction) {
     case DIRECTION_NONE:
@@ -74,6 +80,23 @@ void adjacent_cell(Direction direction, int32_t* x, int32_t* y) {
         (*x)--;
         break;
     }
+}
+
+Direction opposite_direction(Direction direction) {
+    switch(direction) {
+    case DIRECTION_NONE:
+        break;
+    case DIRECTION_NORTH:
+        return DIRECTION_SOUTH;
+    case DIRECTION_EAST:
+        return DIRECTION_WEST;
+    case DIRECTION_SOUTH:
+        return DIRECTION_NORTH;
+    case DIRECTION_WEST:
+        return DIRECTION_EAST;
+    }
+
+    return DIRECTION_NONE;
 }
 
 bool level_init(Level* level, int32_t width, int32_t height) {
@@ -128,6 +151,23 @@ bool level_get_cell(Level* level, int32_t x, int32_t y, Cell* value) {
     return true;
 }
 
+FoundSnakeHead find_snake_head(Level* level) {
+    FoundSnakeHead result = {};
+    for (int32_t y = 0; y < level->height; y++) {
+        for (int32_t x = 0; x < level->width; x++) {
+            Cell cell = {};
+            if (level_get_cell(level, x, y, &cell) &&
+                cell.type == CELL_TYPE_SNAKE_HEAD) {
+                result.cell = cell;
+                result.x = x;
+                result.y = y;
+                return result;
+            }
+        }
+    }
+    return result;
+}
+
 uint64_t microseconds_between_timestamps(struct timespec* previous, struct timespec* current) {
     return (current->tv_sec - previous->tv_sec) * 1000000LL +
            ((current->tv_nsec - previous->tv_nsec)) / 1000;
@@ -145,8 +185,10 @@ int32_t main (int argc, char** argv) {
         return 1;
     }
 
+    int32_t window_width = 1280;
+    int32_t window_height = 1024;
     const char* title = "Taco Quest";
-    SDL_Window* window = SDL_CreateWindow(title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 800, 600, 0);
+    SDL_Window* window = SDL_CreateWindow(title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, window_width, window_height, 0);
     if (window == NULL) {
         printf("SDL_CreateWindow failed %s\n", SDL_GetError());
         return 1;
@@ -178,11 +220,12 @@ int32_t main (int argc, char** argv) {
             }
         };
         level_set_cell(&level, 6, 3, &snake_body);
+        level_set_cell(&level, 5, 3, &snake_body);
 
         Cell snake_tail = {
             .type = CELL_TYPE_SNAKE_TAIL,
         };
-        level_set_cell(&level, 5, 3, &snake_tail);
+        level_set_cell(&level, 4, 3, &snake_tail);
 
         Cell taco = {
             .type = CELL_TYPE_TACO,
@@ -216,6 +259,11 @@ int32_t main (int argc, char** argv) {
 
     int64_t time_since_update_us = 0;
 
+    bool input_move_up = false;
+    bool input_move_left = false;
+    bool input_move_down = false;
+    bool input_move_right = false;
+
     bool quit = false;
     while (!quit) {
         // Calculate how much time has elapsed (in microseconds).
@@ -227,60 +275,149 @@ int32_t main (int argc, char** argv) {
         // Handle events, such as input or window changes.
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_QUIT) {
+            switch (event.type) {
+            case SDL_QUIT:
                 quit = true;
                 break;
+            case SDL_KEYDOWN:
+                switch (event.key.keysym.sym) {
+                case SDLK_w:
+                    input_move_up = true;
+                    break;
+                case SDLK_a:
+                    input_move_left = true;
+                    break;
+                case SDLK_s:
+                    input_move_down = true;
+                    break;
+                case SDLK_d:
+                    input_move_right = true;
+                    break;
+                }
+                break;
+            case SDL_KEYUP:
+                switch (event.key.keysym.sym) {
+                case SDLK_w:
+                    input_move_up = false;
+                    break;
+                case SDLK_a:
+                    input_move_left = false;
+                    break;
+                case SDLK_s:
+                    input_move_down = false;
+                    break;
+                case SDLK_d:
+                    input_move_right = false;
+                    break;
+                default:
+                    break;
+                }
+                break;
+            }
+        }
+
+        if (input_move_up) {
+            FoundSnakeHead found_snake_head = find_snake_head(&level);
+            if (found_snake_head.cell.type == CELL_TYPE_SNAKE_HEAD &&
+                found_snake_head.cell.data.snake_head.connected_to !=
+                DIRECTION_NORTH) {
+                found_snake_head.cell.data.snake_head.facing = DIRECTION_NORTH;
+                level_set_cell(&level, found_snake_head.x, found_snake_head.y, &found_snake_head.cell);
+            }
+        }
+
+        if (input_move_left) {
+            FoundSnakeHead found_snake_head = find_snake_head(&level);
+            if (found_snake_head.cell.type == CELL_TYPE_SNAKE_HEAD &&
+                found_snake_head.cell.data.snake_head.connected_to !=
+                DIRECTION_WEST) {
+                found_snake_head.cell.data.snake_head.facing = DIRECTION_WEST;
+                level_set_cell(&level, found_snake_head.x, found_snake_head.y, &found_snake_head.cell);
+            }
+        }
+
+        if (input_move_right) {
+            FoundSnakeHead found_snake_head = find_snake_head(&level);
+            if (found_snake_head.cell.type == CELL_TYPE_SNAKE_HEAD &&
+                found_snake_head.cell.data.snake_head.connected_to !=
+                DIRECTION_EAST) {
+                found_snake_head.cell.data.snake_head.facing = DIRECTION_EAST;
+                level_set_cell(&level, found_snake_head.x, found_snake_head.y, &found_snake_head.cell);
+            }
+        }
+
+        if (input_move_down) {
+            FoundSnakeHead found_snake_head = find_snake_head(&level);
+            if (found_snake_head.cell.type == CELL_TYPE_SNAKE_HEAD &&
+                found_snake_head.cell.data.snake_head.connected_to !=
+                DIRECTION_SOUTH) {
+                found_snake_head.cell.data.snake_head.facing = DIRECTION_SOUTH;
+                level_set_cell(&level, found_snake_head.x, found_snake_head.y, &found_snake_head.cell);
             }
         }
 
         // Update the game state if a tick has passed.
         if (time_since_update_us >= GAME_SIMULATE_TIME_INTERVAL_US) {
             time_since_update_us -= GAME_SIMULATE_TIME_INTERVAL_US;
-
-            // Find the snake body.
-            int32_t snake_head_x = 0;
-            int32_t snake_head_y = 0;
-            Cell snake_head = {};
-            for (int32_t y = 0; y < level.height; y++) {
-                for (int32_t x = 0; x < level.width; x++) {
-                    Cell cell = {};
-                    if (level_get_cell(&level, x, y, &cell) &&
-                        cell.type == CELL_TYPE_SNAKE_HEAD) {
-                        snake_head = cell;
-                        snake_head_x = x;
-                        snake_head_y = y;
-                        break;
-                    }
-                }
-                if (snake_head.type != CELL_TYPE_EMPTY) {
-                    break;
-                }
-            }
+            FoundSnakeHead found_snake_head = find_snake_head(&level);
 
             // If we found the snake head, move it in the direction it is facing.
-            if (snake_head.type != CELL_TYPE_EMPTY) {
-                int32_t next_snake_head_x = snake_head_x;
-                int32_t next_snake_head_y = snake_head_y;
-                adjacent_cell(snake_head.data.snake_head.facing, &next_snake_head_x, &next_snake_head_y);
+            if (found_snake_head.cell.type == CELL_TYPE_SNAKE_HEAD) {
+                int32_t new_cell_x = found_snake_head.x;
+                int32_t new_cell_y = found_snake_head.y;
+                adjacent_cell(found_snake_head.cell.data.snake_head.facing, &new_cell_x, &new_cell_y);
 
-                if (next_snake_head_x >= 0 && next_snake_head_x < level.width &&
-                    next_snake_head_y >= 0 && next_snake_head_y < level.height) {
-                    // TODO: check for walls.
-                    level_set_cell(&level, next_snake_head_x, next_snake_head_y, &snake_head);
+                Cell new_cell = {};
+                level_get_cell(&level, new_cell_x, new_cell_y, &new_cell);
 
-                    int32_t cell_x = snake_head_x;
-                    int32_t cell_y = snake_head_y;
-                    Cell cell = {};
-                    do {
-                        int32_t prev_cell_x = cell_x;
-                        int32_t prev_cell_y = cell_y;
-                        adjacent_cell(snake_head.data.snake_head.connected_to, &cell_x, &cell_y);
-                        level_get_cell(&level, cell_x, cell_y, &cell);
-                        level_set_cell(&level, prev_cell_x, prev_cell_y, &cell);
-                    } while (cell.type != CELL_TYPE_SNAKE_TAIL);
-                    // TODO: Unless we've eaten a taco, we will move the tail.
-                    Cell empty_cell = {};
-                    level_set_cell(&level, cell_x, cell_y, &empty_cell);
+                // TODO: Check for walls and the snake's own body.
+                if (new_cell_x >= 0 && new_cell_x < level.width &&
+                    new_cell_y >= 0 && new_cell_y < level.height &&
+                    (new_cell.type == CELL_TYPE_EMPTY ||
+                     new_cell.type == CELL_TYPE_TACO)) {
+                    int32_t old_cell_x = found_snake_head.x;
+                    int32_t old_cell_y = found_snake_head.y;
+                    Cell old_cell = found_snake_head.cell;
+
+                    // Save connected to to update other snake body parts.
+                    Direction connected_to = found_snake_head.cell.data.snake_head.connected_to;
+
+                    // Update the snake's connected to based on the direction we've moved.
+                    old_cell.data.snake_head.connected_to = opposite_direction(found_snake_head.cell.data.snake_head.facing);
+
+                    while (true) {
+                        // Write the new cell with the old cell's data.
+                        level_set_cell(&level, new_cell_x, new_cell_y, &old_cell);
+
+                        // Iterate over the snake by updating the new cell location to the next snake's body part.
+                        new_cell_x = old_cell_x;
+                        new_cell_y = old_cell_y;
+
+                        // Update the old cell location to the next snake's body part.
+                        if (old_cell.type == CELL_TYPE_SNAKE_HEAD ||
+                            old_cell.type == CELL_TYPE_SNAKE_BODY) {
+                            adjacent_cell(connected_to, &old_cell_x, &old_cell_y);
+                        } else {
+                            Cell empty_cell = {};
+                            level_set_cell(&level, old_cell_x, old_cell_y, &empty_cell);
+                            break;
+                        }
+
+                        // Get the old cell's data.
+                        level_get_cell(&level, old_cell_x, old_cell_y, &old_cell);
+
+                        // Save the direction we are coming from, and update the old cell's
+                        // connected_to based on the saved direction from this iteration.
+                        if (old_cell.type == CELL_TYPE_SNAKE_HEAD) {
+                            Direction tmp = connected_to;
+                            connected_to = old_cell.data.snake_head.connected_to;
+                            old_cell.data.snake_head.connected_to = tmp;
+                        } else if (old_cell.type == CELL_TYPE_SNAKE_BODY) {
+                            Direction tmp = connected_to;
+                            connected_to = old_cell.data.snake_body.connected_to;
+                            old_cell.data.snake_body.connected_to = tmp;
+                        }
+                    }
                 }
             }
         }
@@ -334,7 +471,7 @@ int32_t main (int argc, char** argv) {
 
                 SDL_Rect cell_rect = {};
                 cell_rect.x = x * CELL_SIZE;
-                cell_rect.y = y * CELL_SIZE;
+                cell_rect.y = (window_height - CELL_SIZE) - y * CELL_SIZE;
                 cell_rect.w = CELL_SIZE;
                 cell_rect.h = CELL_SIZE;
 
