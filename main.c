@@ -1,6 +1,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <time.h>
 
 #include "SDL2/SDL.h"
@@ -8,7 +9,7 @@
 #define LEVEL_WIDTH 20
 #define LEVEL_HEIGHT 15
 #define CELL_SIZE 32
-#define GAME_SIMULATE_TIME_INTERVAL_US 500000
+#define GAME_SIMULATE_TIME_INTERVAL_US 200000
 
 typedef enum {
     CELL_TYPE_EMPTY,
@@ -36,14 +37,9 @@ typedef struct {
     Direction connected_to;
 } CellSnakeBody;
 
-typedef struct {
-    int32_t time_to_live_ms;
-} CellTaco;
-
 typedef union {
     CellSnakeHead snake_head;
     CellSnakeBody snake_body;
-    CellTaco taco;
 } CellData;
 
 typedef struct {
@@ -61,7 +57,7 @@ typedef struct {
     Cell cell;
     int32_t x;
     int32_t y;
-} FoundSnakeHead;
+} FoundCell;
 
 void adjacent_cell(Direction direction, int32_t* x, int32_t* y) {
     switch(direction) {
@@ -151,13 +147,13 @@ bool level_get_cell(Level* level, int32_t x, int32_t y, Cell* value) {
     return true;
 }
 
-FoundSnakeHead find_snake_head(Level* level) {
-    FoundSnakeHead result = {};
+FoundCell find_cell(Level* level, CellType cell_type) {
+    FoundCell result = {};
     for (int32_t y = 0; y < level->height; y++) {
         for (int32_t x = 0; x < level->width; x++) {
             Cell cell = {};
             if (level_get_cell(level, x, y, &cell) &&
-                cell.type == CELL_TYPE_SNAKE_HEAD) {
+                cell.type == cell_type) {
                 result.cell = cell;
                 result.x = x;
                 result.y = y;
@@ -229,9 +225,13 @@ int32_t main (int argc, char** argv) {
 
         Cell taco = {
             .type = CELL_TYPE_TACO,
-            .data = { .taco = { .time_to_live_ms = 10000 } }
+            .data = {}
         };
         level_set_cell(&level, 9, 5, &taco);
+        level_set_cell(&level, 14, 3, &taco);
+        level_set_cell(&level, 15, 9, &taco);
+        level_set_cell(&level, 2, 2, &taco);
+        level_set_cell(&level, 8, 10, &taco);
     }
 
     for (int32_t y = 0; y < level.height; y++) {
@@ -256,6 +256,9 @@ int32_t main (int argc, char** argv) {
 
     struct timespec last_frame_timestamp = {};
     timespec_get(&last_frame_timestamp, TIME_UTC);
+
+    // Seed random with time.
+    srand((uint32_t)(time(NULL)));
 
     int64_t time_since_update_us = 0;
 
@@ -317,7 +320,7 @@ int32_t main (int argc, char** argv) {
         }
 
         if (input_move_up) {
-            FoundSnakeHead found_snake_head = find_snake_head(&level);
+            FoundCell found_snake_head = find_cell(&level, CELL_TYPE_SNAKE_HEAD);
             if (found_snake_head.cell.type == CELL_TYPE_SNAKE_HEAD &&
                 found_snake_head.cell.data.snake_head.connected_to !=
                 DIRECTION_NORTH) {
@@ -327,7 +330,7 @@ int32_t main (int argc, char** argv) {
         }
 
         if (input_move_left) {
-            FoundSnakeHead found_snake_head = find_snake_head(&level);
+            FoundCell found_snake_head = find_cell(&level, CELL_TYPE_SNAKE_HEAD);
             if (found_snake_head.cell.type == CELL_TYPE_SNAKE_HEAD &&
                 found_snake_head.cell.data.snake_head.connected_to !=
                 DIRECTION_WEST) {
@@ -337,7 +340,7 @@ int32_t main (int argc, char** argv) {
         }
 
         if (input_move_right) {
-            FoundSnakeHead found_snake_head = find_snake_head(&level);
+            FoundCell found_snake_head = find_cell(&level, CELL_TYPE_SNAKE_HEAD);
             if (found_snake_head.cell.type == CELL_TYPE_SNAKE_HEAD &&
                 found_snake_head.cell.data.snake_head.connected_to !=
                 DIRECTION_EAST) {
@@ -347,7 +350,7 @@ int32_t main (int argc, char** argv) {
         }
 
         if (input_move_down) {
-            FoundSnakeHead found_snake_head = find_snake_head(&level);
+            FoundCell found_snake_head = find_cell(&level, CELL_TYPE_SNAKE_HEAD);
             if (found_snake_head.cell.type == CELL_TYPE_SNAKE_HEAD &&
                 found_snake_head.cell.data.snake_head.connected_to !=
                 DIRECTION_SOUTH) {
@@ -359,7 +362,7 @@ int32_t main (int argc, char** argv) {
         // Update the game state if a tick has passed.
         if (time_since_update_us >= GAME_SIMULATE_TIME_INTERVAL_US) {
             time_since_update_us -= GAME_SIMULATE_TIME_INTERVAL_US;
-            FoundSnakeHead found_snake_head = find_snake_head(&level);
+            FoundCell found_snake_head = find_cell(&level, CELL_TYPE_SNAKE_HEAD);
 
             // If we found the snake head, move it in the direction it is facing.
             if (found_snake_head.cell.type == CELL_TYPE_SNAKE_HEAD) {
@@ -417,7 +420,38 @@ int32_t main (int argc, char** argv) {
                             connected_to = old_cell.data.snake_body.connected_to;
                             old_cell.data.snake_body.connected_to = tmp;
                         }
+
+                        // If we're at the tail, and we ate a taco
+                        if (old_cell.type == CELL_TYPE_SNAKE_TAIL &&
+                            new_cell.type == CELL_TYPE_TACO) {
+                            old_cell.type = CELL_TYPE_SNAKE_BODY;
+                            old_cell.data.snake_body.connected_to = connected_to;
+                            level_set_cell(&level, new_cell_x, new_cell_y, &old_cell);
+                            break;
+                        }
                     }
+                }
+            }
+
+            // If there are no tacos on the map, generate one in an empty cell.
+            FoundCell found_taco = find_cell(&level, CELL_TYPE_TACO);
+            if (found_taco.cell.type == CELL_TYPE_EMPTY) {
+                int32_t attempts = 0;
+                while (attempts < 10) {
+                    int taco_x = rand() % level.width;
+                    int taco_y = rand() % level.height;
+
+                    Cell current_cell = {};
+                    level_get_cell(&level, taco_x, taco_y, &current_cell);
+                    if (current_cell.type == CELL_TYPE_EMPTY) {
+                        Cell new_taco_cell = {
+                            .type = CELL_TYPE_TACO,
+                            .data = {}
+                        };
+                        level_set_cell(&level, taco_x, taco_y, &new_taco_cell);
+                        break;
+                    }
+                    attempts++;
                 }
             }
         }
@@ -486,10 +520,8 @@ int32_t main (int argc, char** argv) {
         SDL_Delay(0);
     }
 
-
     level_destroy(&level);
     SDL_DestroyWindow(window);
     SDL_Quit();
-
     return 0;
 }
