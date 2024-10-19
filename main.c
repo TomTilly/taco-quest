@@ -6,10 +6,9 @@
 
 #include "SDL2/SDL.h"
 
-#define LEVEL_WIDTH 20
-#define LEVEL_HEIGHT 15
-#define CELL_SIZE 32
-#define GAME_SIMULATE_TIME_INTERVAL_US 200000
+#define LEVEL_WIDTH 24
+#define LEVEL_HEIGHT 20
+#define GAME_SIMULATE_TIME_INTERVAL_US 150000
 
 typedef enum {
     CELL_TYPE_EMPTY,
@@ -189,6 +188,8 @@ int32_t main (int argc, char** argv) {
         printf("SDL_CreateWindow failed %s\n", SDL_GetError());
         return 1;
     }
+
+    int32_t cell_size = window_height / LEVEL_HEIGHT;
 
     SDL_Surface* window_surface = SDL_GetWindowSurface(window);
 
@@ -427,31 +428,28 @@ int32_t main (int argc, char** argv) {
                             old_cell.type = CELL_TYPE_SNAKE_BODY;
                             old_cell.data.snake_body.connected_to = connected_to;
                             level_set_cell(&level, new_cell_x, new_cell_y, &old_cell);
+
+                            // If there are no tacos on the map, generate one in an empty cell.
+                            int32_t attempts = 0;
+                            while (attempts < 10) {
+                                int taco_x = rand() % level.width;
+                                int taco_y = rand() % level.height;
+
+                                Cell current_cell = {};
+                                level_get_cell(&level, taco_x, taco_y, &current_cell);
+                                if (current_cell.type == CELL_TYPE_EMPTY) {
+                                    Cell new_taco_cell = {
+                                        .type = CELL_TYPE_TACO,
+                                        .data = {}
+                                    };
+                                    level_set_cell(&level, taco_x, taco_y, &new_taco_cell);
+                                    break;
+                                }
+                                attempts++;
+                            }
                             break;
                         }
                     }
-                }
-            }
-
-            // If there are no tacos on the map, generate one in an empty cell.
-            FoundCell found_taco = find_cell(&level, CELL_TYPE_TACO);
-            if (found_taco.cell.type == CELL_TYPE_EMPTY) {
-                int32_t attempts = 0;
-                while (attempts < 10) {
-                    int taco_x = rand() % level.width;
-                    int taco_y = rand() % level.height;
-
-                    Cell current_cell = {};
-                    level_get_cell(&level, taco_x, taco_y, &current_cell);
-                    if (current_cell.type == CELL_TYPE_EMPTY) {
-                        Cell new_taco_cell = {
-                            .type = CELL_TYPE_TACO,
-                            .data = {}
-                        };
-                        level_set_cell(&level, taco_x, taco_y, &new_taco_cell);
-                        break;
-                    }
-                    attempts++;
                 }
             }
         }
@@ -504,10 +502,10 @@ int32_t main (int argc, char** argv) {
                 }
 
                 SDL_Rect cell_rect = {};
-                cell_rect.x = x * CELL_SIZE;
-                cell_rect.y = (window_height - CELL_SIZE) - y * CELL_SIZE;
-                cell_rect.w = CELL_SIZE;
-                cell_rect.h = CELL_SIZE;
+                cell_rect.x = x * cell_size;
+                cell_rect.y = (window_height - cell_size) - y * cell_size;
+                cell_rect.w = cell_size;
+                cell_rect.h = cell_size;
 
                 SDL_FillRect(window_surface, &cell_rect, rgb);
             }
