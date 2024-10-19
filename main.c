@@ -9,7 +9,7 @@
 
 typedef enum { EMPTY, WALL, SNAKE_HEAD, SNAKE_BODY, TACO } CellType;
 
-typedef struct { 
+typedef struct {
     CellType* cells;
     int32_t width;
     int32_t height;
@@ -57,13 +57,16 @@ bool level_get_cell(Level* level, int32_t x, int32_t y, CellType* value) {
     if (y < 0 || y >= level->width) {
         return false;
     }
-    
+
     int32_t index = y * level->width + x;
     *value = level->cells[index];
     return true;
 }
 
-int32_t main () {
+int32_t main (int argc, char** argv) {
+    (void)(argc);
+    (void)(argv);
+
     printf("hello taco\n");
 
     int rc = SDL_Init(SDL_INIT_EVERYTHING);
@@ -128,7 +131,7 @@ int32_t main () {
                     continue;
                 }
 
-                uint32_t rgb;
+                uint32_t rgb = 0;
 
                 switch (cell_type) {
                     case EMPTY: {

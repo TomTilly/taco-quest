@@ -21,6 +21,7 @@
 *.a
 *.la
 *.lo
+external/*
 
 # Shared objects (inc. Windows DLLs)
 *.dll
@@ -36,6 +37,7 @@
 *.x86_64
 *.hex
 taco-quest
+taco-quest.exe
 
 # Debug files
 *.dSYM/
