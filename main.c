@@ -138,6 +138,8 @@ void snake_turn(Snake* snake, Direction direction) {
             snake->direction = direction;
         }
         break;
+    default:
+        break;
     }
 }
 
