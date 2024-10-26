@@ -11,7 +11,7 @@
 #define LEVEL_WIDTH 24
 #define LEVEL_HEIGHT 20
 #define GAME_SIMULATE_TIME_INTERVAL_US 150000
-#define INITIAL_SNAKE_LEN 15
+#define INITIAL_SNAKE_LEN 3
 
 typedef enum {
     CELL_TYPE_INVALID = -1,
@@ -36,6 +36,7 @@ typedef struct {
 typedef struct {
     SnakeSegment* segments;
     int length;
+    int capacity; // I hate STL
     Direction direction;
 } Snake;
 
@@ -44,6 +45,7 @@ typedef struct {
     int32_t width;
     int32_t height;
     Snake snake;
+    Snake other_snake;
 } Level;
 
 void adjacent_cell(Direction direction, int32_t* x, int32_t* y) {
@@ -82,6 +84,78 @@ Direction opposite_direction(Direction direction) {
     return DIRECTION_NONE;
 }
 
+bool snake_init(Snake* snake, int32_t capacity) {
+    snake->segments = calloc(capacity, sizeof(snake->segments[0]));
+    if (snake->segments == NULL) {
+        return false;
+    }
+    snake->capacity = capacity;
+    return true;
+}
+
+void snake_spawn(Snake* snake, int x, int y, Direction direction) {
+    snake->length = INITIAL_SNAKE_LEN;
+    snake->direction = direction;
+
+    for (int i = 0; i < snake->length; i++) {
+        snake->segments[i].x = x;
+        snake->segments[i].y = y;
+    }
+}
+
+void snake_grow(Snake* snake) {
+    if (snake->length >= snake->capacity) {
+        printf("catastrophic error!\n");
+        return;
+    }
+
+    int last_segment_index = snake->length - 1;
+    int new_segment_index = snake->length;
+    snake->segments[new_segment_index].x = snake->segments[last_segment_index].x;
+    snake->segments[new_segment_index].y = snake->segments[last_segment_index].y;
+    snake->length++;
+}
+
+void snake_turn(Snake* snake, Direction direction) {
+    switch(direction) {
+    case DIRECTION_NORTH:
+        if (snake->direction != DIRECTION_SOUTH) {
+            snake->direction = direction;
+        }
+        break;
+    case DIRECTION_EAST:
+        if (snake->direction != DIRECTION_WEST) {
+            snake->direction = direction;
+        }
+        break;
+    case DIRECTION_SOUTH:
+        if (snake->direction != DIRECTION_NORTH) {
+            snake->direction = direction;
+        }
+        break;
+    case DIRECTION_WEST:
+        if (snake->direction != DIRECTION_EAST) {
+            snake->direction = direction;
+        }
+        break;
+    }
+}
+
+void snake_draw(SDL_Renderer* renderer, Snake* snake, int32_t cell_size) {
+    for (int i = 0; i < snake->length; i++) {
+        SDL_SetRenderDrawColor(renderer, 0, (i == 0) ? 176 : 255, 0, 255);
+
+        SDL_Rect r = {
+            .x = snake->segments[i].x * cell_size,
+            .y = snake->segments[i].y * cell_size,
+            .w = cell_size,
+            .h = cell_size
+        };
+
+        SDL_RenderFillRect(renderer, &r);
+    }
+}
+
 bool level_init(Level* level, int32_t width, int32_t height) {
     size_t size = width * height * sizeof(level->cells[0]);
     level->cells = malloc(size);
@@ -95,22 +169,15 @@ bool level_init(Level* level, int32_t width, int32_t height) {
     level->width = width;
     level->height = height;
 
-    level->snake.segments = calloc(width * height, sizeof(level->snake.segments[0]));
-    if (level->snake.segments == NULL) {
+    int32_t snake_capacity = width * height;
+    if (!snake_init(&level->snake, snake_capacity)) {
+        return false;
+    }
+    if (!snake_init(&level->other_snake, snake_capacity)) {
         return false;
     }
 
     return true;
-}
-
-void spawn_snake(Snake* snake, int x, int y, Direction direction) {
-    snake->length = INITIAL_SNAKE_LEN;
-    snake->direction = direction;
-
-    for (int i = 0; i < snake->length; i++) {
-        snake->segments[i].x = x;
-        snake->segments[i].y = y;
-    }
 }
 
 void level_destroy(Level* level) {
@@ -147,6 +214,70 @@ CellType level_get_cell(Level* level, int32_t x, int32_t y) {
 
     int32_t index = level_get_cell_index(level, x, y);
     return level->cells[index];
+}
+
+void taco_spawn(Level* level) {
+    // If there are no tacos on the map, generate one in an empty cell.
+    int32_t attempts = 0;
+    while (attempts < 10) {
+        int taco_x = rand() % level->width;
+        int taco_y = rand() % level->height;
+
+        CellType cell_type = level_get_cell(level, taco_x, taco_y);
+        if (cell_type == CELL_TYPE_EMPTY) {
+            level_set_cell(level, taco_x, taco_y, CELL_TYPE_TACO);
+            break;
+        }
+        attempts++;
+    }
+}
+
+void snake_update(Snake* snake, Level* level) {
+    int32_t new_snake_x = snake->segments[0].x;
+    int32_t new_snake_y = snake->segments[0].y;
+
+    adjacent_cell(snake->direction,
+                  &new_snake_x,
+                  &new_snake_y);
+
+    CellType cell_type = level_get_cell(level, new_snake_x, new_snake_y);
+
+    bool collide_with_snake = false;
+
+    // TODO: This simplifies when we have an array of snakes.
+    for (int i = 0; i < level->snake.length; i++) {
+        SnakeSegment* segment = level->snake.segments + i;
+        if (segment->x == new_snake_x &&
+            segment->y == new_snake_y) {
+            collide_with_snake = true;
+            break;
+        }
+    }
+    for (int i = 0; i < level->other_snake.length; i++) {
+        SnakeSegment* segment = level->other_snake.segments + i;
+        if (segment->x == new_snake_x &&
+            segment->y == new_snake_y) {
+            collide_with_snake = true;
+            break;
+        }
+    }
+
+    if ((cell_type == CELL_TYPE_EMPTY || cell_type == CELL_TYPE_TACO) &&
+        !collide_with_snake) {
+        for (int i = snake->length; i >= 1; i--) {
+            snake->segments[i].x = snake->segments[i - 1].x;
+            snake->segments[i].y = snake->segments[i - 1].y;
+        }
+
+        snake->segments[0].x = new_snake_x;
+        snake->segments[0].y = new_snake_y;
+
+        if (cell_type == CELL_TYPE_TACO) {
+            level_set_cell(level, new_snake_x, new_snake_y, CELL_TYPE_EMPTY);
+            snake_grow(snake);
+            taco_spawn(level);
+        }
+    }
 }
 
 uint64_t microseconds_between_timestamps(struct timespec* previous, struct timespec* current) {
@@ -196,8 +327,13 @@ int32_t main (int argc, char** argv) {
     level_set_cell(&level, 2, 2, CELL_TYPE_TACO);
     level_set_cell(&level, 8, 10, CELL_TYPE_TACO);
 
-    spawn_snake(&level.snake,
-                level.width / 2,
+    snake_spawn(&level.snake,
+                level.width / 3,
+                level.height / 2,
+                DIRECTION_EAST);
+
+    snake_spawn(&level.other_snake,
+                (level.width / 3) + (level.width / 3),
                 level.height / 2,
                 DIRECTION_EAST);
 
@@ -225,6 +361,11 @@ int32_t main (int argc, char** argv) {
     bool input_move_left = false;
     bool input_move_down = false;
     bool input_move_right = false;
+
+    bool other_input_move_up = false;
+    bool other_input_move_left = false;
+    bool other_input_move_down = false;
+    bool other_input_move_right = false;
 
     bool quit = false;
     while (!quit) {
@@ -255,6 +396,18 @@ int32_t main (int argc, char** argv) {
                 case SDLK_d:
                     input_move_right = true;
                     break;
+                case SDLK_UP:
+                    other_input_move_up = true;
+                    break;
+                case SDLK_LEFT:
+                    other_input_move_left = true;
+                    break;
+                case SDLK_DOWN:
+                    other_input_move_down = true;
+                    break;
+                case SDLK_RIGHT:
+                    other_input_move_right = true;
+                    break;
                 }
                 break;
             case SDL_KEYUP:
@@ -271,6 +424,18 @@ int32_t main (int argc, char** argv) {
                 case SDLK_d:
                     input_move_right = false;
                     break;
+                case SDLK_UP:
+                    other_input_move_up = false;
+                    break;
+                case SDLK_LEFT:
+                    other_input_move_left = false;
+                    break;
+                case SDLK_DOWN:
+                    other_input_move_down = false;
+                    break;
+                case SDLK_RIGHT:
+                    other_input_move_right = false;
+                    break;
                 default:
                     break;
                 }
@@ -278,35 +443,43 @@ int32_t main (int argc, char** argv) {
             }
         }
 
-        // TODO: move snake
         if (input_move_up) {
-            level.snake.direction = DIRECTION_NORTH;
+            snake_turn(&level.snake, DIRECTION_NORTH);
         }
 
         if (input_move_left) {
-            level.snake.direction = DIRECTION_WEST;
+            snake_turn(&level.snake, DIRECTION_WEST);
         }
 
         if (input_move_right) {
-            level.snake.direction = DIRECTION_EAST;
+            snake_turn(&level.snake, DIRECTION_EAST);
         }
 
         if (input_move_down) {
-            level.snake.direction = DIRECTION_SOUTH;
+            snake_turn(&level.snake, DIRECTION_SOUTH);
+        }
+
+        if (other_input_move_up) {
+            snake_turn(&level.other_snake, DIRECTION_NORTH);
+        }
+
+        if (other_input_move_left) {
+            snake_turn(&level.other_snake, DIRECTION_WEST);
+        }
+
+        if (other_input_move_right) {
+            snake_turn(&level.other_snake, DIRECTION_EAST);
+        }
+
+        if (other_input_move_down) {
+            snake_turn(&level.other_snake, DIRECTION_SOUTH);
         }
 
         // Update the game state if a tick has passed.
         if (time_since_update_us >= GAME_SIMULATE_TIME_INTERVAL_US) {
             time_since_update_us -= GAME_SIMULATE_TIME_INTERVAL_US;
-
-            for (int i = level.snake.length; i >= 1; i--) {
-                level.snake.segments[i].x = level.snake.segments[i - 1].x;
-                level.snake.segments[i].y = level.snake.segments[i - 1].y;
-            }
-
-            adjacent_cell(level.snake.direction,
-                          &level.snake.segments[0].x,
-                          &level.snake.segments[0].y);
+            snake_update(&level.snake, &level);
+            snake_update(&level.other_snake, &level);
         }
 
         // Clear window
@@ -350,21 +523,8 @@ int32_t main (int argc, char** argv) {
             }
         }
 
-        SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
-
-        for (int i = 0; i < level.snake.length; i++) {
-            SDL_Rect r = {
-                .x = level.snake.segments[i].x * cell_size,
-                .y = level.snake.segments[i].y * cell_size,
-                .w = cell_size,
-                .h = cell_size
-            };
-
-            // *ptr -> the contents of ptr
-            // &var -> the address of var
-
-            SDL_RenderFillRect(renderer, &r);
-        }
+        snake_draw(renderer, &level.snake, cell_size);
+        snake_draw(renderer, &level.other_snake, cell_size);
 
         // Render updates
         SDL_RenderPresent(renderer);
