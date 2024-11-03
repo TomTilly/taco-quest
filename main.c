@@ -35,6 +35,17 @@ typedef enum {
     DIRECTION_WEST
 } Direction;
 
+typedef uint8_t SnakeAction;
+
+// Acts as a bitfield for actions to apply to a snake.
+typedef enum {
+    SNAKE_ACTION_NONE,                                // 0
+    SNAKE_ACTION_FACE_NORTH = (1 << DIRECTION_NORTH), // 1
+    SNAKE_ACTION_FACE_EAST = (1 << DIRECTION_EAST),   // 2
+    SNAKE_ACTION_FACE_SOUTH = (1 << DIRECTION_SOUTH), // 4
+    SNAKE_ACTION_FACE_WEST = (1 << DIRECTION_WEST),   // 8
+} SnakeActionFlags;
+
 typedef struct {
     int x;
     int y;
@@ -51,9 +62,14 @@ typedef struct {
     CellType* cells;
     int32_t width;
     int32_t height;
+} Level;
+
+typedef struct {
+    Level level;
+    // TODO: Convert to array so we can all play !
     Snake snake;
     Snake other_snake;
-} Level;
+} Game;
 
 void adjacent_cell(Direction direction, int32_t* x, int32_t* y) {
     switch(direction) {
@@ -165,6 +181,11 @@ void snake_draw(SDL_Renderer* renderer, Snake* snake, int32_t cell_size) {
     }
 }
 
+void snake_destroy(Snake* snake) {
+    free(snake->segments);
+    memset(snake, 0, sizeof(*snake));
+}
+
 bool level_init(Level* level, int32_t width, int32_t height) {
     size_t size = width * height * sizeof(level->cells[0]);
     level->cells = malloc(size);
@@ -177,14 +198,6 @@ bool level_init(Level* level, int32_t width, int32_t height) {
 
     level->width = width;
     level->height = height;
-
-    int32_t snake_capacity = width * height;
-    if (!snake_init(&level->snake, snake_capacity)) {
-        return false;
-    }
-    if (!snake_init(&level->other_snake, snake_capacity)) {
-        return false;
-    }
 
     return true;
 }
@@ -241,7 +254,7 @@ void taco_spawn(Level* level) {
     }
 }
 
-void snake_update(Snake* snake, Level* level) {
+void snake_update(Snake* snake, Game* game) {
     int32_t new_snake_x = snake->segments[0].x;
     int32_t new_snake_y = snake->segments[0].y;
 
@@ -249,21 +262,21 @@ void snake_update(Snake* snake, Level* level) {
                   &new_snake_x,
                   &new_snake_y);
 
-    CellType cell_type = level_get_cell(level, new_snake_x, new_snake_y);
+    CellType cell_type = level_get_cell(&game->level, new_snake_x, new_snake_y);
 
     bool collide_with_snake = false;
 
     // TODO: This simplifies when we have an array of snakes.
-    for (int i = 0; i < level->snake.length; i++) {
-        SnakeSegment* segment = level->snake.segments + i;
+    for (int i = 0; i < game->snake.length; i++) {
+        SnakeSegment* segment = game->snake.segments + i;
         if (segment->x == new_snake_x &&
             segment->y == new_snake_y) {
             collide_with_snake = true;
             break;
         }
     }
-    for (int i = 0; i < level->other_snake.length; i++) {
-        SnakeSegment* segment = level->other_snake.segments + i;
+    for (int i = 0; i < game->other_snake.length; i++) {
+        SnakeSegment* segment = game->other_snake.segments + i;
         if (segment->x == new_snake_x &&
             segment->y == new_snake_y) {
             collide_with_snake = true;
@@ -282,11 +295,59 @@ void snake_update(Snake* snake, Level* level) {
         snake->segments[0].y = new_snake_y;
 
         if (cell_type == CELL_TYPE_TACO) {
-            level_set_cell(level, new_snake_x, new_snake_y, CELL_TYPE_EMPTY);
+            level_set_cell(&game->level, new_snake_x, new_snake_y, CELL_TYPE_EMPTY);
             snake_grow(snake);
-            taco_spawn(level);
+            taco_spawn(&game->level);
         }
     }
+}
+
+bool game_init(Game* game, int32_t level_width, int32_t level_height) {
+    if (!level_init(&game->level, level_width, level_height)) {
+        return false;
+    }
+
+    int32_t snake_capacity = level_width * level_height;
+    if (!snake_init(&game->snake, snake_capacity)) {
+        return false;
+    }
+    if (!snake_init(&game->other_snake, snake_capacity)) {
+        return false;
+    }
+
+    return true;
+}
+
+void game_apply_snake_action(Game* game, SnakeAction snake_action, bool is_other_snake) {
+    Direction direction = DIRECTION_NONE;
+    Snake* snake = is_other_snake ? &game->snake : &game->other_snake;
+    if (snake_action & SNAKE_ACTION_FACE_NORTH) {
+        direction = DIRECTION_NORTH;
+    }
+    if (snake_action & SNAKE_ACTION_FACE_EAST) {
+        direction = DIRECTION_EAST;
+    }
+    if (snake_action & SNAKE_ACTION_FACE_SOUTH) {
+        direction = DIRECTION_SOUTH;
+    }
+    if (snake_action & SNAKE_ACTION_FACE_WEST) {
+        direction = DIRECTION_WEST;
+    }
+    snake_turn(snake, direction);
+}
+
+void game_update(Game* game, SnakeAction snake_action, SnakeAction other_snake_action) {
+    game_apply_snake_action(game, snake_action, false /* is_other_snake */);
+    game_apply_snake_action(game, other_snake_action, true /* is_other_snake */);
+
+    snake_update(&game->snake, game);
+    snake_update(&game->other_snake, game);
+}
+
+void game_destroy(Game* game) {
+    level_destroy(&game->level);
+    snake_destroy(&game->snake);
+    snake_destroy(&game->other_snake);
 }
 
 uint64_t microseconds_between_timestamps(struct timespec* previous, struct timespec* current) {
@@ -297,28 +358,28 @@ uint64_t microseconds_between_timestamps(struct timespec* previous, struct times
 int32_t main (int argc, char** argv) {
     puts("hello taco");
 
-    const char* port;
-    const char* ip;
-    
+    const char* port = NULL;
+    const char* ip = NULL;
+
     SessionType session_type = SESSION_TYPE_SINGLE_PLAYER;
     if(argc > 1) {
         if (strcmp(argv[1], "-s") == 0) {
             session_type = SESSION_TYPE_SERVER;
-            
+
             if (argc != 3) {
                 puts("Expected port argument for server mode");
                 return EXIT_FAILURE;
             }
-            
+
             port = argv[2];
         } else if (strcmp(argv[1], "-c") == 0) {
             session_type = SESSION_TYPE_CLIENT;
-            
+
             if (argc != 4) {
                 puts("Expected ip and port arguments for client mode");
                 return EXIT_FAILURE;
             }
-            
+
             ip = argv[2];
             port = argv[3];
         } else {
@@ -326,11 +387,18 @@ int32_t main (int argc, char** argv) {
             return EXIT_FAILURE;
         }
     }
-    
-    (void)port;
-    (void)ip;
-    (void)session_type;
-    
+
+    switch(session_type) {
+    case SESSION_TYPE_SINGLE_PLAYER:
+        puts("Starting single player session.\n");
+        break;
+    case SESSION_TYPE_CLIENT:
+        printf("Starting client session, with address: %s:%s\n", ip, port);
+        break;
+    case SESSION_TYPE_SERVER:
+        printf("Starting server session, with port: %s\n", port);
+        break;
+    }
 
     int rc = SDL_Init(SDL_INIT_EVERYTHING);
     if (rc < 0) {
@@ -359,33 +427,35 @@ int32_t main (int argc, char** argv) {
         return 1;
     }
 
-    Level level = {0};
-    level_init(&level, LEVEL_WIDTH, LEVEL_HEIGHT);
+    Game game = {0};
+    game_init(&game, LEVEL_WIDTH, LEVEL_HEIGHT);
 
-    level_set_cell(&level, 9, 5, CELL_TYPE_TACO);
-    level_set_cell(&level, 14, 3, CELL_TYPE_TACO);
-    level_set_cell(&level, 15, 9, CELL_TYPE_TACO);
-    level_set_cell(&level, 2, 2, CELL_TYPE_TACO);
-    level_set_cell(&level, 8, 10, CELL_TYPE_TACO);
+    Level* level = &game.level;
 
-    snake_spawn(&level.snake,
-                level.width / 3,
-                level.height / 2,
+    level_set_cell(level, 9, 5, CELL_TYPE_TACO);
+    level_set_cell(level, 14, 3, CELL_TYPE_TACO);
+    level_set_cell(level, 15, 9, CELL_TYPE_TACO);
+    level_set_cell(level, 2, 2, CELL_TYPE_TACO);
+    level_set_cell(level, 8, 10, CELL_TYPE_TACO);
+
+    snake_spawn(&game.snake,
+                level->width / 3,
+                level->height / 2,
                 DIRECTION_EAST);
 
-    snake_spawn(&level.other_snake,
-                (level.width / 3) + (level.width / 3),
-                level.height / 2,
+    snake_spawn(&game.other_snake,
+                (level->width / 3) + (level->width / 3),
+                level->height / 2,
                 DIRECTION_EAST);
 
-    for (int32_t y = 0; y < level.height; y++) {
-        for (int32_t x = 0; x < level.width; x++) {
-            if (x == 0 || x == level.width - 1) {
-                level_set_cell(&level, x, y, CELL_TYPE_WALL);
+    for (int32_t y = 0; y < level->height; y++) {
+        for (int32_t x = 0; x < level->width; x++) {
+            if (x == 0 || x == level->width - 1) {
+                level_set_cell(level, x, y, CELL_TYPE_WALL);
             }
 
-            if (y == 0 || y == level.height - 1) {
-                level_set_cell(&level, x, y, CELL_TYPE_WALL);
+            if (y == 0 || y == level->height - 1) {
+                level_set_cell(level, x, y, CELL_TYPE_WALL);
             }
         }
     }
@@ -398,15 +468,8 @@ int32_t main (int argc, char** argv) {
 
     int64_t time_since_update_us = 0;
 
-    bool input_move_up = false;
-    bool input_move_left = false;
-    bool input_move_down = false;
-    bool input_move_right = false;
-
-    bool other_input_move_up = false;
-    bool other_input_move_left = false;
-    bool other_input_move_down = false;
-    bool other_input_move_right = false;
+    SnakeAction snake_action = SNAKE_ACTION_NONE;
+    SnakeAction other_snake_action = SNAKE_ACTION_NONE;
 
     bool quit = false;
     while (!quit) {
@@ -426,101 +489,55 @@ int32_t main (int argc, char** argv) {
             case SDL_KEYDOWN:
                 switch (event.key.keysym.sym) {
                 case SDLK_w:
-                    input_move_up = true;
+                    snake_action |= SNAKE_ACTION_FACE_NORTH;
                     break;
                 case SDLK_a:
-                    input_move_left = true;
+                    snake_action |= SNAKE_ACTION_FACE_WEST;
                     break;
                 case SDLK_s:
-                    input_move_down = true;
+                    snake_action |= SNAKE_ACTION_FACE_SOUTH;
                     break;
                 case SDLK_d:
-                    input_move_right = true;
+                    snake_action |= SNAKE_ACTION_FACE_EAST;
                     break;
                 case SDLK_UP:
-                    other_input_move_up = true;
+                    other_snake_action |= SNAKE_ACTION_FACE_NORTH;
                     break;
                 case SDLK_LEFT:
-                    other_input_move_left = true;
+                    other_snake_action |= SNAKE_ACTION_FACE_WEST;
                     break;
                 case SDLK_DOWN:
-                    other_input_move_down = true;
+                    other_snake_action |= SNAKE_ACTION_FACE_SOUTH;
                     break;
                 case SDLK_RIGHT:
-                    other_input_move_right = true;
-                    break;
-                }
-                break;
-            case SDL_KEYUP:
-                switch (event.key.keysym.sym) {
-                case SDLK_w:
-                    input_move_up = false;
-                    break;
-                case SDLK_a:
-                    input_move_left = false;
-                    break;
-                case SDLK_s:
-                    input_move_down = false;
-                    break;
-                case SDLK_d:
-                    input_move_right = false;
-                    break;
-                case SDLK_UP:
-                    other_input_move_up = false;
-                    break;
-                case SDLK_LEFT:
-                    other_input_move_left = false;
-                    break;
-                case SDLK_DOWN:
-                    other_input_move_down = false;
-                    break;
-                case SDLK_RIGHT:
-                    other_input_move_right = false;
-                    break;
-                default:
+                    other_snake_action |= SNAKE_ACTION_FACE_EAST;
                     break;
                 }
                 break;
             }
         }
 
-        if (input_move_up) {
-            snake_turn(&level.snake, DIRECTION_NORTH);
-        }
-
-        if (input_move_left) {
-            snake_turn(&level.snake, DIRECTION_WEST);
-        }
-
-        if (input_move_right) {
-            snake_turn(&level.snake, DIRECTION_EAST);
-        }
-
-        if (input_move_down) {
-            snake_turn(&level.snake, DIRECTION_SOUTH);
-        }
-
-        if (other_input_move_up) {
-            snake_turn(&level.other_snake, DIRECTION_NORTH);
-        }
-
-        if (other_input_move_left) {
-            snake_turn(&level.other_snake, DIRECTION_WEST);
-        }
-
-        if (other_input_move_right) {
-            snake_turn(&level.other_snake, DIRECTION_EAST);
-        }
-
-        if (other_input_move_down) {
-            snake_turn(&level.other_snake, DIRECTION_SOUTH);
-        }
-
         // Update the game state if a tick has passed.
         if (time_since_update_us >= GAME_SIMULATE_TIME_INTERVAL_US) {
             time_since_update_us -= GAME_SIMULATE_TIME_INTERVAL_US;
-            snake_update(&level.snake, &level);
-            snake_update(&level.other_snake, &level);
+
+            switch(session_type) {
+            case SESSION_TYPE_CLIENT:
+                // TODO: check for updated state from server.
+                break;
+            case SESSION_TYPE_SERVER:
+                // TODO: check for command from client
+                game_update(&game, snake_action, other_snake_action);
+                // TODO: Send state to client.
+                break;
+            case SESSION_TYPE_SINGLE_PLAYER:
+                game_update(&game, snake_action, other_snake_action);
+                break;
+            }
+
+            // Clear actions.
+            snake_action = 0;
+            other_snake_action = 0;
         }
 
         // Clear window
@@ -528,10 +545,10 @@ int32_t main (int argc, char** argv) {
         SDL_RenderClear(renderer);
 
         // Draw level
-        for(int32_t y = 0; y < level.height; y++) {
-            for(int32_t x = 0; x < level.width; x++) {
+        for(int32_t y = 0; y < level->height; y++) {
+            for(int32_t x = 0; x < level->width; x++) {
                 // TODO: Asserts
-                CellType cell_type = level_get_cell(&level, x, y);
+                CellType cell_type = level_get_cell(level, x, y);
 
                 if (cell_type == CELL_TYPE_EMPTY) {
                     continue;
@@ -564,8 +581,8 @@ int32_t main (int argc, char** argv) {
             }
         }
 
-        snake_draw(renderer, &level.snake, cell_size);
-        snake_draw(renderer, &level.other_snake, cell_size);
+        snake_draw(renderer, &game.snake, cell_size);
+        snake_draw(renderer, &game.other_snake, cell_size);
 
         // Render updates
         SDL_RenderPresent(renderer);
@@ -574,7 +591,7 @@ int32_t main (int argc, char** argv) {
         SDL_Delay(0);
     }
 
-    level_destroy(&level);
+    game_destroy(&game);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
