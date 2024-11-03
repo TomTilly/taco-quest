@@ -56,3 +56,4 @@ dkms.conf
 
 # Mac stuf
 .DS_Store
+*.entitlements

@@ -6,6 +6,3 @@ set -x
 
 # Compile program
 clang -std=c11 main.c -Wall -Wextra -Werror -lSDL2 -g -o taco-quest
-
-# Run program
-./taco-quest

@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <time.h>
+#include <string.h>
 
 #include <SDL2/SDL.h>
 
@@ -12,6 +13,12 @@
 #define LEVEL_HEIGHT 20
 #define GAME_SIMULATE_TIME_INTERVAL_US 150000
 #define INITIAL_SNAKE_LEN 3
+
+typedef enum {
+    SESSION_TYPE_SINGLE_PLAYER,
+    SESSION_TYPE_SERVER,
+    SESSION_TYPE_CLIENT
+} SessionType;
 
 typedef enum {
     CELL_TYPE_INVALID = -1,
@@ -288,15 +295,47 @@ uint64_t microseconds_between_timestamps(struct timespec* previous, struct times
 }
 
 int32_t main (int argc, char** argv) {
-    (void)(argc);
-    (void)(argv);
+    puts("hello taco");
 
-    printf("hello taco\n");
+    const char* port;
+    const char* ip;
+    
+    SessionType session_type = SESSION_TYPE_SINGLE_PLAYER;
+    if(argc > 1) {
+        if (strcmp(argv[1], "-s") == 0) {
+            session_type = SESSION_TYPE_SERVER;
+            
+            if (argc != 3) {
+                puts("Expected port argument for server mode");
+                return EXIT_FAILURE;
+            }
+            
+            port = argv[2];
+        } else if (strcmp(argv[1], "-c") == 0) {
+            session_type = SESSION_TYPE_CLIENT;
+            
+            if (argc != 4) {
+                puts("Expected ip and port arguments for client mode");
+                return EXIT_FAILURE;
+            }
+            
+            ip = argv[2];
+            port = argv[3];
+        } else {
+            puts("Unexpected argument passed");
+            return EXIT_FAILURE;
+        }
+    }
+    
+    (void)port;
+    (void)ip;
+    (void)session_type;
+    
 
     int rc = SDL_Init(SDL_INIT_EVERYTHING);
     if (rc < 0) {
         printf("SDL_Init failed %s\n", SDL_GetError());
-        return 1;
+        return EXIT_FAILURE;
     }
 
     int32_t cell_size = 48;
