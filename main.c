@@ -1,16 +1,22 @@
 #include "game.h"
 
+#include <errno.h>
+#include <fcntl.h>
+#include <netdb.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <unistd.h>
 
 #include <SDL2/SDL.h>
 
 #define LEVEL_WIDTH 24
 #define LEVEL_HEIGHT 20
 #define GAME_SIMULATE_TIME_INTERVAL_US 150000
+#define SERVER_ACCEPT_QUEUE_LIMIT 5
 
 typedef enum {
     SESSION_TYPE_SINGLE_PLAYER,
@@ -23,7 +29,7 @@ uint64_t microseconds_between_timestamps(struct timespec* previous, struct times
            ((current->tv_nsec - previous->tv_nsec)) / 1000;
 }
 
-S32 main (int argc, char** argv) {
+S32 main (S32 argc, char** argv) {
     puts("hello taco");
 
     const char* port = NULL;
@@ -56,6 +62,8 @@ S32 main (int argc, char** argv) {
         }
     }
 
+    int server_socket_fd = -1;
+
     switch(session_type) {
     case SESSION_TYPE_SINGLE_PLAYER:
         puts("Starting single player session.\n");
@@ -63,9 +71,62 @@ S32 main (int argc, char** argv) {
     case SESSION_TYPE_CLIENT:
         printf("Starting client session, with address: %s:%s\n", ip, port);
         break;
-    case SESSION_TYPE_SERVER:
+    case SESSION_TYPE_SERVER: {
         printf("Starting server session, with port: %s\n", port);
+
+        struct addrinfo hints;
+        struct addrinfo *server_info;
+
+        memset(&hints, 0, sizeof hints);
+        hints.ai_family = AF_UNSPEC;
+        hints.ai_socktype = SOCK_STREAM;
+        hints.ai_flags = AI_PASSIVE;
+
+        // See beej's network guide for more details.
+        // Lookup network info for server type socket.
+        int rc = getaddrinfo(NULL, port, &hints, &server_info);
+        if (rc != 0) {
+            fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(rc));
+            return EXIT_FAILURE;
+        }
+
+        // Create server socket file descriptor.
+        server_socket_fd = socket(server_info->ai_family, server_info->ai_socktype, server_info->ai_protocol);
+        if (server_socket_fd < 0) {
+            fprintf(stderr, "socket() failed: %s\n", strerror(errno));
+            return EXIT_FAILURE;
+        }
+
+        // Set socket file descriptor to non blocking, so we can call accept() without blocking.
+        int server_socket_flags = fcntl(server_socket_fd, F_GETFL);
+        if (server_socket_flags == -1){
+            fprintf(stderr, "fcntl(F_GETFL) failed: %s\n", strerror(errno));
+            return EXIT_FAILURE;
+        }
+        server_socket_flags |= O_NONBLOCK;
+        rc = fcntl(server_socket_fd, F_SETFL, server_socket_flags);
+        if (rc != 0){
+            fprintf(stderr, "fcntl(F_SETFL) failed: %s\n", strerror(errno));
+            return EXIT_FAILURE;
+        }
+
+        // Bind to a specific port.
+        rc = bind(server_socket_fd, server_info->ai_addr, server_info->ai_addrlen);
+        if (rc != 0) {
+            fprintf(stderr, "bind() failed: %s\n", strerror(errno));
+            return EXIT_FAILURE;
+        }
+
+        // Listen on the socket for incoming connections.
+        rc = listen(server_socket_fd, SERVER_ACCEPT_QUEUE_LIMIT);
+        if (rc != 0) {
+            fprintf(stderr, "listen() failed: %s\n", strerror(errno));
+            return EXIT_FAILURE;
+        }
+
+        freeaddrinfo(server_info);
         break;
+    }
     }
 
     int rc = SDL_Init(SDL_INIT_EVERYTHING);
@@ -192,12 +253,26 @@ S32 main (int argc, char** argv) {
             switch(session_type) {
             case SESSION_TYPE_CLIENT:
                 // TODO: check for updated state from server.
+                // TODO: Send command to server
                 break;
-            case SESSION_TYPE_SERVER:
+            case SESSION_TYPE_SERVER: {
+                struct sockaddr_storage client_addr;
+                socklen_t client_addr_len = sizeof(client_addr);
+                int rc = accept(server_socket_fd, (struct sockaddr *)&client_addr, &client_addr_len);
+                if (rc != 0) {
+                    if (errno != EWOULDBLOCK && errno != EAGAIN){
+                        fprintf(stderr, "accept() failed: %s\n", strerror(errno));
+                    }
+                } else {
+                    fprintf(stdout, "received incoming client connection!\n");
+                    // TODO: Handle incoming client connection.
+                }
+
                 // TODO: check for command from client
                 game_update(&game, snake_action, other_snake_action);
                 // TODO: Send state to client.
                 break;
+            }
             case SESSION_TYPE_SINGLE_PLAYER:
                 game_update(&game, snake_action, other_snake_action);
                 break;
@@ -258,6 +333,19 @@ S32 main (int argc, char** argv) {
 
         // Allow process to go to sleep so we don't use 100% of CPU
         SDL_Delay(0);
+    }
+
+    switch(session_type) {
+    case SESSION_TYPE_CLIENT:
+        // TODO: close client socket.
+        break;
+    case SESSION_TYPE_SERVER: {
+        close(server_socket_fd);
+        // TODO: close any client sockets.
+        break;
+    }
+    case SESSION_TYPE_SINGLE_PLAYER:
+        break;
     }
 
     game_destroy(&game);
