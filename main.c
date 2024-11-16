@@ -34,6 +34,7 @@ S32 main (S32 argc, char** argv) {
 
     const char* port = NULL;
     const char* ip = NULL;
+    const char* window_title;
 
     SessionType session_type = SESSION_TYPE_SINGLE_PLAYER;
     if(argc > 1) {
@@ -63,23 +64,59 @@ S32 main (S32 argc, char** argv) {
     }
 
     int server_socket_fd = -1;
+    int client_socket_fd = -1;
+    
+    struct addrinfo hints = {
+        .ai_family = AF_UNSPEC, // don't care IPv4 or IPv6
+        .ai_socktype = SOCK_STREAM // TCP stream sockets
+    };
+    
+    struct addrinfo *server_info;  // will point to the results
 
     switch(session_type) {
     case SESSION_TYPE_SINGLE_PLAYER:
         puts("Starting single player session.\n");
+        
+        window_title = "Taco Quest";
+        
         break;
-    case SESSION_TYPE_CLIENT:
+    case SESSION_TYPE_CLIENT: {
         printf("Starting client session, with address: %s:%s\n", ip, port);
+        
+        window_title = "Taco Quest (Client)";
+
+        // get ready to connect
+        int rc = getaddrinfo(ip, port, &hints, &server_info);
+        if (rc != 0) {
+            fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(rc));
+            return EXIT_FAILURE;
+        }
+
+        // Create client socket file descriptor.
+        client_socket_fd = socket(server_info->ai_family, server_info->ai_socktype, server_info->ai_protocol);
+        if (client_socket_fd < 0) {
+            fprintf(stderr, "socket() failed: %s\n", strerror(errno));
+            return EXIT_FAILURE;
+        }
+        
+        // TODO: Set to non-blocking?
+        
+        rc = connect(client_socket_fd, server_info->ai_addr, server_info->ai_addrlen);
+        if (rc == -1) {
+            fprintf(stderr, "connect error: %s\n", strerror(errno));
+            return EXIT_FAILURE;
+        }
+        
+        freeaddrinfo(server_info);
+        
+        printf("Connected to %s:%s\n", ip, port);
         break;
+    }
     case SESSION_TYPE_SERVER: {
         printf("Starting server session, with port: %s\n", port);
+        
+        window_title = "Taco Quest (Server)";
 
-        struct addrinfo hints;
-        struct addrinfo *server_info;
-
-        memset(&hints, 0, sizeof hints);
-        hints.ai_family = AF_UNSPEC;
-        hints.ai_socktype = SOCK_STREAM;
         hints.ai_flags = AI_PASSIVE;
 
         // See beej's network guide for more details.
@@ -138,8 +175,7 @@ S32 main (S32 argc, char** argv) {
     S32 cell_size = 40;
     S32 window_width = LEVEL_WIDTH * cell_size;
     S32 window_height = LEVEL_HEIGHT * cell_size;
-    const char* title = "Taco Quest";
-    SDL_Window* window = SDL_CreateWindow(title,
+    SDL_Window* window = SDL_CreateWindow(window_title,
                                           SDL_WINDOWPOS_CENTERED,
                                           SDL_WINDOWPOS_CENTERED,
                                           window_width,
