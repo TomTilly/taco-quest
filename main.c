@@ -357,8 +357,14 @@ S32 main (S32 argc, char** argv) {
                     size_t bytes_deserialized = 0;
                     do {
                         bytes_deserialized += level_deserialize(buffer + bytes_deserialized,
-                                                                buffer_size,
+                                                                buffer_size - bytes_deserialized,
                                                                 &game.level);
+                        bytes_deserialized += snake_deserialize(buffer + bytes_deserialized,
+                                                                buffer_size - bytes_deserialized,
+                                                                game.snakes + 0);
+                        bytes_deserialized += snake_deserialize(buffer + bytes_deserialized,
+                                                                buffer_size - bytes_deserialized,
+                                                                game.snakes + 1);
                     } while ( bytes_deserialized < (size_t)received );
                 }
 
@@ -395,6 +401,8 @@ S32 main (S32 argc, char** argv) {
                     size_t buffer_size = 1024 * 1024;
                     char* buffer = (char*)malloc(buffer_size);
                     size_t msg_size = level_serialize(&game.level, buffer, buffer_size);
+                    msg_size += snake_serialize(game.snakes + 0, buffer + msg_size, buffer_size - msg_size);
+                    msg_size += snake_serialize(game.snakes + 1, buffer + msg_size, buffer_size - msg_size);
 
 #if defined(PLATFORM_WINDOWS)
                     int size_sent = send(server_client_socket_fd,

@@ -62,8 +62,7 @@ CellType level_get_cell(Level* level, int32_t x, int32_t y) {
     return level->cells[index];
 }
 
-size_t level_serialize(const Level* level, void * buffer, size_t buffer_size)
-{
+size_t level_serialize(const Level* level, void * buffer, size_t buffer_size) {
     size_t cells_size = level->width * level->height * sizeof(*level->cells);
     size_t total_size = sizeof(level->width) + sizeof(level->height) + cells_size;
 
@@ -82,8 +81,7 @@ size_t level_serialize(const Level* level, void * buffer, size_t buffer_size)
     return total_size;
 }
 
-size_t level_deserialize(void * buffer, size_t size, Level * out)
-{
+size_t level_deserialize(void * buffer, size_t size, Level * out) {
     U8 * ptr = buffer;
 
     assert(size >= sizeof(out->width) * sizeof(out->height)

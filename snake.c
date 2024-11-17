@@ -77,3 +77,55 @@ void snake_destroy(Snake* snake) {
     free(snake->segments);
     memset(snake, 0, sizeof(*snake));
 }
+
+size_t snake_serialize(const Snake* snake, void* buffer, size_t buffer_size) {
+    // Segments plus the direction as a single byte.
+    size_t segments_size = (snake->length * sizeof(*snake->segments));
+    size_t total_size = sizeof(snake->length) + segments_size + 1;
+    assert(total_size <= buffer_size && "buffer too small!");
+
+    U8 * ptr = buffer;
+
+    memcpy(ptr, &snake->length, sizeof(snake->length));
+    ptr += sizeof(snake->length);
+
+    memcpy(ptr, snake->segments, segments_size);
+    ptr += segments_size;
+
+    *ptr = (U8)snake->direction;
+
+    return total_size;
+}
+
+size_t snake_deserialize(void * buffer, size_t size, Snake* out) {
+    U8 * ptr = buffer;
+
+    assert(size >= sizeof(out->length)
+           && "buffer size too smol for snake segment length!");
+
+    S32 length = *(S32 *)ptr;
+    ptr += sizeof(out->length);
+    size -= sizeof(out->length);
+
+    if ( out->length != length) {
+        // TODO: a proper snake function to set the length.
+        if ( length > out->length ) {
+            snake_destroy(out);
+            bool success = snake_init(out, length);
+            assert(success && "snake_init() failed!");
+        }
+        out->length = length;
+    }
+
+    size_t segments_size = length * sizeof(*out->segments);
+    assert(size >= segments_size && "buffer size too smol for snake segments");
+
+    memcpy(out->segments, ptr, segments_size);
+    ptr += segments_size;
+    size -= segments_size;
+
+    out->direction = (Direction)*ptr;
+    ptr++;
+
+    return ptr - (U8 *)buffer;
+}

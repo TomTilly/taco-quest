@@ -27,8 +27,8 @@ typedef struct {
 
 typedef struct {
     SnakeSegment* segments;
-    int length;
-    int capacity; // I hate STL
+    S32 length;
+    S32 capacity; // I hate STL
     Direction direction;
 } Snake;
 
@@ -38,5 +38,7 @@ void snake_grow(Snake* snake);
 void snake_turn(Snake* snake, Direction direction);
 void snake_draw(SDL_Renderer* renderer, Snake* snake, int32_t cell_size);
 void snake_destroy(Snake* snake);
+size_t snake_serialize(const Snake* snake, void * buffer, size_t buffer_size);
+size_t snake_deserialize(void * buffer, size_t size, Snake* out);
 
 #endif /* snake_h */
