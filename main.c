@@ -211,7 +211,7 @@ S32 main (S32 argc, char** argv) {
     SDL_GetDisplayBounds(0, &display_size);
 
     int window_x = SDL_WINDOWPOS_CENTERED;
-    int window_y = display_size.y / 4;
+    int window_y = display_size.h / 4;
     S32 cell_size = 40;
     S32 window_width = LEVEL_WIDTH * cell_size;
     S32 window_height = LEVEL_HEIGHT * cell_size;
@@ -390,7 +390,9 @@ S32 main (S32 argc, char** argv) {
 #else
                     ssize_t received = recv(server_client_socket_fd, &client_snake_action, sizeof(client_snake_action), 0);
                     if (received < 0) {
-                        fprintf(stderr, "recv() error?: %s\n", strerror(errno));
+                        if (errno != EWOULDBLOCK && errno != EAGAIN){
+                            fprintf(stderr, "recv() error?: %s\n", strerror(errno));
+                        }
                     }
 #endif
                 }
