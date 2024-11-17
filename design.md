@@ -16,3 +16,5 @@ Classic snake game with a multiplayer twist...and tacos!
 - How can we make the snake pooping a game mechanic ? Maybe a way for the snake to shrink ?
 - Arrow keys allow you to control a second snake on one computer
 - Snake gets item to speed up/slow down time for oneself or all players
+- Easter egg for players who use port 6969
+

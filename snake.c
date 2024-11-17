@@ -1,5 +1,7 @@
 #include "snake.h"
 
+#include <assert.h>
+
 bool snake_init(Snake* snake, int32_t capacity) {
     snake->segments = calloc(capacity, sizeof(snake->segments[0]));
     if (snake->segments == NULL) {
@@ -20,10 +22,7 @@ void snake_spawn(Snake* snake, int x, int y, Direction direction) {
 }
 
 void snake_grow(Snake* snake) {
-    if (snake->length >= snake->capacity) {
-        printf("catastrophic error!\n");
-        return;
-    }
+    assert(snake->length < snake->capacity);
 
     int last_segment_index = snake->length - 1;
     int new_segment_index = snake->length;

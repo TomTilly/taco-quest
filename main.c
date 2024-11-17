@@ -2,15 +2,23 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <netdb.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 #include <string.h>
+#include <assert.h>
+
+#if defined(PLATFORM_WINDOWS)
+#include <ws2tcpip.h>
+#include <winsock2.h>
+#else
+#include <netdb.h>
 #include <sys/socket.h>
 #include <unistd.h>
-#include <assert.h>
+
+#define INVALID_SOCKET -1
+#endif
 
 #include <SDL2/SDL.h>
 
@@ -35,7 +43,7 @@ S32 main (S32 argc, char** argv) {
 
     const char* port = NULL;
     const char* ip = NULL;
-    const char* window_title;
+    const char* window_title = NULL;
 
     SessionType session_type = SESSION_TYPE_SINGLE_PLAYER;
     if(argc > 1) {
@@ -64,27 +72,43 @@ S32 main (S32 argc, char** argv) {
         }
     }
 
-    int server_socket_fd = -1;
-    int client_socket_fd = -1;
-    int server_client_socket_fd = -1; // TODO: will be an array to handle multiple connections
+#if defined(PLATFORM_WINDOWS)
+    SOCKET server_socket_fd = INVALID_SOCKET;
+    SOCKET client_socket_fd = INVALID_SOCKET;
+    SOCKET server_client_socket_fd = INVALID_SOCKET;
+
+    {
+        WORD wsa_version_requested = MAKEWORD(2, 2);
+        WSADATA wsa_data = {0};
+        int rc = WSAStartup(wsa_version_requested, &wsa_data);
+        if (rc != 0) {
+            fprintf(stderr, "WSAStartup() failed with %d\n", rc);
+            return EXIT_FAILURE;
+        }
+    }
+#else
+    int server_socket_fd = INVALID_SOCKET;
+    int client_socket_fd = INVALID_SOCKET;
+    int server_client_socket_fd = INVALID_SOCKET; // TODO: will be an array to handle multiple connections
+#endif
 
     struct addrinfo hints = {
         .ai_family = AF_UNSPEC, // don't care IPv4 or IPv6
         .ai_socktype = SOCK_STREAM // TCP stream sockets
     };
-    
+
     struct addrinfo *server_info;  // will point to the results
 
     switch(session_type) {
     case SESSION_TYPE_SINGLE_PLAYER:
         puts("Starting single player session.\n");
-        
+
         window_title = "Taco Quest";
-        
+
         break;
     case SESSION_TYPE_CLIENT: {
         printf("Starting client session, with address: %s:%s\n", ip, port);
-        
+
         window_title = "Taco Quest (Client)";
 
         // get ready to connect
@@ -95,28 +119,28 @@ S32 main (S32 argc, char** argv) {
         }
 
         // Create client socket file descriptor.
-        client_socket_fd = socket(server_info->ai_family, server_info->ai_socktype, server_info->ai_protocol);
+        client_socket_fd = socket(server_info->ai_family, server_info->ai_socktype, (int)server_info->ai_protocol);
         if (client_socket_fd < 0) {
             fprintf(stderr, "socket() failed: %s\n", strerror(errno));
             return EXIT_FAILURE;
         }
-        
+
         // TODO: Set to non-blocking?
-        
-        rc = connect(client_socket_fd, server_info->ai_addr, server_info->ai_addrlen);
+
+        rc = connect(client_socket_fd, server_info->ai_addr, (int)server_info->ai_addrlen);
         if (rc == -1) {
             fprintf(stderr, "connect error: %s\n", strerror(errno));
             return EXIT_FAILURE;
         }
-        
+
         freeaddrinfo(server_info);
-        
+
         printf("Connected to %s:%s\n", ip, port);
         break;
     }
     case SESSION_TYPE_SERVER: {
         printf("Starting server session, with port: %s\n", port);
-        
+
         window_title = "Taco Quest (Server)";
 
         hints.ai_flags = AI_PASSIVE;
@@ -137,6 +161,14 @@ S32 main (S32 argc, char** argv) {
         }
 
         // Set socket file descriptor to non blocking, so we can call accept() without blocking.
+#if defined(PLATFORM_WINDOWS)
+        u_long server_socket_flags = 1;
+        rc = ioctlsocket(server_socket_fd, FIONBIO, &server_socket_flags);
+        if (rc != NO_ERROR) {
+            fprintf(stderr, "ioctlsocket() failed with error: %ld\n", rc);
+            return EXIT_FAILURE;
+        }
+#else
         int server_socket_flags = fcntl(server_socket_fd, F_GETFL);
         if (server_socket_flags == -1){
             fprintf(stderr, "fcntl(F_GETFL) failed: %s\n", strerror(errno));
@@ -148,9 +180,10 @@ S32 main (S32 argc, char** argv) {
             fprintf(stderr, "fcntl(F_SETFL) failed: %s\n", strerror(errno));
             return EXIT_FAILURE;
         }
+#endif
 
         // Bind to a specific port.
-        rc = bind(server_socket_fd, server_info->ai_addr, server_info->ai_addrlen);
+        rc = bind(server_socket_fd, server_info->ai_addr, (int)server_info->ai_addrlen);
         if (rc != 0) {
             fprintf(stderr, "bind() failed: %s\n", strerror(errno));
             return EXIT_FAILURE;
@@ -173,9 +206,6 @@ S32 main (S32 argc, char** argv) {
         printf("SDL_Init failed %s\n", SDL_GetError());
         return EXIT_FAILURE;
     }
-
-
-
 
     SDL_Rect display_size;
     SDL_GetDisplayBounds(0, &display_size);
@@ -311,10 +341,15 @@ S32 main (S32 argc, char** argv) {
                 // TODO: Send command to server
 
                 size_t buffer_size = 1024 * 1024;
-                void * buffer = malloc(buffer_size);
-                ssize_t received = recv(client_socket_fd, buffer, buffer_size, 0);
+                char* buffer = (char*)malloc(buffer_size);
 
+#if defined(PLATFORM_WINDOWS)
+                int received = recv(client_socket_fd, buffer, (int)buffer_size, 0);
+                assert(received < (int)buffer_size);
+#else
+                ssize_t received = recv(client_socket_fd, buffer, buffer_size, 0);
                 assert(received < (ssize_t)buffer_size);
+#endif
 
                 if ( received == -1 ) {
                     fprintf(stderr, "error receiving data: %s\n", strerror(errno));
@@ -336,27 +371,40 @@ S32 main (S32 argc, char** argv) {
                 // TODO: check for command from client
                 game_update(&game, snake_action, other_snake_action);
 
-                if ( server_client_socket_fd == -1 ) {
+                if ( server_client_socket_fd == INVALID_SOCKET ) {
                     server_client_socket_fd = accept(server_socket_fd,
                                                      (struct sockaddr *)&client_addr,
                                                      &client_addr_len);
 
                     // socket is still -1 on error:
-                    if (server_client_socket_fd == -1) {
+                    if (server_client_socket_fd == INVALID_SOCKET) {
+#if defined(PLATFORM_WINDOWS)
+                        int last_error = WSAGetLastError();
+                        if (last_error != WSAEWOULDBLOCK) {
+                            fprintf(stderr, "accept() failed: %d\n", last_error);
+                        }
+#else
                         if (errno != EWOULDBLOCK && errno != EAGAIN){
                             fprintf(stderr, "accept() failed: %s\n", strerror(errno));
                         }
+#endif
                     } else {
                         printf("client connected!\n");
                     }
                 } else {
                     size_t buffer_size = 1024 * 1024;
-                    void * buffer = malloc(buffer_size);
+                    char* buffer = (char*)malloc(buffer_size);
                     size_t msg_size = level_serialize(&game.level, buffer, buffer_size);
 
+#if defined(PLATFORM_WINDOWS)
+                    int size_sent = send(server_client_socket_fd,
+                                         buffer, (int)msg_size,
+                                         0);
+#else
                     ssize_t size_sent = send(server_client_socket_fd,
                                              buffer, msg_size,
                                              0);
+#endif
 
                     if ( size_sent == -1 ) {
                         fprintf(stderr, "send() error?: %s\n", strerror(errno));
@@ -436,10 +484,20 @@ S32 main (S32 argc, char** argv) {
     switch(session_type) {
     case SESSION_TYPE_CLIENT:
         // TODO: close client socket.
+#if defined(PLATFORM_WINDOWS)
+        closesocket(client_socket_fd);
+#else
+        close(client_socket_fd);
+#endif
         break;
     case SESSION_TYPE_SERVER: {
+#if defined(PLATFORM_WINDOWS)
+        closesocket(server_socket_fd);
+        closesocket(server_client_socket_fd);
+#else
         close(server_socket_fd);
-        // TODO: close any client sockets.
+        close(server_client_socket_fd);
+#endif
         break;
     }
     case SESSION_TYPE_SINGLE_PLAYER:

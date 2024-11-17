@@ -17,9 +17,10 @@ cl ^
     /WX ^
     /Zi ^
     /D_CRT_SECURE_NO_WARNINGS ^
+    /DPLATFORM_WINDOWS ^
     /I"external\include" ^
     *.c ^
-    "SDL2.lib" "SDL2main.lib" "shell32.lib" ^
+    "SDL2.lib" "SDL2main.lib" "shell32.lib" "Ws2_32.lib" ^
     /link ^
     "/OUT:taco-quest.exe" ^
     "/LIBPATH:external\lib" ^
