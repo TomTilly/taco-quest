@@ -11,6 +11,8 @@
 #ifndef level_h
 #define level_h
 
+#include <stdlib.h>
+
 typedef enum {
     CELL_TYPE_INVALID = -1,
     CELL_TYPE_EMPTY,
@@ -29,5 +31,7 @@ void level_destroy(Level* level);
 S32 level_get_cell_index(Level* level, S32 x, S32 y);
 bool level_set_cell(Level* level, S32 x, S32 y, CellType value);
 CellType level_get_cell(Level* level, S32 x, S32 y);
+size_t level_serialize(const Level* level, void * buffer, size_t buffer_size);
+size_t level_deserialize(void * buffer, size_t size, Level * out);
 
 #endif /* level_h */

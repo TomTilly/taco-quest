@@ -10,6 +10,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <assert.h>
 
 #include <SDL2/SDL.h>
 
@@ -65,7 +66,8 @@ S32 main (S32 argc, char** argv) {
 
     int server_socket_fd = -1;
     int client_socket_fd = -1;
-    
+    int server_client_socket_fd = -1; // TODO: will be an array to handle multiple connections
+
     struct addrinfo hints = {
         .ai_family = AF_UNSPEC, // don't care IPv4 or IPv6
         .ai_socktype = SOCK_STREAM // TCP stream sockets
@@ -172,12 +174,29 @@ S32 main (S32 argc, char** argv) {
         return EXIT_FAILURE;
     }
 
+
+
+
+    SDL_Rect display_size;
+    SDL_GetDisplayBounds(0, &display_size);
+
+    int window_x = SDL_WINDOWPOS_CENTERED;
+    int window_y = display_size.y / 4;
     S32 cell_size = 40;
     S32 window_width = LEVEL_WIDTH * cell_size;
     S32 window_height = LEVEL_HEIGHT * cell_size;
+
+    if ( session_type == SESSION_TYPE_SERVER ) {
+        window_x = display_size.w / 2 - window_width;
+    } else if ( session_type == SESSION_TYPE_CLIENT ) {
+        window_x = display_size.w / 2;
+    } else {
+        window_y = SDL_WINDOWPOS_CENTERED;
+    }
+
     SDL_Window* window = SDL_CreateWindow(window_title,
-                                          SDL_WINDOWPOS_CENTERED,
-                                          SDL_WINDOWPOS_CENTERED,
+                                          window_x,
+                                          window_y,
                                           window_width,
                                           window_height,
                                           0);
@@ -287,26 +306,69 @@ S32 main (S32 argc, char** argv) {
             time_since_update_us -= GAME_SIMULATE_TIME_INTERVAL_US;
 
             switch(session_type) {
-            case SESSION_TYPE_CLIENT:
+            case SESSION_TYPE_CLIENT: {
                 // TODO: check for updated state from server.
                 // TODO: Send command to server
+
+                size_t buffer_size = 1024 * 1024;
+                void * buffer = malloc(buffer_size);
+                ssize_t received = recv(client_socket_fd, buffer, buffer_size, 0);
+
+                assert(received < (ssize_t)buffer_size);
+
+                if ( received == -1 ) {
+                    fprintf(stderr, "error receiving data: %s\n", strerror(errno));
+                } else {
+                    size_t bytes_deserialized = 0;
+                    do {
+                        bytes_deserialized += level_deserialize(buffer + bytes_deserialized,
+                                                                buffer_size,
+                                                                &game.level);
+                    } while ( bytes_deserialized < (size_t)received );
+                }
+
                 break;
+            }
             case SESSION_TYPE_SERVER: {
                 struct sockaddr_storage client_addr;
                 socklen_t client_addr_len = sizeof(client_addr);
-                int rc = accept(server_socket_fd, (struct sockaddr *)&client_addr, &client_addr_len);
-                if (rc != 0) {
-                    if (errno != EWOULDBLOCK && errno != EAGAIN){
-                        fprintf(stderr, "accept() failed: %s\n", strerror(errno));
-                    }
-                } else {
-                    fprintf(stdout, "received incoming client connection!\n");
-                    // TODO: Handle incoming client connection.
-                }
 
                 // TODO: check for command from client
                 game_update(&game, snake_action, other_snake_action);
-                // TODO: Send state to client.
+
+                if ( server_client_socket_fd == -1 ) {
+                    server_client_socket_fd = accept(server_socket_fd,
+                                                     (struct sockaddr *)&client_addr,
+                                                     &client_addr_len);
+
+                    // socket is still -1 on error:
+                    if (server_client_socket_fd == -1) {
+                        if (errno != EWOULDBLOCK && errno != EAGAIN){
+                            fprintf(stderr, "accept() failed: %s\n", strerror(errno));
+                        }
+                    } else {
+                        printf("client connected!\n");
+                    }
+                } else {
+                    size_t buffer_size = 1024 * 1024;
+                    void * buffer = malloc(buffer_size);
+                    size_t msg_size = level_serialize(&game.level, buffer, buffer_size);
+
+                    ssize_t size_sent = send(server_client_socket_fd,
+                                             buffer, msg_size,
+                                             0);
+
+                    if ( size_sent == -1 ) {
+                        fprintf(stderr, "send() error?: %s\n", strerror(errno));
+                    }
+
+                    if ( (size_t)size_sent != msg_size ) {
+                        printf("sent only %zu bytes\n", msg_size);
+                    }
+
+                    free(buffer);
+                }
+
                 break;
             }
             case SESSION_TYPE_SINGLE_PLAYER:
