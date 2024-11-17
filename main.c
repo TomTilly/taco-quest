@@ -147,7 +147,7 @@ S32 main (S32 argc, char** argv) {
 
         // See beej's network guide for more details.
         // Lookup network info for server type socket.
-        int rc = getaddrinfo(NULL, port, &hints, &server_info);
+        int rc = getaddrinfo("0.0.0.0", port, &hints, &server_info);
         if (rc != 0) {
             fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(rc));
             return EXIT_FAILURE;
