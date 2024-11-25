@@ -301,7 +301,7 @@ S32 main (S32 argc, char** argv) {
     size_t net_msg_buffer_size = 1024 * 1024;
     char* net_msg_buffer = (char*)malloc(net_msg_buffer_size);
 
-    void * client_buffer = NULL;
+    U8* client_buffer = NULL;
     size_t client_buffer_size = 0;
     size_t client_received = 0;
 
@@ -500,26 +500,32 @@ S32 main (S32 argc, char** argv) {
                     msg_size += snake_serialize(game.snakes + 0, net_msg_buffer + msg_size, net_msg_buffer_size - msg_size);
                     msg_size += snake_serialize(game.snakes + 1, net_msg_buffer + msg_size, net_msg_buffer_size - msg_size);
 
+                    PacketHeader header = {
+                        .type = PACKET_TYPE_LEVEL_STATE,
+                        .size = (U16)(msg_size)
+                    };
+
 #if defined(PLATFORM_WINDOWS)
                     int size_sent = send(server_client_socket_fd,
                                          net_msg_buffer, (int)msg_size,
                                          0);
-                    // TODO: error/size checking
 #else
-                    PacketHeader header = {
-                        .type = PACKET_TYPE_LEVEL_STATE,
-                        .size = msg_size
-                    };
-
                     ssize_t size_sent = send(server_client_socket_fd, &header, sizeof(header), 0);
+#endif
                     if ( size_sent == -1 ) {
                         fprintf(stderr, "send() error?: %s\n", strerror(errno));
                     } else if ( (size_t)size_sent != sizeof(header) ) {
                         printf("sent only %zu bytes of header\n", msg_size);
                     } else {
+#if defined(PLATFORM_WINDOWS)
+                        size_sent = send(server_client_socket_fd,
+                                         net_msg_buffer, (int)msg_size,
+                                         0);
+#else
                         size_sent = send(server_client_socket_fd,
                                          net_msg_buffer, msg_size,
                                          0);
+#endif
 
                         // NOTE: this used to be for windoze too.
                         if ( size_sent == -1 ) {
@@ -528,7 +534,6 @@ S32 main (S32 argc, char** argv) {
                             printf("sent only %zu bytes\n", msg_size);
                         }
                     }
-#endif
                 }
 
                 break;
