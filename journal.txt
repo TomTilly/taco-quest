@@ -2,5 +2,45 @@
 Past:
 - Justin last made the windows build succeed, but it doesn't work in any way.
 
+Today:
+- Justin started by actually fixing windows code
+- Tom T followed instructions from Tom F and Justin to begin implementing network platform layer
+
 Future:
-- 
+- Next up: Tom F
+- Finish implementing network platform layer
+- Do network actions more frequently (outside of game tick) to reduce client lag
+
+Notes:
+- We decided to implement the lowest level wrapper around the socket APIs as opposed to wrapping all of the network and game logic. Reasons:
+    - We don't want to have to write the game logic for each platform
+    - Reusability for future projects (potentially)
+- Windows has special WSAStartup init code that's required
+- Setting up client is identical on both platforms
+- Setting up server only differs in setting socket to non-blocking
+- Interface should handle would block stuff if you set the socket to non-blocking
+- Provide conversion layer to provide errors to the user
+- Ideas for interface
+    - Move INVALID_SOCKET into interface
+    - Unify socket type
+    - Setup client socket function
+        - Params: IP, port
+    - Setup server socket function
+        - Params: port, (blocking - maybe include later)
+    - Send
+        - Params: socket, pointer, size
+        - Returns: sent, error
+        - Basic and loop versions
+    - Receive
+        - Params: socket, pointer, size
+        - Returns: received, error
+        - Basic and loop versions
+    - Close
+    - Accept
+        - Params: socket
+        - Returns: unified socket, error
+
+---
+
+Homework
+- Research Steam networking code. There may be security restrictions

@@ -22,6 +22,8 @@
 
 #include <SDL2/SDL.h>
 
+#include "network.h"
+
 #define LEVEL_WIDTH 24
 #define LEVEL_HEIGHT 20
 #define GAME_SIMULATE_TIME_INTERVAL_US 150000
@@ -85,26 +87,18 @@ S32 main (S32 argc, char** argv) {
             return EXIT_FAILURE;
         }
     }
-
-#if defined(PLATFORM_WINDOWS)
-    SOCKET server_socket_fd = INVALID_SOCKET;
-    SOCKET client_socket_fd = INVALID_SOCKET;
-    SOCKET server_client_socket_fd = INVALID_SOCKET;
-
-    {
-        WORD wsa_version_requested = MAKEWORD(2, 2);
-        WSADATA wsa_data = {0};
-        int rc = WSAStartup(wsa_version_requested, &wsa_data);
-        if (rc != 0) {
-            fprintf(stderr, "WSAStartup() failed with %d\n", rc);
-            return EXIT_FAILURE;
-        }
+    
+    NetSocket server_socket_fd = NET_INVALID_SOCKET;
+    NetSocket client_socket_fd = NET_INVALID_SOCKET;
+    NetSocket server_client_socket_fd = NET_INVALID_SOCKET; // TODO: will be an array to handle multiple connections
+    
+    NetInitResult result = net_init();
+    
+    if (!result.succeeded) {
+        fprintf(stderr, "%s\n", result.error_message);
+        return EXIT_FAILURE;
     }
-#else
-    int server_socket_fd = INVALID_SOCKET;
-    int client_socket_fd = INVALID_SOCKET;
-    int server_client_socket_fd = INVALID_SOCKET; // TODO: will be an array to handle multiple connections
-#endif
+    
 
     struct addrinfo hints = {
         .ai_family = AF_UNSPEC, // don't care IPv4 or IPv6

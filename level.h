@@ -5,13 +5,13 @@
 //  Created by Thomas Foster on 11/9/24.
 //
 
-#include "ints.h"
-#include <stdbool.h>
-
 #ifndef level_h
 #define level_h
 
 #include <stdlib.h>
+#include <stdbool.h>
+
+#include "ints.h"
 
 typedef enum {
     CELL_TYPE_INVALID = -1,
