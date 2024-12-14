@@ -340,6 +340,9 @@ S32 main (S32 argc, char** argv) {
         }
 
         if (session_type == SESSION_TYPE_CLIENT) {
+            // TODO: Check if our socket is still alive, otherwise we have to press a key after
+            // the server disconnects.
+
             // Send our action to the server if there is one.
             if (snake_action != SNAKE_ACTION_NONE) {
                 PacketHeader packet_header = {
@@ -348,24 +351,45 @@ S32 main (S32 argc, char** argv) {
                 };
 
 #if defined(PLATFORM_WINDOWS)
-                int size_sent = send(client_socket_fd, (char*)&packet_header, (int)sizeof(packet_header), 0);
+                int size_sent = send(client_socket_fd,
+                                     (char*)&packet_header,
+                                     (int)sizeof(packet_header),
+                                     0);
                 if ( size_sent == -1 ) {
                     fprintf(stderr, "error sending data: %d\n", WSAGetLastError());
-                } else {
-                    assert(size_sent == sizeof(packet_header));
-                    size_sent = send(client_socket_fd, (char*)&snake_action, (int)sizeof(snake_action), 0);
+                    fprintf(stderr, "ending session.\n");
+                    return 1;
+                } else if (size_sent == sizeof(packet_header)) {
+                    size_sent = send(client_socket_fd,
+                                     (char*)&snake_action,
+                                     (int)sizeof(snake_action),
+                                     0);
                     if ( size_sent == -1 ) {
                         fprintf(stderr, "error sending data: %d\n", WSAGetLastError());
+                        fprintf(stderr, "ending session.\n");
+                        return 1;
                     }
+                } else {
+                    fprintf(stderr, "failed to send entire header for snake action\n");
                 }
 #else
-                ssize_t size_sent = send(client_socket_fd, &packet_header, sizeof(packet_header), 0);
+                ssize_t size_sent = send(client_socket_fd,
+                                         &packet_header,
+                                         sizeof(packet_header),
+                                         0);
                 if (size_sent == -1) {
                     fprintf(stderr, "error sending data: %s\n", strerror(errno));
+                    fprintf(stderr, "ending session.\n");
+                    return 1;
                 } else if (size_sent == sizeof(packet_header)) {
-                    size_sent = send(client_socket_fd, &snake_action, sizeof(snake_action), 0);
+                    size_sent = send(client_socket_fd,
+                                     &snake_action,
+                                     sizeof(snake_action),
+                                     0);
                     if (size_sent == -1) {
                         fprintf(stderr, "error sending data: %s\n", strerror(errno));
+                        fprintf(stderr, "ending session.\n");
+                        return 1;
                     }
                 } else {
                     fprintf(stderr, "failed to send entire header for snake action\n");
@@ -378,58 +402,71 @@ S32 main (S32 argc, char** argv) {
                 PacketHeader packet_header;
 
 #if defined(PLATFORM_WINDOWS)
-                int received = recv(client_socket_fd, (char*)&packet_header, (int)sizeof(packet_header), 0);
+                int received = recv(client_socket_fd,
+                                    (char*)&packet_header,
+                                    (int)sizeof(packet_header),
+                                    0);
                 if ( received < 0 ) {
                     fprintf(stderr, "error sending data: %d\n", WSAGetLastError());
-                } else {
-                    assert(received == sizeof(packet_header));
+
                 }
 #else
-                ssize_t received = recv(client_socket_fd, &packet_header, sizeof(packet_header), 0);
-                if ( received == -1 ) {
+                ssize_t received = recv(client_socket_fd,
+                                        &packet_header,
+                                        sizeof(packet_header),
+                                        0);
+                if ( received < 0 ) {
                     fprintf(stderr, "error receiving data: %s\n", strerror(errno));
-                } else {
-                    assert(received == sizeof(packet_header));
                 }
 #endif
 
-                if ( packet_header.type == PACKET_TYPE_LEVEL_STATE ) {
-                    client_buffer_size = packet_header.size;
-                    client_buffer = malloc(client_buffer_size);
-                    client_received = 0;
+                if (received > 0) {
+                    assert(received == sizeof(packet_header));
+
+                    if (packet_header.type == PACKET_TYPE_LEVEL_STATE ) {
+                        client_buffer_size = packet_header.size;
+                        client_buffer = malloc(client_buffer_size);
+                        client_received = 0;
+                    }
                 }
             }
 
+            // If we have a client buffer, we are either reading the start of or continuing in the middle of a packet message.
+            if ( client_buffer ) {
 #if defined(PLATFORM_WINDOWS)
-            int received = recv(client_socket_fd, (char*)(client_buffer + client_received), (int)(client_buffer_size - client_received), 0);
-#else
-            ssize_t received = recv(client_socket_fd,
-                                    client_buffer + client_received,
-                                    client_buffer_size - client_received,
+                int received = recv(client_socket_fd,
+                                    (char*)(client_buffer + client_received),
+                                    (int)(client_buffer_size - client_received),
                                     0);
+#else
+                ssize_t received = recv(client_socket_fd,
+                                        client_buffer + client_received,
+                                        client_buffer_size - client_received,
+                                        0);
 #endif
 
-            if ( received == -1 ) {
-                fprintf(stderr, "error receiving data: %s\n", strerror(errno));
-            } else {
-                client_received += received;
+                if ( received == -1 ) {
+                    fprintf(stderr, "error receiving data: %s\n", strerror(errno));
+                } else {
+                    client_received += received;
 
-                if ( client_received == client_buffer_size ) {
-                    size_t bytes_deserialized = 0;
-                    do {
-                        bytes_deserialized += level_deserialize(client_buffer + bytes_deserialized,
-                                                                client_buffer_size - bytes_deserialized,
-                                                                &game.level);
-                        bytes_deserialized += snake_deserialize(client_buffer + bytes_deserialized,
-                                                                client_buffer_size - bytes_deserialized,
-                                                                game.snakes + 0);
-                        bytes_deserialized += snake_deserialize(client_buffer + bytes_deserialized,
-                                                                client_buffer_size - bytes_deserialized,
-                                                                game.snakes + 1);
-                    } while ( bytes_deserialized < (size_t)client_received );
+                    if ( client_received == client_buffer_size ) {
+                        size_t bytes_deserialized = 0;
+                        do {
+                            bytes_deserialized += level_deserialize(client_buffer + bytes_deserialized,
+                                                                    client_buffer_size - bytes_deserialized,
+                                                                    &game.level);
+                            bytes_deserialized += snake_deserialize(client_buffer + bytes_deserialized,
+                                                                    client_buffer_size - bytes_deserialized,
+                                                                    game.snakes + 0);
+                            bytes_deserialized += snake_deserialize(client_buffer + bytes_deserialized,
+                                                                    client_buffer_size - bytes_deserialized,
+                                                                    game.snakes + 1);
+                        } while ( bytes_deserialized < (size_t)client_received );
 
-                    free(client_buffer);
-                    client_buffer = NULL;
+                        free(client_buffer);
+                        client_buffer = NULL;
+                    }
                 }
             }
 
@@ -459,6 +496,8 @@ S32 main (S32 argc, char** argv) {
                         int last_error = WSAGetLastError();
                         if (last_error != WSAEWOULDBLOCK) {
                             fprintf(stderr, "recv() error: %d\n", last_error);
+                            closesocket(server_client_socket_fd);
+                            server_client_socket_fd = INVALID_SOCKET;
                         }
                     } else if (received > 0) {
                         assert(received == sizeof(packet_header));
@@ -469,9 +508,12 @@ S32 main (S32 argc, char** argv) {
                                 int last_error = WSAGetLastError();
                                 if (last_error != WSAEWOULDBLOCK) {
                                     fprintf(stderr, "recv() error: %d\n", last_error);
+                                    closesocket(server_client_socket_fd);
+                                    server_client_socket_fd = INVALID_SOCKET;
                                 }
+                            } else if (received > 0) {
+                                assert(received == sizeof(client_snake_action));
                             }
-                            assert(received == sizeof(client_snake_action));
                         } else {
                             // TODO: If it is a message that we don't recognize, read the number of bytes in the packet.
                             printf("unrecognized packet up in har: %d\n", packet_header.type);
@@ -482,6 +524,8 @@ S32 main (S32 argc, char** argv) {
                     if (received < 0) {
                         if (errno != EWOULDBLOCK && errno != EAGAIN){
                             fprintf(stderr, "recv() error?: %s\n", strerror(errno));
+                            close(server_client_socket_fd);
+                            server_client_socket_fd = INVALID_SOCKET;
                         }
                     } else if (received > 0) {
                         assert(received == sizeof(packet_header));
@@ -491,8 +535,10 @@ S32 main (S32 argc, char** argv) {
                             if (received < 0) { // TODO: refactor?
                                 if (errno != EWOULDBLOCK && errno != EAGAIN){
                                     fprintf(stderr, "recv() error?: %s\n", strerror(errno));
+                                    close(server_client_socket_fd);
+                                    server_client_socket_fd = INVALID_SOCKET;
                                 }
-                            } else {
+                            } else if (received > 0) {
                                 assert(received == sizeof(client_snake_action));
                             }
                         } else {
