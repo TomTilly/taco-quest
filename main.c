@@ -545,7 +545,7 @@ S32 main (S32 argc, char** argv) {
                     if ( size_sent == -1 ) {
                         fprintf(stderr, "send() error?: %s\n", strerror(errno));
                     } else if ( (size_t)size_sent != sizeof(packet_header) ) {
-                        printf("sent only %d of %zu bytes of header\n", size_sent, msg_size);
+                        printf("sent only %zu of %zu bytes of header\n", (size_t)size_sent, msg_size);
                     } else {
                         // Send the actual message.
 #if defined(PLATFORM_WINDOWS)
