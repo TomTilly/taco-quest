@@ -1,0 +1,6 @@
+12/13/2024: Discord
+Past:
+- Justin last made the windows build succeed, but it doesn't work in any way.
+
+Future:
+- 
