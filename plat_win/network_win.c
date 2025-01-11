@@ -1,4 +1,3 @@
-#if defined(PLATFORM_WINDOWS)
 #include "network.h"
 #include <stdio.h>
 #include <ws2tcpip.h>
@@ -18,4 +17,3 @@ NetInitResult net_init(void) {
     
     return result;
 }
-#endif

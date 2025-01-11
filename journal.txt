@@ -1,4 +1,21 @@
+TODO:
+- Do network actions more frequently (outside of game tick) to reduce client lag
+
+HOMEWORK:
+- Research Steam networking code. There may be security restrictions
+
+--------------------------------------------------------------------------------
+1/11/2024: Discord
+
+Today:
+- Tom F finished implementing the rest of the network interface for mac.
+
+Next Time:
+- Justin does windows net interface.
+
+--------------------------------------------------------------------------------
 12/13/2024: Discord
+
 Past:
 - Justin last made the windows build succeed, but it doesn't work in any way.
 
@@ -9,7 +26,6 @@ Today:
 Future:
 - Next up: Tom F
 - Finish implementing network platform layer
-- Do network actions more frequently (outside of game tick) to reduce client lag
 
 Notes:
 - We decided to implement the lowest level wrapper around the socket APIs as opposed to wrapping all of the network and game logic. Reasons:
@@ -39,8 +55,3 @@ Notes:
     - Accept
         - Params: socket
         - Returns: unified socket, error
-
----
-
-Homework
-- Research Steam networking code. There may be security restrictions

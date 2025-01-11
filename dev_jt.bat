@@ -19,7 +19,7 @@ cl ^
     /D_CRT_SECURE_NO_WARNINGS ^
     /DPLATFORM_WINDOWS ^
     /I"external\include" ^
-    *.c ^
+    *.c plat_win\*.c ^
     "SDL2.lib" "SDL2main.lib" "shell32.lib" "Ws2_32.lib" ^
     /link ^
     "/OUT:taco-quest.exe" ^

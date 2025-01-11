@@ -5,4 +5,4 @@ set -e
 set -x
 
 # Compile program
-clang -std=c11 *.c -Wall -Wextra -Werror -lSDL2 -g -o taco-quest
+clang -std=c11 *.c plat_mac/*.c -Wall -Wextra -Werror -lSDL2 -g -o taco-quest
