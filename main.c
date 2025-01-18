@@ -76,14 +76,12 @@ S32 main (S32 argc, char** argv) {
         }
     }
     
-    NetSocket server_socket_fd = NET_INVALID_SOCKET;
-    NetSocket client_socket_fd = NET_INVALID_SOCKET;
-    NetSocket server_client_socket_fd = NET_INVALID_SOCKET; // TODO: will be an array to handle multiple connections
-    
-    NetInitResult result = net_init();
-    
-    if (!result.succeeded) {
-        fprintf(stderr, "%s\n", result.error_message);
+    NetSocket* server_socket = NULL;
+    NetSocket* client_socket = NULL;
+    NetSocket* server_client_socket = NULL; // TODO: will be an array to handle multiple connections
+
+    if (!net_init()) {
+        fprintf(stderr, "%s\n", net_get_error());
         return EXIT_FAILURE;
     }
 
@@ -99,13 +97,12 @@ S32 main (S32 argc, char** argv) {
 
         window_title = "Taco Quest (Client)";
 
-        NetCreateSocketResult result = net_create_client_socket(ip, port);
-        if ( !result.succeeded ) {
-            fprintf(stderr, "%s\n", result.error_message);
+        client_socket = net_create_client(ip, port);
+        if ( client_socket == NULL ) {
+            fprintf(stderr, "%s\n", net_get_error());
             return EXIT_FAILURE;
         }
 
-        client_socket_fd = result.socket;
         printf("Connected to %s:%s\n", ip, port);
         break;
     }
@@ -114,13 +111,12 @@ S32 main (S32 argc, char** argv) {
 
         window_title = "Taco Quest (Server)";
 
-        NetCreateSocketResult result = net_create_server_socket(port);
-        if ( !result.succeeded ) {
-            fputs(result.error_message, stderr);
+        server_socket = net_create_server(port);
+        if ( server_socket == NULL ) {
+            fputs(net_get_error(), stderr);
             return EXIT_FAILURE;
         }
 
-        server_socket_fd = result.socket;
         break;
     }
     }
@@ -260,19 +256,23 @@ S32 main (S32 argc, char** argv) {
                     .size = sizeof(snake_action)
                 };
 
-                NetTransferResult result = net_send(client_socket_fd, &packet_header, sizeof(packet_header));
-                if (!result.succeeded) {
-                    fprintf(stderr, "error sending data: %s\n", strerror(errno));
+                int bytes_sent = net_send(client_socket,
+                                          &packet_header,
+                                          sizeof(packet_header));
+                if (bytes_sent == -1) {
+                    fprintf(stderr, "%s\n", net_get_error());
                     fprintf(stderr, "ending session.\n");
-                    return 1; // TODO: do we want to exit on action send failure?
-                } else if (result.num_bytes == sizeof(packet_header)) { // Packet send success:
-                    result = net_send(client_socket_fd,
-                                      &snake_action,
-                                      sizeof(snake_action));
-                    if (!result.succeeded) {
-                        fprintf(stderr, "error sending data: %s\n", strerror(errno));
+                    // TODO: do we want to exit on action send failure?
+                    return EXIT_FAILURE;
+                } else if (bytes_sent == sizeof(packet_header)) {
+                    // Packet send success:
+                    bytes_sent = net_send(client_socket,
+                                          &snake_action,
+                                          sizeof(snake_action));
+                    if (bytes_sent == -1) {
+                        fprintf(stderr, "%s\n", net_get_error());
                         fprintf(stderr, "ending session.\n");
-                        return 1;
+                        return EXIT_FAILURE;
                     }
                 } else {
                     fprintf(stderr, "failed to send entire header for snake action\n");
@@ -283,13 +283,13 @@ S32 main (S32 argc, char** argv) {
             if ( client_buffer == NULL ) {
                 PacketHeader packet_header;
 
-                NetTransferResult result = net_receive(client_socket_fd, &packet_header, sizeof(packet_header));
-                if (!result.succeeded) {
-                    fprintf(stderr, "%s\n", result.error_message);
-                }
-
-                if (result.num_bytes > 0) {
-                    assert(result.num_bytes == sizeof(packet_header));
+                int bytes_received = net_receive(client_socket,
+                                                 &packet_header,
+                                                 sizeof(packet_header));
+                if (bytes_received == -1) {
+                    fprintf(stderr, "%s\n", net_get_error());
+                } else if (bytes_received > 0) {
+                    assert(bytes_received == sizeof(packet_header));
 
                     if (packet_header.type == PACKET_TYPE_LEVEL_STATE ) {
                         client_buffer_size = packet_header.size;
@@ -301,16 +301,17 @@ S32 main (S32 argc, char** argv) {
 
             // If we have a client buffer, we are either reading the start of or continuing in the middle of a packet message.
             if ( client_buffer ) {
-                NetTransferResult result = net_receive(client_socket_fd,
-                                                       client_buffer + client_received,
-                                                       client_buffer_size - client_received);
-                if (!result.succeeded) {
-                    fprintf(stderr, "%s\n", result.error_message);
+                int bytes_received = net_receive(client_socket,
+                                                 client_buffer + client_received,
+                                                 client_buffer_size - client_received);
+                if (bytes_received == -1) {
+                    fprintf(stderr, "%s\n", net_get_error());
                 } else {
-                    client_received += result.num_bytes;
+                    client_received += bytes_received;
 
                     if ( client_received == client_buffer_size ) {
                         size_t bytes_deserialized = 0;
+                        // TODO: do we still need this loop now that we have packet
                         do {
                             bytes_deserialized += level_deserialize(client_buffer + bytes_deserialized,
                                                                     client_buffer_size - bytes_deserialized,
@@ -343,26 +344,30 @@ S32 main (S32 argc, char** argv) {
                 SnakeAction client_snake_action = {0};
 
                 // Server receive input from client, update, then send game state to client
-                if ( server_client_socket_fd != NET_INVALID_SOCKET ) {
+                if ( server_client_socket != NULL ) {
                     PacketHeader packet_header;
 
-                    NetTransferResult result = net_receive(server_client_socket_fd, &packet_header, sizeof(packet_header));
+                    int bytes_received = net_receive(server_client_socket,
+                                                     &packet_header,
+                                                     sizeof(packet_header));
 
-                    if (!result.succeeded) {
-                        fputs(result.error_message, stderr);
-                        net_close(server_client_socket_fd);
-                        server_client_socket_fd = NET_INVALID_SOCKET;
-                    } else if ( result.num_bytes > 0 ) {
-                        assert(result.num_bytes == sizeof(packet_header));
+                    if (bytes_received == -1) {
+                        fputs(net_get_error(), stderr);
+                        net_destory_socket(server_client_socket);
+                        server_client_socket = NULL;
+                    } else if (bytes_received > 0) {
+                        assert(bytes_received == sizeof(packet_header));
 
                         if ( packet_header.type == PACKET_TYPE_SNAKE_ACTION ) {
-                            result = net_receive(server_client_socket_fd, &client_snake_action, sizeof(client_snake_action));
-                            if (!result.succeeded) {
-                                fputs(result.error_message, stderr);
-                                net_close(server_client_socket_fd);
-                                server_client_socket_fd = NET_INVALID_SOCKET;
-                            } else if (result.num_bytes > 0) {
-                                assert(result.num_bytes == sizeof(client_snake_action));
+                            bytes_received = net_receive(server_client_socket,
+                                                         &client_snake_action,
+                                                         sizeof(client_snake_action));
+                            if (bytes_received == -1) {
+                                fputs(net_get_error(), stderr);
+                                net_destory_socket(server_client_socket);
+                                server_client_socket = NULL;
+                            } else if (bytes_received > 0) {
+                                assert(bytes_received == sizeof(client_snake_action));
                             }
                         } else {
                             printf("unrecognized packet up in har: %d\n", packet_header.type);
@@ -373,13 +378,14 @@ S32 main (S32 argc, char** argv) {
                 game_update(&game, snake_action, client_snake_action);
 
                 // Listen for client connections
-                if ( server_client_socket_fd == NET_INVALID_SOCKET ) {
-                    NetCreateSocketResult result = net_server_accept(server_socket_fd);
-                    if ( result.succeeded ) {
-                        printf("client connected!\n");
-                        server_client_socket_fd = result.socket;
+                if (server_client_socket == NULL) {
+                    bool result = net_accept(server_socket, &server_client_socket);
+                    if (result) {
+                        if (server_client_socket != NULL) {
+                            printf("client connected!\n");
+                        }
                     } else {
-                        fprintf(stderr, "accept() failed: %s\n", strerror(errno));
+                        fprintf(stderr, "%s\n", net_get_error());
                     }
                 } else {
                     // Serialize game state
@@ -394,20 +400,26 @@ S32 main (S32 argc, char** argv) {
                         .size = (U16)(msg_size)
                     };
 
-                    NetTransferResult result = net_send(server_client_socket_fd, &packet_header, sizeof(packet_header));
-                    if (!result.succeeded) {
-                        fprintf(stderr, "send() error?: %s\n", strerror(errno));
-                    } else if (result.num_bytes != sizeof(packet_header)) {
-                        printf("sent only %zu of %zu bytes of header\n", result.num_bytes, sizeof(packet_header));
+                    int bytes_sent = net_send(server_client_socket,
+                                              &packet_header,
+                                              sizeof(packet_header));
+
+                    if (bytes_sent == -1) {
+                        fprintf(stderr, "%s\n", net_get_error());
+                    } else if (bytes_sent != sizeof(packet_header)) {
+                        printf("sent only %d of %zu bytes of header\n",
+                               bytes_sent, sizeof(packet_header));
                     }
 
                     // Send game state to client.
 
-                    result = net_send(server_client_socket_fd, net_msg_buffer, msg_size);
+                    bytes_sent = net_send(server_client_socket,
+                                          net_msg_buffer,
+                                          (int)msg_size);
 
-                    if (!result.succeeded) {
-                        fprintf(stderr, "send() error?: %s\n", strerror(errno));
-                    } else if ( result.num_bytes != msg_size ) {
+                    if (bytes_sent == -1) {
+                        fprintf(stderr, "%s\n", net_get_error());
+                    } else if (bytes_sent != (int)msg_size) {
                         printf("sent only %zu bytes\n", msg_size);
                     }
                 }
@@ -479,11 +491,13 @@ S32 main (S32 argc, char** argv) {
 
     switch(session_type) {
     case SESSION_TYPE_CLIENT:
-        net_close(client_socket_fd);
+        net_destory_socket(client_socket);
         break;
     case SESSION_TYPE_SERVER: {
-        net_close(server_socket_fd);
-        net_close(server_client_socket_fd);
+        net_destory_socket(server_socket);
+        if ( server_client_socket ) {
+            net_destory_socket(server_client_socket);
+        }
         break;
     }
     case SESSION_TYPE_SINGLE_PLAYER:
