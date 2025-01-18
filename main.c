@@ -303,7 +303,7 @@ S32 main (S32 argc, char** argv) {
             if ( client_buffer ) {
                 int bytes_received = net_receive(client_socket,
                                                  client_buffer + client_received,
-                                                 client_buffer_size - client_received);
+                                                 (int)(client_buffer_size - client_received));
                 if (bytes_received == -1) {
                     fprintf(stderr, "%s\n", net_get_error());
                 } else {

@@ -26,10 +26,6 @@ static void set_err(const char* format, ...) {
     va_end(args);
 }
 
-const char* net_get_error(void) {
-    return err_str;
-}
-
 // TODO: make error messages more generic, don't mention fcntl etc?
 
 bool net_init(void) {
@@ -55,9 +51,9 @@ NetSocket* net_create_client(const char* ip, const char* port) {
     }
 
     // Create client socket file descriptor.
-    NetSocket* sock = malloc(sizeof(*socket));
+    NetSocket* sock = malloc(sizeof(*sock));
     if ( sock == NULL ) {
-        set_err("malloc failed: %s", strerror(errno));
+        set_err("malloc failed: %s\n", strerror(errno));
         return NULL;
     }
 
@@ -102,9 +98,9 @@ NetSocket* net_create_server(const char* port) {
 
     // Create server socket file descriptor.
 
-    NetSocket* sock = malloc(sizeof(*socket));
+    NetSocket* sock = malloc(sizeof(*sock));
     if ( sock == NULL ) {
-        set_err("malloc failed: %s", strerror(errno));
+        set_err("malloc failed: %s\n", strerror(errno));
         return NULL;
     }
 
@@ -170,10 +166,10 @@ bool net_accept(NetSocket* server, NetSocket** out) {
     }
 
     // there was a connection.
-    *out = malloc(sizeof(*socket));
+    *out = malloc(sizeof(**out));
     if ( *out == NULL ) {
-        set_err("malloc failed: %s", strerror(errno));
-        return NULL;
+        set_err("malloc failed: %s\n", strerror(errno));
+        return false;
     }
 
     (*out)->fd = fd;
@@ -191,7 +187,7 @@ int net_send(NetSocket* socket, void* buf, int size) {
             return 0;
         }
 
-        set_err("Failed to send data: %s", strerror(errno));
+        set_err("Failed to send data: %s\n", strerror(errno));
         return -1;
     }
 
@@ -209,7 +205,7 @@ int net_receive(NetSocket* socket, void* buf, int size) {
             // Received nothing, but socket was non-blocking so it's okay.
             return 0;
         }
-        set_err("Error receiving data: %s", strerror(errno));
+        set_err("Error receiving data: %s\n", strerror(errno));
         return -1;
     }
 
@@ -221,4 +217,10 @@ void net_destory_socket(NetSocket* socket) {
 
     close(socket->fd);
     free(socket);
+
 }
+
+const char* net_get_error(void) {
+    return err_str;
+}
+
