@@ -18,3 +18,25 @@ Classic snake game with a multiplayer twist...and tacos!
 - Snake gets item to speed up/slow down time for oneself or all players
 - Easter egg for players who use port 6969
 
+## 1/26 Brainstorming Session
+
+Competative coop
+Severing tail -> turns back into apples which either opponent can eat
+Colliding into a wall:
+- no consequence (just stop)
+- or, die, respawn at original len, body turns to apples (opportunity to recover len)
+door requires two (or more?) buttons simult. to open
+- short: impossible (without coop!) long: possible
+- maybe area of level that has good stuff, only accessible to a long snake
+Apples don't spawn randomly: they "grow", required one to make plans
+Apples really are random:
+- 1/3: get lucky
+- 1/3: unlucky (spawns near the other player)
+- 1/3: both are same distance: race
+Apples spawn both randomly and with 'growing' version
+Level wraps around?
+power-up that enables tail snipping (otherwise normal snake mechanic: die when hitting other)
+Penalty if you get snipped
+Penalty for the snipper: momentary freeze
+low amount of food spawns: more in frequent
+speed power, but become snippable
