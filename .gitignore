@@ -59,4 +59,4 @@ dkms.conf
 *.entitlements
 
 #
-ips.txt
+docs/ips.txt

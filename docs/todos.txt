@@ -1,0 +1,3 @@
+Bugs
+
+- When a server and client are playing, and a new client attempts to connect, everybody crashes.
