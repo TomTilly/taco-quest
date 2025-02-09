@@ -9,6 +9,8 @@ struct net_socket {
     SOCKET socket;
 };
 
+static FILE* log_file;
+
 // TODO: use __thread or similar if we go multithreaded!
 static char err_str[NET_ERROR_MESSAGE_LEN] = "No error";
 static char windows_error_str[NET_ERROR_MESSAGE_LEN];
@@ -43,6 +45,12 @@ bool net_init(void) {
     if (rc != 0) {
         int last_error = WSAGetLastError();
         set_err("WSAStartup() failed with %s\n", get_windows_network_error(last_error));
+        return false;
+    }
+
+    log_file = fopen("net.log", "w");
+    if (log_file == NULL) {
+        set_err("Failed to open net.log\n");
         return false;
     }
 
@@ -237,4 +245,15 @@ void net_destroy_socket(NetSocket* socket) {
     assert(socket != NULL);
     closesocket(socket->socket);
     free(socket);
+}
+
+void net_shutdown(void) {
+    fclose(log_file);
+}
+
+void net_log(const char* format, ...) {
+    va_list args;
+    va_start(args, format);
+    vfprintf(log_file, format, args);
+    va_end(args);
 }

@@ -1,3 +1,11 @@
 Bugs
 
 - When a server and client are playing, and a new client attempts to connect, everybody crashes.
+
+Work
+
+- Figure out client side lag and potentially do network actions more frequently (outside of game tick) to reduce client lag
+
+HOMEWORK:
+
+- Research Steam networking code. There may be security restrictions

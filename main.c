@@ -47,6 +47,18 @@ typedef struct {
     PacketType type;
 } PacketHeader;
 
+typedef U8 ReceiveMessageStage;
+enum {
+    RECEIVE_MESSAGE_STAGE_PACKET_HEADER,
+    RECEIVE_MESSAGE_STAGE_PAYLOAD,
+    RECEIVE_MESSAGE_STAGE_COMPLETE,
+};
+
+typedef struct {
+    ReceiveMessageStage stage;
+    int bytes_received;
+} ReceiveMessageState;
+
 U16 server_sequence;
 U16 client_sequence;
 
@@ -65,35 +77,116 @@ const char* packet_type_description(PacketType type) {
     }
 }
 
-bool receive_result(NetSocket** socket, int expected, int actual)
-{
-    if (actual == -1) {
+int receive_result(NetSocket** socket, int bytes) {
+    if (bytes == -1) {
         fputs(net_get_error(), stderr);
         net_destroy_socket(*socket);
         *socket = NULL;
         return false;
     }
 
-    return actual == expected;
+    return bytes;
 }
 
-bool receive_packet(NetSocket** socket, PacketHeader* header) {
-
+int receive_packet(NetSocket** socket, PacketHeader* header, int offset) {
     net_log(RECV_FMT, sizeof(*header));
-    int bytes_received = net_receive(*socket, header, sizeof(*header));
+    int bytes_received = net_receive(*socket, header + offset, sizeof(*header) - offset);
     net_log(PACKET_AFTER_FMT, bytes_received, header->sequence,
             packet_type_description(header->type));
 
-    return receive_result(socket, sizeof(*header), bytes_received);
+    return receive_result(socket, bytes_received);
 }
 
-bool receive_payload(NetSocket** socket, void* buffer, int size, const char* description)
-{
+int receive_payload(NetSocket** socket, void* buffer, int size, const char* description) {
     net_log(RECV_FMT, size);
     int bytes_received = net_receive(*socket, buffer, size);
     net_log(AFTER_FMT, bytes_received, description);
 
-    return receive_result(socket, size, bytes_received);
+    return receive_result(socket, bytes_received);
+}
+
+// returns whether or not to continue running stages.
+bool receive_message_stage(NetSocket** socket,
+                           PacketHeader* packet_header,
+                           PacketType expected_packet_type,
+                           uint8_t* payload_buffer,
+                           int payload_size,
+                           const char* description,
+                           ReceiveMessageState* state) {
+    switch(state->stage) {
+    case RECEIVE_MESSAGE_STAGE_PACKET_HEADER: {
+        int bytes_received = receive_packet(socket, packet_header, state->bytes_received);
+        if (bytes_received < 0) {
+            memset(state, 0, sizeof(*state));
+            return false;
+        } else if (bytes_received > 0) {
+            state->bytes_received += bytes_received;
+        } else if (bytes_received == 0) {
+            return false;
+        }
+
+        if (state->bytes_received == sizeof(*packet_header)) {
+            if (packet_header->type != expected_packet_type) {
+                fprintf(stderr,
+                        "unrecognized packet type %d on sequence number %d\n",
+                        packet_header->type,
+                        packet_header->sequence);
+                memset(state, 0, sizeof(*state));
+                return false;
+            }
+
+            state->stage = RECEIVE_MESSAGE_STAGE_PAYLOAD;
+            state->bytes_received = 0;
+        }
+        break;
+    }
+    case RECEIVE_MESSAGE_STAGE_PAYLOAD: {
+        int bytes_received = receive_payload(socket,
+                                             payload_buffer + state->bytes_received,
+                                             payload_size,
+                                             description);
+        if (bytes_received < 0) {
+            memset(state, 0, sizeof(*state));
+            return false;
+        } else if (bytes_received > 0) {
+            state->bytes_received += bytes_received;
+        } else if (bytes_received == 0) {
+            return false;
+        }
+
+        if (state->bytes_received == payload_size) {
+            state->stage = RECEIVE_MESSAGE_STAGE_COMPLETE;
+        }
+        break;
+    }
+    case RECEIVE_MESSAGE_STAGE_COMPLETE:
+    default:
+        assert(!"Invalid receive message state!");
+        break;
+    }
+
+    return true;
+}
+
+// TODO: do we really need to pass in PacketHeader ?
+void receive_message(NetSocket** socket,
+                     PacketHeader* packet_header,
+                     PacketType expected_packet_type,
+                     uint8_t* payload_buffer,
+                     int payload_size,
+                     const char* description,
+                     ReceiveMessageState* state) {
+    while (state->stage != RECEIVE_MESSAGE_STAGE_COMPLETE) {
+        if (!receive_message_stage(socket,
+                                   packet_header,
+                                   expected_packet_type,
+                                   payload_buffer,
+                                   payload_size,
+                                   description,
+                                   state)) {
+            break;
+        }
+    }
 }
 
 S32 main (S32 argc, char** argv) {
@@ -129,7 +222,7 @@ S32 main (S32 argc, char** argv) {
             return EXIT_FAILURE;
         }
     }
-    
+
     NetSocket* server_socket = NULL;
     NetSocket* client_socket = NULL;
     NetSocket* server_client_socket = NULL; // TODO: will be an array to handle multiple connections
@@ -138,6 +231,12 @@ S32 main (S32 argc, char** argv) {
     if (!net_init()) {
         fprintf(stderr, "%s\n", net_get_error());
         return EXIT_FAILURE;
+    }
+
+    if (session_type == SESSION_TYPE_SINGLE_PLAYER) {
+        // ip = "127.0.0.1";
+        port = "12345";
+        session_type = SESSION_TYPE_SERVER;
     }
 
     switch(session_type) {
@@ -151,7 +250,7 @@ S32 main (S32 argc, char** argv) {
         printf("Starting client session, with address: %s:%s\n", ip, port);
 
         window_title = "Taco Quest (Client)";
-        
+
         net_log("CLIENT\n");
 
         client_socket = net_create_client(ip, port);
@@ -167,7 +266,7 @@ S32 main (S32 argc, char** argv) {
         printf("Starting server session, with port: %s\n", port);
 
         window_title = "Taco Quest (Server)";
-        
+
         net_log("SERVER\n");
 
         server_socket = net_create_server(port);
@@ -270,6 +369,9 @@ S32 main (S32 argc, char** argv) {
     size_t client_buffer_size = 0;
     size_t client_received = 0;
 
+    ReceiveMessageState receive_client_snake_action_message_state = {0};
+    // ReceiveMessageState receive_game_state_message_state = {0};
+
     bool quit = false;
     while (!quit) {
         // Calculate how much time has elapsed (in microseconds).
@@ -315,7 +417,7 @@ S32 main (S32 argc, char** argv) {
                     .size = sizeof(snake_action),
                     .sequence = client_sequence++
                 };
-                
+
                 net_log(SEND_FMT, sizeof(packet_header));
                 int bytes_sent = net_send(client_socket,
                                           &packet_header,
@@ -346,21 +448,73 @@ S32 main (S32 argc, char** argv) {
                 }
             }
 
+            // TODO: We've made a mistake, we need to allocate the client buffer between receiving
+            // the packet header and the payload.
+            //
+            // Its weird that client buffer is passed in as null on the first call. Maybe when
+            // client_buffer is null, we are able to run the packet header stage explicitly.
+            //
+            // if (client_buffer == NULL) {
+            //     receive_message_packet_header();
+            //     if (receive_game_state_message_state.stage == RECEIVE_MESSAGE_STAGE_PAYLOAD) {
+            //         allocate client buffer
+            //     }
+            // }
+            // if (client_buffer) {
+            //     receive_message();
+            //     if (receive_game_state_message_state.stage == RECEIVE_MESSAGE_STAGE_COMPLETE) {
+            //         // deserialize and cleanup client_buffer
+            //     }
+            // }
+#if 0
+
+            PacketHeader packet_header;
+            receive_message_stage(&server_client_socket,
+                                  &packet_header,
+                                  PACKET_TYPE_SNAKE_ACTION,
+                                  client_buffer,
+                                  client_buffer_size,
+                                  "game state",
+                                  &receive_game_state_message_state);
+            if (receive_game_state_message_state.stage == RECEIVE_MESSAGE_STAGE_PAYLOAD) {
+                client_buffer_size = packet_header.size;
+                client_buffer = malloc(client_buffer_size);
+                receive_message_stage(&server_client_socket,
+                                      &packet_header,
+                                      PACKET_TYPE_SNAKE_ACTION,
+                                      client_buffer,
+                                      client_buffer_size,
+                                      "game state",
+                                      &receive_game_state_message_state);
+            }
+
+            if (receive_game_state_message_state.stage == RECEIVE_MESSAGE_STAGE_COMPLETE) {
+                memset(&receive_game_state_message_state,
+                       0,
+                       sizeof(receive_game_state_message_state));
+                size_t bytes_deserialized = 0;
+                // TODO: do we still need this loop now that we have packet
+                do {
+                    bytes_deserialized += level_deserialize(client_buffer + bytes_deserialized,
+                                                            client_buffer_size - bytes_deserialized,
+                                                            &game.level);
+                    bytes_deserialized += snake_deserialize(client_buffer + bytes_deserialized,
+                                                            client_buffer_size - bytes_deserialized,
+                                                            game.snakes + 0);
+                    bytes_deserialized += snake_deserialize(client_buffer + bytes_deserialized,
+                                                            client_buffer_size - bytes_deserialized,
+                                                            game.snakes + 1);
+                } while ( bytes_deserialized < (size_t)client_buffer_size );
+
+                free(client_buffer);
+                client_buffer = NULL;
+            }
+#else
             // Check if the server has sent us the updated game state.
             if ( client_buffer == NULL ) {
                 PacketHeader packet_header;
 
-                net_log(RECV_FMT, sizeof(packet_header));
-                int bytes_received = net_receive(client_socket,
-                                                 &packet_header,
-                                                 sizeof(packet_header));
-                net_log(PACKET_AFTER_FMT, bytes_received, packet_header.sequence, "game state packet header");
-
-                if (bytes_received == -1) {
-                    fprintf(stderr, "%s\n", net_get_error());
-                } else if (bytes_received > 0) {
-                    assert(bytes_received == sizeof(packet_header));
-
+                if (receive_packet(&client_socket, &packet_header, 0) == sizeof(packet_header)) {
                     if (packet_header.type == PACKET_TYPE_LEVEL_STATE ) {
                         client_buffer_size = packet_header.size;
                         client_buffer = malloc(client_buffer_size);
@@ -371,39 +525,29 @@ S32 main (S32 argc, char** argv) {
 
             // If we have a client buffer, we are either reading the start of or continuing in the middle of a packet message.
             if ( client_buffer ) {
+                if (receive_payload(&client_socket,
+                                    client_buffer + client_received,
+                                    (int)(client_buffer_size - client_received),
+                                    "game state")) {
+                    size_t bytes_deserialized = 0;
+                    // TODO: do we still need this loop now that we have packet
+                    do {
+                        bytes_deserialized += level_deserialize(client_buffer + bytes_deserialized,
+                                                                client_buffer_size - bytes_deserialized,
+                                                                &game.level);
+                        bytes_deserialized += snake_deserialize(client_buffer + bytes_deserialized,
+                                                                client_buffer_size - bytes_deserialized,
+                                                                game.snakes + 0);
+                        bytes_deserialized += snake_deserialize(client_buffer + bytes_deserialized,
+                                                                client_buffer_size - bytes_deserialized,
+                                                                game.snakes + 1);
+                    } while ( bytes_deserialized < (size_t)client_received );
 
-
-                net_log(RECV_FMT, (size_t)(client_buffer_size - client_received));
-                int bytes_received = net_receive(client_socket,
-                                                 client_buffer + client_received,
-                                                 (int)(client_buffer_size - client_received));
-                net_log(AFTER_FMT, bytes_received, "game state");
-
-                if (bytes_received == -1) {
-                    fprintf(stderr, "%s\n", net_get_error());
-                } else {
-                    client_received += bytes_received;
-
-                    if ( client_received == client_buffer_size ) {
-                        size_t bytes_deserialized = 0;
-                        // TODO: do we still need this loop now that we have packet
-                        do {
-                            bytes_deserialized += level_deserialize(client_buffer + bytes_deserialized,
-                                                                    client_buffer_size - bytes_deserialized,
-                                                                    &game.level);
-                            bytes_deserialized += snake_deserialize(client_buffer + bytes_deserialized,
-                                                                    client_buffer_size - bytes_deserialized,
-                                                                    game.snakes + 0);
-                            bytes_deserialized += snake_deserialize(client_buffer + bytes_deserialized,
-                                                                    client_buffer_size - bytes_deserialized,
-                                                                    game.snakes + 1);
-                        } while ( bytes_deserialized < (size_t)client_received );
-
-                        free(client_buffer);
-                        client_buffer = NULL;
-                    }
+                    free(client_buffer);
+                    client_buffer = NULL;
                 }
             }
+#endif
 
             snake_action = 0;
         } else if (time_since_update_us >= GAME_SIMULATE_TIME_INTERVAL_US) {
@@ -422,7 +566,20 @@ S32 main (S32 argc, char** argv) {
                 if (server_client_socket != NULL) {
                     PacketHeader packet_header;
 
-                    if (receive_packet(&server_client_socket, &packet_header)) {
+                    receive_message(&server_client_socket,
+                                    &packet_header,
+                                    PACKET_TYPE_SNAKE_ACTION,
+                                    &client_snake_action,
+                                    sizeof(client_snake_action),
+                                    "client snake action",
+                                    &receive_client_snake_action_message_state);
+                    if (receive_client_snake_action_message_state.stage == RECEIVE_MESSAGE_STAGE_COMPLETE) {
+                        memset(&receive_client_snake_action_message_state,
+                               0,
+                               sizeof(receive_client_snake_action_message_state));
+                    }
+#if 0
+                    if (receive_packet(&server_client_socket, &packet_header, 0) == sizeof(packet_header)) {
                         if (packet_header.type == PACKET_TYPE_SNAKE_ACTION) {
                             receive_payload(&server_client_socket,
                                             &client_snake_action,
@@ -432,44 +589,8 @@ S32 main (S32 argc, char** argv) {
                             printf("unrecognized packet up in har: %d\n", packet_header.type);
                         }
                     }
-
-#if 0
-                    net_log(RECV_FMT, sizeof(packet_header));
-                    int bytes_received = net_receive(server_client_socket,
-                                                     &packet_header,
-                                                     sizeof(packet_header));
-                    net_log(PACKET_AFTER_FMT, bytes_received, packet_header.sequence,
-                            "client input packet header");
-
-                    if (bytes_received == -1) {
-                        fputs(net_get_error(), stderr);
-                        net_destroy_socket(server_client_socket);
-                        server_client_socket = NULL;
-                    } else if (bytes_received > 0) {
-                        assert(bytes_received == sizeof(packet_header));
-
-                        if ( packet_header.type == PACKET_TYPE_SNAKE_ACTION ) {
-
-                            net_log(RECV_FMT, sizeof(client_snake_action));
-                            bytes_received = net_receive(server_client_socket,
-                                                         &client_snake_action,
-                                                         sizeof(client_snake_action));
-                            net_log(AFTER_FMT, bytes_received, "client snake action");
-
-                            if (bytes_received == -1) {
-                                fputs(net_get_error(), stderr);
-                                net_destroy_socket(server_client_socket);
-                                server_client_socket = NULL;
-                            } else if (bytes_received > 0) {
-                                assert(bytes_received == sizeof(client_snake_action));
-                            }
-                        } else {
-                            printf("unrecognized packet up in har: %d\n", packet_header.type);
-                        }
-                    }
 #endif
                 }
-
 
                 game_update(&game, snake_action, client_snake_action);
 
@@ -496,7 +617,7 @@ S32 main (S32 argc, char** argv) {
                         .size = (U16)(msg_size),
                         .sequence = server_sequence++
                     };
-                    
+
                     net_log(SEND_FMT, sizeof(packet_header));
                     int bytes_sent = net_send(server_client_socket,
                                               &packet_header,
@@ -511,7 +632,6 @@ S32 main (S32 argc, char** argv) {
                     }
 
                     // Send game state to client.
-
                     net_log(SEND_FMT, (size_t)msg_size);
                     bytes_sent = net_send(server_client_socket,
                                           net_msg_buffer,
@@ -521,6 +641,7 @@ S32 main (S32 argc, char** argv) {
                     if (bytes_sent == -1) {
                         fprintf(stderr, "%s\n", net_get_error());
                     } else if (bytes_sent != (int)msg_size) {
+                        assert(bytes_sent == (int)msg_size);
                         printf("sent only %zu bytes\n", msg_size);
                     }
                 }
@@ -604,7 +725,7 @@ S32 main (S32 argc, char** argv) {
     case SESSION_TYPE_SINGLE_PLAYER:
         break;
     }
-    
+
     net_shutdown();
     free(net_msg_buffer);
     game_destroy(&game);

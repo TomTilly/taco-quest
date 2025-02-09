@@ -32,12 +32,12 @@ static void set_err(const char* format, ...) {
 
 bool net_init(void) {
     log_file = fopen("net.log", "w");
-    
+
     if (log_file == NULL) {
         set_err("Failed to open net.log\n");
         return false;
     }
-    
+
     return true;
 }
 

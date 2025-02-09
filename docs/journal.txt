@@ -1,11 +1,16 @@
-TODO:
-- Do network actions more frequently (outside of game tick) to reduce client lag
+--------------------------------------------------------------------------------
+2/08/2025: Discord
 
-HOMEWORK:
-- Research Steam networking code. There may be security restrictions
+Today:
+- Tom T added network log, we debugged a network issue around receiving 0 bytes while expecting a payload.
+- Tom F made some wrappers around the network API for receiving messages.
+- Justin T made a wrapper around those for tracking partial messages and packet vs payload state. This is still in progress.
+
+Next Time:
+- Justin continues on wrapper and replacement. Finishing this should solve the bug that the network log found.
 
 --------------------------------------------------------------------------------
-1/11/2024: Discord
+1/11/2025: Discord
 
 Today:
 - Tom F finished implementing the rest of the network interface for mac.
