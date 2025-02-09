@@ -33,6 +33,7 @@ uint64_t microseconds_between_timestamps(struct timespec* previous, struct times
            ((current->tv_nsec - previous->tv_nsec)) / 1000;
 }
 
+typedef U8 PacketType;
 enum {
     PACKET_TYPE_NONE,
     PACKET_TYPE_SNAKE_ACTION,
@@ -40,17 +41,60 @@ enum {
     PACKET_TYPE_SNAKE_STATE
 };
 
-typedef U8 PacketType;
-
 typedef struct {
     U16 size;
     U16 sequence;
     PacketType type;
 } PacketHeader;
 
-//U8 packet_header_sequence = 0;
 U16 server_sequence;
 U16 client_sequence;
+
+const char* packet_type_description(PacketType type) {
+    switch (type) {
+        case PACKET_TYPE_NONE:
+            return "none";
+        case PACKET_TYPE_SNAKE_ACTION:
+            return "snake action";
+        case PACKET_TYPE_LEVEL_STATE:
+            return "level state";
+        case PACKET_TYPE_SNAKE_STATE:
+            return "snake";
+        default:
+            return "unknown";
+    }
+}
+
+bool receive_result(NetSocket** socket, int expected, int actual)
+{
+    if (actual == -1) {
+        fputs(net_get_error(), stderr);
+        net_destroy_socket(*socket);
+        *socket = NULL;
+        return false;
+    }
+
+    return actual == expected;
+}
+
+bool receive_packet(NetSocket** socket, PacketHeader* header) {
+
+    net_log(RECV_FMT, sizeof(*header));
+    int bytes_received = net_receive(*socket, header, sizeof(*header));
+    net_log(PACKET_AFTER_FMT, bytes_received, header->sequence,
+            packet_type_description(header->type));
+
+    return receive_result(socket, sizeof(*header), bytes_received);
+}
+
+bool receive_payload(NetSocket** socket, void* buffer, int size, const char* description)
+{
+    net_log(RECV_FMT, size);
+    int bytes_received = net_receive(*socket, buffer, size);
+    net_log(AFTER_FMT, bytes_received, description);
+
+    return receive_result(socket, size, bytes_received);
+}
 
 S32 main (S32 argc, char** argv) {
     printf("hello taco, size_t is %zu bytes\n", sizeof(size_t));
@@ -375,9 +419,21 @@ S32 main (S32 argc, char** argv) {
                 SnakeAction client_snake_action = {0};
 
                 // Server receive input from client, update, then send game state to client
-                if ( server_client_socket != NULL ) {
+                if (server_client_socket != NULL) {
                     PacketHeader packet_header;
 
+                    if (receive_packet(&server_client_socket, &packet_header)) {
+                        if (packet_header.type == PACKET_TYPE_SNAKE_ACTION) {
+                            receive_payload(&server_client_socket,
+                                            &client_snake_action,
+                                            sizeof(client_snake_action),
+                                            "client snake action");
+                        } else {
+                            printf("unrecognized packet up in har: %d\n", packet_header.type);
+                        }
+                    }
+
+#if 0
                     net_log(RECV_FMT, sizeof(packet_header));
                     int bytes_received = net_receive(server_client_socket,
                                                      &packet_header,
@@ -411,7 +467,9 @@ S32 main (S32 argc, char** argv) {
                             printf("unrecognized packet up in har: %d\n", packet_header.type);
                         }
                     }
+#endif
                 }
+
 
                 game_update(&game, snake_action, client_snake_action);
 
