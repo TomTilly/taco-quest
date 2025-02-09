@@ -17,7 +17,9 @@ NetSocket*  net_create_server(const char* port);
 bool        net_accept(NetSocket* server, NetSocket** out);
 int         net_send(NetSocket* socket, void* buf, int size);
 int         net_receive(NetSocket* sock, void* buf, int size);
-void        net_destory_socket(NetSocket* socket);
+void        net_destroy_socket(NetSocket* socket);
 const char* net_get_error(void);
+void        net_shutdown(void);
+void        net_log(const char* format, ...);
 
 #endif /* network_h */

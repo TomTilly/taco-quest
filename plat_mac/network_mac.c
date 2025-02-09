@@ -16,6 +16,8 @@ struct net_socket {
     int fd;
 };
 
+static FILE* log_file;
+
 // TODO: use __thread or similar if we go multithreaded!
 static char err_str[NET_ERROR_MESSAGE_LEN] = "No error";
 
@@ -29,6 +31,13 @@ static void set_err(const char* format, ...) {
 // TODO: make error messages more generic, don't mention fcntl etc?
 
 bool net_init(void) {
+    log_file = fopen("net.log", "w");
+    
+    if (log_file == NULL) {
+        set_err("Failed to open net.log\n");
+        return false;
+    }
+    
     return true;
 }
 
@@ -212,7 +221,7 @@ int net_receive(NetSocket* socket, void* buf, int size) {
     return (int)received;
 }
 
-void net_destory_socket(NetSocket* socket) {
+void net_destroy_socket(NetSocket* socket) {
     assert(socket != NULL);
 
     close(socket->fd);
@@ -224,3 +233,13 @@ const char* net_get_error(void) {
     return err_str;
 }
 
+void net_shutdown(void) {
+    fclose(log_file);
+}
+
+void net_log(const char* format, ...) {
+    va_list args;
+    va_start(args, format);
+    vfprintf(log_file, format, args);
+    va_end(args);
+}

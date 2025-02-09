@@ -233,7 +233,7 @@ int net_receive(NetSocket* sock, void* buf, int size) {
     return received;
 }
 
-void net_destory_socket(NetSocket* socket) {
+void net_destroy_socket(NetSocket* socket) {
     assert(socket != NULL);
     closesocket(socket->socket);
     free(socket);

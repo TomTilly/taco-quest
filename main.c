@@ -38,9 +38,12 @@ enum {
 typedef U8 PacketType;
 
 typedef struct {
-    PacketType type;
     U16 size;
+    PacketType type;
+    U8 sequence;
 } PacketHeader;
+
+U8 packet_header_sequence = 0;
 
 S32 main (S32 argc, char** argv) {
     printf("hello taco, size_t is %zu bytes\n", sizeof(size_t));
@@ -80,6 +83,7 @@ S32 main (S32 argc, char** argv) {
     NetSocket* client_socket = NULL;
     NetSocket* server_client_socket = NULL; // TODO: will be an array to handle multiple connections
 
+    // TODO: Only do this when doing networking
     if (!net_init()) {
         fprintf(stderr, "%s\n", net_get_error());
         return EXIT_FAILURE;
@@ -96,6 +100,8 @@ S32 main (S32 argc, char** argv) {
         printf("Starting client session, with address: %s:%s\n", ip, port);
 
         window_title = "Taco Quest (Client)";
+        
+        net_log("CLIENT\n");
 
         client_socket = net_create_client(ip, port);
         if ( client_socket == NULL ) {
@@ -110,6 +116,8 @@ S32 main (S32 argc, char** argv) {
         printf("Starting server session, with port: %s\n", port);
 
         window_title = "Taco Quest (Server)";
+        
+        net_log("SERVER\n");
 
         server_socket = net_create_server(port);
         if ( server_socket == NULL ) {
@@ -253,9 +261,11 @@ S32 main (S32 argc, char** argv) {
             if (snake_action != SNAKE_ACTION_NONE) {
                 PacketHeader packet_header = {
                     .type = PACKET_TYPE_SNAKE_ACTION,
-                    .size = sizeof(snake_action)
+                    .size = sizeof(snake_action),
+                    .sequence = packet_header_sequence++
                 };
-
+                
+                net_log("SEND: %10zu | %3d (snake action packet header)\n", sizeof(packet_header), packet_header.sequence);
                 int bytes_sent = net_send(client_socket,
                                           &packet_header,
                                           sizeof(packet_header));
@@ -265,6 +275,7 @@ S32 main (S32 argc, char** argv) {
                     // TODO: do we want to exit on action send failure?
                     return EXIT_FAILURE;
                 } else if (bytes_sent == sizeof(packet_header)) {
+                    net_log("SEND: %10zu (snake action)\n", sizeof(snake_action));
                     // Packet send success:
                     bytes_sent = net_send(client_socket,
                                           &snake_action,
@@ -283,6 +294,7 @@ S32 main (S32 argc, char** argv) {
             if ( client_buffer == NULL ) {
                 PacketHeader packet_header;
 
+                net_log("RECV: %10zu | %3d (packet header)\n", sizeof(packet_header), packet_header.sequence);
                 int bytes_received = net_receive(client_socket,
                                                  &packet_header,
                                                  sizeof(packet_header));
@@ -304,6 +316,7 @@ S32 main (S32 argc, char** argv) {
                 int bytes_received = net_receive(client_socket,
                                                  client_buffer + client_received,
                                                  (int)(client_buffer_size - client_received));
+                net_log("RECV: %10d (packet message)\n", (int)(client_buffer_size - client_received));
                 if (bytes_received == -1) {
                     fprintf(stderr, "%s\n", net_get_error());
                 } else {
@@ -350,10 +363,11 @@ S32 main (S32 argc, char** argv) {
                     int bytes_received = net_receive(server_client_socket,
                                                      &packet_header,
                                                      sizeof(packet_header));
+                    net_log("RECV: %10zu | %3d (packet header)\n", sizeof(packet_header), packet_header.sequence);
 
                     if (bytes_received == -1) {
                         fputs(net_get_error(), stderr);
-                        net_destory_socket(server_client_socket);
+                        net_destroy_socket(server_client_socket);
                         server_client_socket = NULL;
                     } else if (bytes_received > 0) {
                         assert(bytes_received == sizeof(packet_header));
@@ -364,7 +378,7 @@ S32 main (S32 argc, char** argv) {
                                                          sizeof(client_snake_action));
                             if (bytes_received == -1) {
                                 fputs(net_get_error(), stderr);
-                                net_destory_socket(server_client_socket);
+                                net_destroy_socket(server_client_socket);
                                 server_client_socket = NULL;
                             } else if (bytes_received > 0) {
                                 assert(bytes_received == sizeof(client_snake_action));
@@ -397,9 +411,11 @@ S32 main (S32 argc, char** argv) {
 
                     PacketHeader packet_header = {
                         .type = PACKET_TYPE_LEVEL_STATE,
-                        .size = (U16)(msg_size)
+                        .size = (U16)(msg_size),
+                        .sequence = packet_header_sequence++
                     };
-
+                    
+                    net_log("SEND: %10zu | %3d (level state packet header)\n", sizeof(packet_header), packet_header.sequence);
                     int bytes_sent = net_send(server_client_socket,
                                               &packet_header,
                                               sizeof(packet_header));
@@ -413,6 +429,7 @@ S32 main (S32 argc, char** argv) {
 
                     // Send game state to client.
 
+                    net_log("SEND: %10d (game state)\n", (int)msg_size);
                     bytes_sent = net_send(server_client_socket,
                                           net_msg_buffer,
                                           (int)msg_size);
@@ -491,19 +508,20 @@ S32 main (S32 argc, char** argv) {
 
     switch(session_type) {
     case SESSION_TYPE_CLIENT:
-        net_destory_socket(client_socket);
+        net_destroy_socket(client_socket);
         break;
     case SESSION_TYPE_SERVER: {
-        net_destory_socket(server_socket);
+        net_destroy_socket(server_socket);
         if ( server_client_socket ) {
-            net_destory_socket(server_client_socket);
+            net_destroy_socket(server_client_socket);
         }
         break;
     }
     case SESSION_TYPE_SINGLE_PLAYER:
         break;
     }
-
+    
+    net_shutdown();
     free(net_msg_buffer);
     game_destroy(&game);
     SDL_DestroyRenderer(renderer);
