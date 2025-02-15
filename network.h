@@ -11,7 +11,7 @@
 
 typedef struct net_socket NetSocket;
 
-bool        net_init(void);
+bool        net_init(const char* log_name);
 NetSocket*  net_create_client(const char* ip, const char* port);
 NetSocket*  net_create_server(const char* port);
 bool        net_accept(NetSocket* server, NetSocket** out);

@@ -38,7 +38,7 @@ const char* net_get_error(void) {
     return err_str;
 }
 
-bool net_init(void) {
+bool net_init(const char* log_name) {
     WORD wsa_version_requested = MAKEWORD(2, 2);
     WSADATA wsa_data = {0};
     int rc = WSAStartup(wsa_version_requested, &wsa_data);
@@ -48,7 +48,7 @@ bool net_init(void) {
         return false;
     }
 
-    log_file = fopen("net.log", "w");
+    log_file = fopen(log_name, "w");
     if (log_file == NULL) {
         set_err("Failed to open net.log\n");
         return false;
@@ -256,4 +256,6 @@ void net_log(const char* format, ...) {
     va_start(args, format);
     vfprintf(log_file, format, args);
     va_end(args);
+    // TODO: Remote this, just added for testing.
+    fflush(log_file);
 }

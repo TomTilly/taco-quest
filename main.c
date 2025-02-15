@@ -82,7 +82,7 @@ int receive_result(NetSocket** socket, int bytes) {
         fputs(net_get_error(), stderr);
         net_destroy_socket(*socket);
         *socket = NULL;
-        return false;
+        return -1;
     }
 
     return bytes;
@@ -189,9 +189,7 @@ void receive_message(NetSocket** socket,
     }
 }
 
-S32 main (S32 argc, char** argv) {
-    printf("hello taco, size_t is %zu bytes\n", sizeof(size_t));
-
+int main(S32 argc, char** argv) {
     const char* port = NULL;
     const char* ip = NULL;
     const char* window_title = NULL;
@@ -231,12 +229,6 @@ S32 main (S32 argc, char** argv) {
     if (!net_init()) {
         fprintf(stderr, "%s\n", net_get_error());
         return EXIT_FAILURE;
-    }
-
-    if (session_type == SESSION_TYPE_SINGLE_PLAYER) {
-        // ip = "127.0.0.1";
-        port = "12345";
-        session_type = SESSION_TYPE_SERVER;
     }
 
     switch(session_type) {
