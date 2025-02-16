@@ -1,4 +1,4 @@
-#include "..\network.h"
+#include "../network.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,8 +6,9 @@
 
 #if defined(PLATFORM_WINDOWS)
 #include <windows.h>
-#elif defined(PLATFORM_LINUX)
+#else
 #include <unistd.h>
+#include <string.h>
 #endif
 
 #define GAME_SIMULATE_TIME_INTERVAL_US 150000

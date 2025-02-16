@@ -1,4 +1,16 @@
 --------------------------------------------------------------------------------
+2/15/2025: Discord
+
+Today:
+- We did a diagram to clarify how networking works
+- Justin worked on the network packet receiving layer library in a test harness.
+
+Next Time:
+- Windows compiler bug?
+- Move receive packet logic into a library which game.
+- Integrate into game.
+
+--------------------------------------------------------------------------------
 2/08/2025: Discord
 
 Today:

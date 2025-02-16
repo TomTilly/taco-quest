@@ -30,11 +30,11 @@ static void set_err(const char* format, ...) {
 
 // TODO: make error messages more generic, don't mention fcntl etc?
 
-bool net_init(void) {
-    log_file = fopen("net.log", "w");
+bool net_init(const char* log_name) {
+    log_file = fopen(log_name, "w");
 
     if (log_file == NULL) {
-        set_err("Failed to open net.log\n");
+        set_err("Failed to open net.log\n"); // TODO: update
         return false;
     }
 
