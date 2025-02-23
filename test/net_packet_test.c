@@ -35,7 +35,7 @@ enum {
 };
 
 typedef struct {
-    U16 size;
+    U16 payload_size;
     U16 sequence;
     PacketType type;
 } PacketHeader;
@@ -82,25 +82,18 @@ const char* packet_type_description(PacketType type) {
     }
 }
 
-void _execute_receive_stage(NetSocket** socket,
+void _execute_receive_stage(NetSocket* socket,
                             Packet* packet,
                             PacketTransmissionState* packet_transmission_state,
                             U8* bytes,
                             int size,
                             PacketProgressStage next_stage) {
-    net_log("RECV: %6zu bytes | ", sizeof(packet->header));
-    int bytes_received = net_receive(*socket,
+    net_log("RECV: %6zu bytes | ", size);
+    int bytes_received = net_receive(socket,
                                      bytes + packet_transmission_state->progress_bytes,
                                      size - packet_transmission_state->progress_bytes);
-    net_log("%5d bytes - seq %5d (%s)\n",
-            bytes_received,
-            packet->header.sequence,
-            packet_type_description(packet->header.type));
 
     if (bytes_received == -1) {
-        fputs(net_get_error(), stderr);
-        net_destroy_socket(*socket);
-        *socket = NULL;
         packet_transmission_state->stage = PACKET_PROGRESS_STAGE_ERROR;
         return;
     }
@@ -109,10 +102,18 @@ void _execute_receive_stage(NetSocket** socket,
     if (packet_transmission_state->progress_bytes == size) {
         packet_transmission_state->stage = next_stage;
         packet_transmission_state->progress_bytes = 0;
+        net_log("%5d bytes - seq %5d (%s)\n",
+                bytes_received,
+                packet->header.sequence,
+                packet_type_description(packet->header.type));
+    } else {
+        net_log("%5d bytes -           (%s)\n",
+                bytes_received,
+                packet_type_description(packet->header.type));
     }
 }
 
-void packet_receive(NetSocket** socket,
+void packet_receive(NetSocket* socket,
                     Packet* packet,
                     PacketTransmissionState* packet_transmission_state) {
     if (packet_transmission_state->stage == PACKET_PROGRESS_STAGE_PACKET_HEADER) {
@@ -123,7 +124,7 @@ void packet_receive(NetSocket** socket,
                                sizeof(packet->header),
                                PACKET_PROGRESS_STAGE_PAYLOAD);
         if (packet_transmission_state->stage == PACKET_PROGRESS_STAGE_PAYLOAD) {
-            packet->payload = malloc(packet->header.size);
+            packet->payload = malloc(packet->header.payload_size);
         }
     }
 
@@ -132,11 +133,51 @@ void packet_receive(NetSocket** socket,
                                packet,
                                packet_transmission_state,
                                packet->payload,
-                               packet->header.size,
+                               packet->header.payload_size,
                                PACKET_PROGRESS_STAGE_COMPLETE);
     }
 }
 // LIBRARY END
+
+bool send_bytes_in_parts(NetSocket* socket,
+                         U8* data,
+                         int total_bytes_to_send,
+                         U16 sequence,
+                         S32 parts) {
+    int total_bytes_sent = 0;
+    int total_bytes_remaining = total_bytes_to_send;
+    for (S32 i = 0; i < parts && total_bytes_remaining > 0; i++) {
+        int bytes_to_send = 0;
+        if (i == (parts - 1)) {
+            bytes_to_send = total_bytes_remaining;
+        } else {
+            bytes_to_send = (rand() % total_bytes_remaining) + 1;
+        }
+        net_log("SEND: %6zu bytes | ", bytes_to_send);
+        int bytes_sent = net_send(socket,
+                                  data + total_bytes_sent,
+                                  bytes_to_send);
+        net_log("%5d of %5d bytes - seq %5d (%s)\n",
+                bytes_sent,
+                bytes_to_send,
+                sequence,
+                "bytes");
+
+        if (bytes_sent == -1) {
+            fprintf(stderr, "%s\n", net_get_error());
+            // TODO: cleanup server_client_socket
+            return false;
+        } else if (bytes_sent != bytes_to_send) {
+            fprintf(stderr, "sent only %d of %d bytes\n",
+                    bytes_sent, bytes_to_send);
+            return false;
+        }
+        total_bytes_sent += bytes_sent;
+        total_bytes_remaining -= bytes_sent;
+    }
+
+    return true;
+}
 
 int main(int argc, char** argv) {
     const char* port = NULL;
@@ -238,19 +279,25 @@ int main(int argc, char** argv) {
         time_since_update_microseconds += microseconds_between_timestamps(&last_frame_timestamp,
                                                                           &current_frame_timestamp);
         // This makes it work on windows, which is <explitive> stupid.
-        // time_since_update_microseconds++;
+        time_since_update_microseconds++;
         last_frame_timestamp = current_frame_timestamp;
 
         // Game tick is less frequent than frames.
         if (session_type == SESSION_TYPE_CLIENT) {
             // Client always attempts to send input and read game state.
-            packet_receive(&client_socket,
+            packet_receive(client_socket,
                            &client_packet,
                            &client_packet_transmission_state);
             if (client_packet_transmission_state.stage == PACKET_PROGRESS_STAGE_COMPLETE) {
+                net_log("RECV: complete message of %d payload size\n",
+                        client_packet.header.payload_size);
+                // Reset to handle the next packet.
                 client_packet_transmission_state.stage = PACKET_PROGRESS_STAGE_PACKET_HEADER;
                 client_packet_transmission_state.progress_bytes = 0;
             } else if (client_packet_transmission_state.stage == PACKET_PROGRESS_STAGE_ERROR) {
+                fputs(net_get_error(), stderr);
+                net_destroy_socket(client_socket);
+                client_socket = NULL;
                 return EXIT_FAILURE;
             }
         } else if (session_type == SESSION_TYPE_SERVER) {
@@ -285,7 +332,7 @@ int main(int argc, char** argv) {
 
                         packet_header = (PacketHeader){
                             .type = PACKET_TYPE_ONE,
-                            .size = sizeof(payload),
+                            .payload_size = sizeof(payload),
                             .sequence = client_sequence++
                         };
 
@@ -306,35 +353,30 @@ int main(int argc, char** argv) {
 
                         packet_header = (PacketHeader){
                             .type = PACKET_TYPE_TWO,
-                            .size = (U16)(level_size),
+                            .payload_size = (U16)(level_size),
                             .sequence = client_sequence++
                         };
                     }
 
-                    net_log("SEND: %6zu bytes | ", sizeof(packet_header));
-                    int bytes_sent = net_send(server_client_socket,
-                                              &packet_header,
-                                              sizeof(packet_header));
-                    net_log("%5d bytes - seq %5d (%s)\n", bytes_sent, packet_header.sequence, "payload one");
-
-                    if (bytes_sent == -1) {
-                        fprintf(stderr, "%s\n", net_get_error());
-                        // TODO: cleanup server_client_socket
-                    } else if (bytes_sent != sizeof(packet_header)) {
-                        fprintf(stderr, "sent only %d of %zu bytes of header\n",
-                                bytes_sent, sizeof(packet_header));
+                    S32 parts = 1;
+                    bool split_message = (rand() % 10) > 5;
+                    if (split_message) {
+                        parts = (rand() % 4) + 1;
                     }
 
-                    net_log("SEND: %6zu bytes | ", sizeof(packet_header));
-                    bytes_sent = net_send(server_client_socket, &payload, packet_header.size);
-                    net_log("%5d bytes - seq %5d (%s)\n", bytes_sent, packet_header.sequence, "payload one");
-
-                    if (bytes_sent == -1) {
-                        fprintf(stderr, "%s\n", net_get_error());
-                        // TODO: cleanup server_client_socket
-                    } else if (bytes_sent != packet_header.size) {
-                        fprintf(stderr, "sent only %d of %zu bytes of header\n",
-                                bytes_sent, sizeof(packet_header));
+                    if (send_bytes_in_parts(server_client_socket,
+                                            (U8*)&packet_header,
+                                            sizeof(packet_header),
+                                            packet_header.sequence,
+                                            parts)) {
+                        net_log("SEND: packet header complete\n");
+                        if(send_bytes_in_parts(server_client_socket,
+                                            payload,
+                                            packet_header.payload_size,
+                                            packet_header.sequence,
+                                            parts)) {
+                            net_log("SEND: message complete of %d payload size\n", packet_header.payload_size);
+                        }
                     }
 
                     free(payload);

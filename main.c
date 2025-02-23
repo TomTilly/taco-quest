@@ -226,7 +226,9 @@ int main(S32 argc, char** argv) {
     NetSocket* server_client_socket = NULL; // TODO: will be an array to handle multiple connections
 
     // TODO: Only do this when doing networking
-    if (!net_init()) {
+    const char* net_log_file_name = session_type == SESSION_TYPE_SERVER ?
+        "net_server.log" : "net_client.log";
+    if (!net_init(net_log_file_name)) {
         fprintf(stderr, "%s\n", net_get_error());
         return EXIT_FAILURE;
     }
