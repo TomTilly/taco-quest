@@ -1,0 +1,72 @@
+#include "packet.h"
+
+#include <stdlib.h>
+
+const char* packet_type_description(PacketType type) {
+    switch (type) {
+        case PACKET_TYPE_NONE:
+            return "none";
+        case PACKET_TYPE_ONE:
+            return "payload one";
+        case PACKET_TYPE_TWO:
+            return "payload two";
+        default:
+            return "unknown";
+    }
+}
+
+void _execute_receive_stage(NetSocket* socket,
+                            Packet* packet,
+                            PacketTransmissionState* packet_transmission_state,
+                            U8* bytes,
+                            int size,
+                            PacketProgressStage next_stage) {
+    net_log("RECV: %6zu bytes | ", size);
+    int bytes_received = net_receive(socket,
+                                     bytes + packet_transmission_state->progress_bytes,
+                                     size - packet_transmission_state->progress_bytes);
+
+    if (bytes_received == -1) {
+        packet_transmission_state->stage = PACKET_PROGRESS_STAGE_ERROR;
+        return;
+    }
+
+    packet_transmission_state->progress_bytes += bytes_received;
+    if (packet_transmission_state->progress_bytes == size) {
+        packet_transmission_state->stage = next_stage;
+        packet_transmission_state->progress_bytes = 0;
+        net_log("%5d bytes - seq %5d (%s)\n",
+                bytes_received,
+                packet->header.sequence,
+                packet_type_description(packet->header.type));
+    } else {
+        net_log("%5d bytes -           (%s)\n",
+                bytes_received,
+                packet_type_description(packet->header.type));
+    }
+}
+
+void packet_receive(NetSocket* socket,
+                    Packet* packet,
+                    PacketTransmissionState* packet_transmission_state) {
+    if (packet_transmission_state->stage == PACKET_PROGRESS_STAGE_PACKET_HEADER) {
+        _execute_receive_stage(socket,
+                               packet,
+                               packet_transmission_state,
+                               (U8*)(&packet->header),
+                               sizeof(packet->header),
+                               PACKET_PROGRESS_STAGE_PAYLOAD);
+        if (packet_transmission_state->stage == PACKET_PROGRESS_STAGE_PAYLOAD) {
+            packet->payload = malloc(packet->header.payload_size);
+        }
+    }
+
+    if (packet_transmission_state->stage == PACKET_PROGRESS_STAGE_PAYLOAD) {
+        _execute_receive_stage(socket,
+                               packet,
+                               packet_transmission_state,
+                               packet->payload,
+                               packet->header.payload_size,
+                               PACKET_PROGRESS_STAGE_COMPLETE);
+    }
+}
