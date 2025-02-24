@@ -13,7 +13,7 @@
 
 #include "ints.h"
 
-typedef U8 CellType;
+typedef S8 CellType;
 enum {
     CELL_TYPE_INVALID = -1,
     CELL_TYPE_EMPTY,

@@ -4,6 +4,11 @@
 Today:
 - Justin improves the network test harness in preparation for use in the game.
 - Tom T copies packet library from net_packet_test.c to packet.c
+- Tom F integrated packet lib into main
+
+Next Time:
+- Tom T starts (or Justin).
+- Investigate lag (make a diagram?)
 
 --------------------------------------------------------------------------------
 2/15/2025: Discord

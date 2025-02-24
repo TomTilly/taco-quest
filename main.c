@@ -308,6 +308,10 @@ int main(S32 argc, char** argv) {
                 free(client_receive_packet.payload);
                 memset(&client_receive_packet, 0, sizeof(client_receive_packet));
             } else if ( recv_game_state_state.stage == PACKET_PROGRESS_STAGE_ERROR ) {
+                if ( client_receive_packet.payload != NULL ) {
+                    free(client_receive_packet.payload);
+                }
+                memset(&client_receive_packet, 0, sizeof(client_receive_packet));
                 fputs(net_get_error(), stderr);
                 net_destroy_socket(client_socket);
                 client_socket = NULL;
@@ -340,6 +344,10 @@ int main(S32 argc, char** argv) {
                         free(server_receive_packet.payload);
                         memset(&server_receive_packet, 0, sizeof(server_receive_packet));
                     } else if ( recv_snake_action_state.stage == PACKET_PROGRESS_STAGE_ERROR ) {
+                        if ( server_receive_packet.payload != NULL ) {
+                            free(server_receive_packet.payload);
+                        }
+                        memset(&server_receive_packet, 0, sizeof(server_receive_packet));
                         fputs(net_get_error(), stderr);
                         net_destroy_socket(server_client_socket);
                         server_client_socket = NULL;
@@ -467,7 +475,9 @@ int main(S32 argc, char** argv) {
 
     switch(session_type) {
     case SESSION_TYPE_CLIENT:
-        net_destroy_socket(client_socket);
+        if ( client_socket ) {
+            net_destroy_socket(client_socket);
+        }
         break;
     case SESSION_TYPE_SERVER: {
         net_destroy_socket(server_socket);
