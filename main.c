@@ -307,6 +307,10 @@ int main(S32 argc, char** argv) {
                 memset(&recv_game_state_state, 0, sizeof(recv_game_state_state));
                 free(client_receive_packet.payload);
                 memset(&client_receive_packet, 0, sizeof(client_receive_packet));
+            } else if ( recv_game_state_state.stage == PACKET_PROGRESS_STAGE_ERROR ) {
+                fputs(net_get_error(), stderr);
+                net_destroy_socket(client_socket);
+                client_socket = NULL;
             }
 
             snake_action = 0;
@@ -323,6 +327,7 @@ int main(S32 argc, char** argv) {
                 SnakeAction client_snake_action = 0;
 
                 // Server receive input from client, update, then send game state to client
+                // TODO: receive multiple snake actions, handle the last one.
                 if (server_client_socket != NULL) {
 
                     packet_receive(server_client_socket,
@@ -334,6 +339,10 @@ int main(S32 argc, char** argv) {
                         memset(&recv_snake_action_state, 0, sizeof(recv_snake_action_state));
                         free(server_receive_packet.payload);
                         memset(&server_receive_packet, 0, sizeof(server_receive_packet));
+                    } else if ( recv_snake_action_state.stage == PACKET_PROGRESS_STAGE_ERROR ) {
+                        fputs(net_get_error(), stderr);
+                        net_destroy_socket(server_client_socket);
+                        server_client_socket = NULL;
                     }
                 }
 

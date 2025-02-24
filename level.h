@@ -13,12 +13,13 @@
 
 #include "ints.h"
 
-typedef enum {
+typedef U8 CellType;
+enum {
     CELL_TYPE_INVALID = -1,
     CELL_TYPE_EMPTY,
     CELL_TYPE_WALL,
     CELL_TYPE_TACO
-} CellType;
+};
 
 typedef struct {
     CellType* cells;
