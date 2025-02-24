@@ -40,6 +40,7 @@ typedef struct {
 // TODO: Should we consider combining Packet and PacketTransmissionState.
 const char* packet_type_description(PacketType type);
 
+// Function allocates packet payload. Caller should free it.
 void packet_receive(NetSocket* socket,
                     Packet* packet,
                     PacketTransmissionState* packet_transmission_state);

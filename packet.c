@@ -6,10 +6,12 @@ const char* packet_type_description(PacketType type) {
     switch (type) {
         case PACKET_TYPE_NONE:
             return "none";
-        case PACKET_TYPE_ONE:
-            return "payload one";
-        case PACKET_TYPE_TWO:
-            return "payload two";
+        case PACKET_TYPE_SNAKE_ACTION:
+            return "snake action";
+        case PACKET_TYPE_LEVEL_STATE:
+            return "level state";
+        case PACKET_TYPE_SNAKE_STATE:
+            return "snake";
         default:
             return "unknown";
     }
