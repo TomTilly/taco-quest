@@ -17,13 +17,17 @@ const char* packet_type_description(PacketType type) {
     }
 }
 
+// TODO: temp or put these in a header.
+void net_log_before(const char * type, int num_bytes);
+void net_log_after(int num_bytes, int seq, const char * desc);
+
 void _execute_receive_stage(NetSocket* socket,
                             Packet* packet,
                             PacketTransmissionState* packet_transmission_state,
                             U8* bytes,
                             int size,
                             PacketProgressStage next_stage) {
-    net_log("RECV: %6zu bytes | ", size);
+    net_log_before("RECV", size);
     int bytes_received = net_receive(socket,
                                      bytes + packet_transmission_state->progress_bytes,
                                      size - packet_transmission_state->progress_bytes);
@@ -37,14 +41,13 @@ void _execute_receive_stage(NetSocket* socket,
     if (packet_transmission_state->progress_bytes == size) {
         packet_transmission_state->stage = next_stage;
         packet_transmission_state->progress_bytes = 0;
-        net_log("%5d bytes - seq %5d (%s)\n",
-                bytes_received,
-                packet->header.sequence,
-                packet_type_description(packet->header.type));
+        net_log_after(bytes_received,
+                      packet->header.sequence,
+                      packet_type_description(packet->header.type));
     } else {
-        net_log("%5d bytes -           (%s)\n",
-                bytes_received,
-                packet_type_description(packet->header.type));
+        net_log_after(bytes_received,
+                      -1,
+                      packet_type_description(packet->header.type));
     }
 }
 
