@@ -245,7 +245,15 @@ int main(S32 argc, char** argv) {
             }
         }
 
-        if (session_type == SESSION_TYPE_CLIENT) {
+        // The server/single player mode should only update the game state if a tick has passed.
+        bool game_should_tick = false;
+        if (time_since_update_us >= GAME_SIMULATE_TIME_INTERVAL_US) {
+            time_since_update_us -= GAME_SIMULATE_TIME_INTERVAL_US;
+            game_should_tick = true;
+        }
+
+        switch (session_type) {
+        case SESSION_TYPE_CLIENT: {
             // TODO: Check if our socket is still alive, otherwise we have to press a key after
             // the server disconnects.
 
@@ -269,7 +277,6 @@ int main(S32 argc, char** argv) {
                     // TODO: do we want to exit on action send failure?
                     return EXIT_FAILURE;
                 } else if (bytes_sent == sizeof(packet_header)) {
-
                     // Packet send success:
                     net_log(SEND_FMT, sizeof(snake_action));
                     bytes_sent = net_send(client_socket,
@@ -318,107 +325,107 @@ int main(S32 argc, char** argv) {
             }
 
             snake_action = 0;
-        } else if (time_since_update_us >= GAME_SIMULATE_TIME_INTERVAL_US) {
-            // Update the game state if a tick has passed.
-            time_since_update_us -= GAME_SIMULATE_TIME_INTERVAL_US;
-
-            switch(session_type) {
-            case SESSION_TYPE_CLIENT: {
-                // Nothing to see here
+            break;
+        }
+        case SESSION_TYPE_SERVER: {
+            if (!game_should_tick) {
                 break;
             }
-            case SESSION_TYPE_SERVER: {
-                SnakeAction client_snake_action = 0;
 
-                // Server receive input from client, update, then send game state to client
-                // TODO: receive multiple snake actions, handle the last one.
-                if (server_client_socket != NULL) {
+            SnakeAction client_snake_action = 0;
 
-                    packet_receive(server_client_socket,
-                                   &server_receive_packet,
-                                   &recv_snake_action_state);
+            // Server receive input from client, update, then send game state to client
+            // TODO: receive multiple snake actions, handle the last one.
+            if (server_client_socket != NULL) {
+                packet_receive(server_client_socket,
+                               &server_receive_packet,
+                               &recv_snake_action_state);
 
-                    if (recv_snake_action_state.stage == PACKET_PROGRESS_STAGE_COMPLETE) {
-                        client_snake_action = *(SnakeAction*)server_receive_packet.payload;
-                        memset(&recv_snake_action_state, 0, sizeof(recv_snake_action_state));
+                if (recv_snake_action_state.stage == PACKET_PROGRESS_STAGE_COMPLETE) {
+                    client_snake_action = *(SnakeAction*)server_receive_packet.payload;
+                    memset(&recv_snake_action_state, 0, sizeof(recv_snake_action_state));
+                    free(server_receive_packet.payload);
+                    memset(&server_receive_packet, 0, sizeof(server_receive_packet));
+                } else if ( recv_snake_action_state.stage == PACKET_PROGRESS_STAGE_ERROR ) {
+                    if ( server_receive_packet.payload != NULL ) {
                         free(server_receive_packet.payload);
-                        memset(&server_receive_packet, 0, sizeof(server_receive_packet));
-                    } else if ( recv_snake_action_state.stage == PACKET_PROGRESS_STAGE_ERROR ) {
-                        if ( server_receive_packet.payload != NULL ) {
-                            free(server_receive_packet.payload);
-                        }
-                        memset(&server_receive_packet, 0, sizeof(server_receive_packet));
-                        fputs(net_get_error(), stderr);
-                        net_destroy_socket(server_client_socket);
-                        server_client_socket = NULL;
                     }
+                    memset(&server_receive_packet, 0, sizeof(server_receive_packet));
+                    fputs(net_get_error(), stderr);
+                    net_destroy_socket(server_client_socket);
+                    server_client_socket = NULL;
                 }
+            }
 
-                game_update(&game, snake_action, client_snake_action);
+            game_update(&game, snake_action, client_snake_action);
 
-                // Listen for client connections
-                if (server_client_socket == NULL) {
-                    bool result = net_accept(server_socket, &server_client_socket);
-                    if (result) {
-                        if (server_client_socket != NULL) {
-                            printf("client connected!\n");
-                        }
-                    } else {
-                        fprintf(stderr, "%s\n", net_get_error());
+            // Listen for client connections
+            if (server_client_socket == NULL) {
+                bool result = net_accept(server_socket, &server_client_socket);
+                if (result) {
+                    if (server_client_socket != NULL) {
+                        printf("client connected!\n");
                     }
                 } else {
-                    // Serialize game state
-                    size_t msg_size = level_serialize(&game.level, net_msg_buffer, net_msg_buffer_size);
-                    msg_size += snake_serialize(game.snakes + 0, net_msg_buffer + msg_size, net_msg_buffer_size - msg_size);
-                    msg_size += snake_serialize(game.snakes + 1, net_msg_buffer + msg_size, net_msg_buffer_size - msg_size);
+                    fprintf(stderr, "%s\n", net_get_error());
+                }
+            } else {
+                // Serialize game state
+                size_t msg_size = level_serialize(&game.level, net_msg_buffer, net_msg_buffer_size);
+                msg_size += snake_serialize(game.snakes + 0, net_msg_buffer + msg_size, net_msg_buffer_size - msg_size);
+                msg_size += snake_serialize(game.snakes + 1, net_msg_buffer + msg_size, net_msg_buffer_size - msg_size);
 
-                    // Send packet header
+                // Send packet header
 
-                    PacketHeader packet_header = {
-                        .type = PACKET_TYPE_LEVEL_STATE,
-                        .payload_size = (U16)(msg_size),
-                        .sequence = server_sequence++
-                    };
+                PacketHeader packet_header = {
+                    .type = PACKET_TYPE_LEVEL_STATE,
+                    .payload_size = (U16)(msg_size),
+                    .sequence = server_sequence++
+                };
 
-                    net_log(SEND_FMT, sizeof(packet_header));
-                    int bytes_sent = net_send(server_client_socket,
-                                              &packet_header,
-                                              sizeof(packet_header));
-                    net_log(PACKET_AFTER_FMT, bytes_sent, packet_header.sequence, "level state packet header");
+                net_log(SEND_FMT, sizeof(packet_header));
+                int bytes_sent = net_send(server_client_socket,
+                                          &packet_header,
+                                          sizeof(packet_header));
+                net_log(PACKET_AFTER_FMT, bytes_sent, packet_header.sequence, "level state packet header");
 
-                    if (bytes_sent == -1) {
-                        fprintf(stderr, "%s\n", net_get_error());
-                    } else if (bytes_sent != sizeof(packet_header)) {
-                        printf("sent only %d of %zu bytes of header\n",
-                               bytes_sent, sizeof(packet_header));
-                    }
-
-                    // Send game state to client.
-                    net_log(SEND_FMT, (size_t)msg_size);
-                    bytes_sent = net_send(server_client_socket,
-                                          net_msg_buffer,
-                                          (int)msg_size);
-                    net_log(AFTER_FMT, bytes_sent, "game state");
-
-                    if (bytes_sent == -1) {
-                        fprintf(stderr, "%s\n", net_get_error());
-                    } else if (bytes_sent != (int)msg_size) {
-                        assert(bytes_sent == (int)msg_size);
-                        printf("sent only %zu bytes\n", msg_size);
-                    }
+                if (bytes_sent == -1) {
+                    fprintf(stderr, "%s\n", net_get_error());
+                } else if (bytes_sent != sizeof(packet_header)) {
+                    printf("sent only %d of %zu bytes of header\n",
+                           bytes_sent, sizeof(packet_header));
                 }
 
-                break;
-            }
-            case SESSION_TYPE_SINGLE_PLAYER: {
-                SnakeAction other_snake_action = {0};
-                game_update(&game, snake_action, other_snake_action);
-                break;
-            }
+                // Send game state to client.
+                net_log(SEND_FMT, (size_t)msg_size);
+                bytes_sent = net_send(server_client_socket,
+                                      net_msg_buffer,
+                                      (int)msg_size);
+                net_log(AFTER_FMT, bytes_sent, "game state");
+
+                if (bytes_sent == -1) {
+                    fprintf(stderr, "%s\n", net_get_error());
+                } else if (bytes_sent != (int)msg_size) {
+                    assert(bytes_sent == (int)msg_size);
+                    printf("sent only %zu bytes\n", msg_size);
+                }
             }
 
             // Clear actions.
             snake_action = 0;
+            break;
+        }
+        case SESSION_TYPE_SINGLE_PLAYER: {
+            if (!game_should_tick) {
+                break;
+            }
+
+            SnakeAction other_snake_action = {0};
+            game_update(&game, snake_action, other_snake_action);
+            // Clear actions.
+            snake_action = 0;
+            break;
+        }
         }
 
         // Clear window
