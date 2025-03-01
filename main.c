@@ -18,11 +18,6 @@
 #define GAME_SIMULATE_TIME_INTERVAL_US 150000
 #define SERVER_ACCEPT_QUEUE_LIMIT 5
 
-#define SEND_FMT "SEND: %6zu bytes | "
-#define RECV_FMT "RECV: %6zu bytes | "
-#define PACKET_AFTER_FMT "%5d bytes - seq %5d (%s)\n"
-#define AFTER_FMT "%5d bytes (%s)\n"
-
 typedef enum {
     SESSION_TYPE_SINGLE_PLAYER,
     SESSION_TYPE_SERVER,
@@ -46,15 +41,15 @@ char* get_timestamp(void) {
 }
 
 void net_log_before(const char * type, int num_bytes) {
-    net_log("%s %s: %6zu bytes | ", get_timestamp(), type, num_bytes);
+    net_log("%s [tk %3d] %s: %4zu bytes | ", get_timestamp(), type, num_bytes);
 }
 
 /// If `seq` is not needed, pass in -1
 void net_log_after(int num_bytes, int seq, const char * desc) {
     if ( seq != -1 ) {
-        net_log("%s %5d bytes - seq %5d (%s)\n", get_timestamp(), num_bytes, seq, desc);
+        net_log("%s %4d bytes - seq %3d (%s)\n", get_timestamp(), num_bytes, seq, desc);
     } else {
-        net_log("%s %5d bytes -         (%s)\n", get_timestamp(), num_bytes, desc);
+        net_log("%s %4d bytes -         (%s)\n", get_timestamp(), num_bytes, desc);
     }
 }
 
@@ -354,6 +349,10 @@ int main(S32 argc, char** argv) {
             break;
         }
         case SESSION_TYPE_SERVER: {
+            if (!game_should_tick) {
+                break;
+            }
+
             SnakeAction client_snake_action = 0;
 
             // Server receive input from client, update, then send game state to client
@@ -377,10 +376,6 @@ int main(S32 argc, char** argv) {
                     net_destroy_socket(server_client_socket);
                     server_client_socket = NULL;
                 }
-            }
-
-            if (!game_should_tick) {
-                break;
             }
 
             game_update(&game, snake_action, client_snake_action);
