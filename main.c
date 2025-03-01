@@ -24,6 +24,8 @@ typedef enum {
     SESSION_TYPE_CLIENT
 } SessionType;
 
+static int __tick;
+
 uint64_t microseconds_between_timestamps(struct timespec* previous, struct timespec* current) {
     return (current->tv_sec - previous->tv_sec) * 1000000LL +
            ((current->tv_nsec - previous->tv_nsec)) / 1000;
@@ -41,7 +43,7 @@ char* get_timestamp(void) {
 }
 
 void net_log_before(const char * type, int num_bytes) {
-    net_log("%s [tk %3d] %s: %4zu bytes | ", get_timestamp(), type, num_bytes);
+    net_log("%s [tk %3d] %s: %4zu bytes | ", get_timestamp(), __tick, type, num_bytes);
 }
 
 /// If `seq` is not needed, pass in -1
@@ -212,7 +214,6 @@ int main(S32 argc, char** argv) {
 
     struct timespec last_frame_timestamp = {0};
     timespec_get(&last_frame_timestamp, TIME_UTC);
-//    int tick_num = 0;
 
     // Seed random with time.
     srand((U32)(time(NULL)));
@@ -270,7 +271,7 @@ int main(S32 argc, char** argv) {
         if (time_since_update_us >= GAME_SIMULATE_TIME_INTERVAL_US) {
             time_since_update_us -= GAME_SIMULATE_TIME_INTERVAL_US;
             game_should_tick = true;
-//            tick_num++;
+            __tick++;
         }
 
         switch (session_type) {
