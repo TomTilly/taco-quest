@@ -7,3 +7,11 @@ TODO
 
 HOMEWORK
 - Research Steam networking code. There may be security restrictions
+
+NOTES
+- Logging updates
+    - Game tick + timestamp for:
+        - Client sends input
+        - Client receives game state
+        - Server receives input
+        - Server sends game state

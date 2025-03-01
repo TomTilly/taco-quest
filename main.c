@@ -34,6 +34,17 @@ uint64_t microseconds_between_timestamps(struct timespec* previous, struct times
            ((current->tv_nsec - previous->tv_nsec)) / 1000;
 }
 
+char* get_timestamp(void) {
+    struct timespec ts = {0};
+    timespec_get(&ts, TIME_UTC);
+    static char buff[100];
+    size_t length = strftime(buff, sizeof(buff), "%T", gmtime(&ts.tv_sec));
+    long ms = ts.tv_nsec / 1000000;
+    snprintf(buff + length, sizeof(buff) - length, ".%03ld", ms);
+    
+    return buff;
+}
+
 int main(S32 argc, char** argv) {
     const char* port = NULL;
     const char* ip = NULL;
@@ -193,6 +204,7 @@ int main(S32 argc, char** argv) {
 
     struct timespec last_frame_timestamp = {0};
     timespec_get(&last_frame_timestamp, TIME_UTC);
+//    int tick_num = 0;
 
     // Seed random with time.
     srand((U32)(time(NULL)));
@@ -250,6 +262,7 @@ int main(S32 argc, char** argv) {
         if (time_since_update_us >= GAME_SIMULATE_TIME_INTERVAL_US) {
             time_since_update_us -= GAME_SIMULATE_TIME_INTERVAL_US;
             game_should_tick = true;
+//            tick_num++;
         }
 
         switch (session_type) {
@@ -328,10 +341,6 @@ int main(S32 argc, char** argv) {
             break;
         }
         case SESSION_TYPE_SERVER: {
-            if (!game_should_tick) {
-                break;
-            }
-
             SnakeAction client_snake_action = 0;
 
             // Server receive input from client, update, then send game state to client
@@ -355,6 +364,10 @@ int main(S32 argc, char** argv) {
                     net_destroy_socket(server_client_socket);
                     server_client_socket = NULL;
                 }
+            }
+
+            if (!game_should_tick) {
+                break;
             }
 
             game_update(&game, snake_action, client_snake_action);
