@@ -1,4 +1,19 @@
 --------------------------------------------------------------------------------
+3/01/2025: Discord
+
+Today:
+- Justin refactored game loop server/client structure.
+- Tom T added get_timestamp().
+- Tom F removed dum net log format macros and replaced with equivalent
+  functions.
+
+Next Time:
+- Check client disconnect assertion failure (net_destroy_socket) after server
+  quits while client is still running.
+- One possible change is to listen for client input every frame.
+- Investigating lag using log files.
+
+--------------------------------------------------------------------------------
 2/23/2025: Discord
 
 Today:

@@ -49,9 +49,9 @@ void net_log_before(const char * type, int num_bytes) {
 /// If `seq` is not needed, pass in -1
 void net_log_after(int num_bytes, int seq, const char * desc) {
     if ( seq != -1 ) {
-        net_log("%s %4d bytes - seq %3d (%s)\n", get_timestamp(), num_bytes, seq, desc);
+        net_log("%4d bytes - seq %3d (%s)\n", num_bytes, seq, desc);
     } else {
-        net_log("%s %4d bytes -         (%s)\n", get_timestamp(), num_bytes, desc);
+        net_log("%4d bytes -         (%s)\n", num_bytes, desc);
     }
 }
 
