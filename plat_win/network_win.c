@@ -92,13 +92,41 @@ NetSocket*  net_create_client(const char* ip, const char* port) {
         return NULL;
     }
 
-    // TODO: Set to non-blocking?
+    u_long socket_flags = 1;
+    rc = ioctlsocket(sock->socket, FIONBIO, &socket_flags);
+    if (rc != NO_ERROR) {
+        int last_error = WSAGetLastError();
+        set_err("ioctlsocket() failed with error: %s\n", get_windows_network_error(last_error));
+        return NULL;
+    }
 
     rc = connect(sock->socket, server_info->ai_addr, (int)server_info->ai_addrlen);
-    if (rc == -1) {
+    if (rc == SOCKET_ERROR) {
+        // Since the socket is non-blocking, the connect() operation is also non-blocking. If the
+        // error that we receive is that it would block, then we just need to wait for the
+        // connection to finish establishing through connect. On any other error just return that
+        // error.
         int last_error = WSAGetLastError();
-        set_err("connect error: %s\n", get_windows_network_error(last_error));
-        return NULL;
+        if (last_error != WSAEWOULDBLOCK) {
+            set_err("connect error: %s\n", get_windows_network_error(last_error));
+            return NULL;
+        }
+
+        fd_set writeable_sockets;
+        struct timeval timeout = {5, 0};
+
+        FD_ZERO(&writeable_sockets);
+        FD_SET(sock->socket, &writeable_sockets);
+
+        rc = select(0, NULL, &writeable_sockets, NULL, &timeout);
+        if (rc == 0) {
+            set_err("timed out connecting to server");
+            return NULL;
+        } else if (rc == SOCKET_ERROR) {
+            last_error = WSAGetLastError();
+            set_err("connect error: %s\n", get_windows_network_error(last_error));
+            return NULL;
+        }
     }
 
     freeaddrinfo(server_info);

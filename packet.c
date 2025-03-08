@@ -18,8 +18,13 @@ const char* packet_type_description(PacketType type) {
 }
 
 // TODO: temp or put these in a header.
-void net_log_before(const char * type, int num_bytes);
-void net_log_after(int num_bytes, int seq, const char * desc);
+char* get_timestamp(void);
+void net_action_log(const char* timestamp_str,
+                    const char* type,
+                    size_t bytes_to_send,
+                    size_t bytes_sent,
+                    int seq,
+                    const char* desc);
 
 void _execute_receive_stage(NetSocket* socket,
                             Packet* packet,
@@ -27,7 +32,7 @@ void _execute_receive_stage(NetSocket* socket,
                             U8* bytes,
                             int size,
                             PacketProgressStage next_stage) {
-    net_log_before("RECV", size);
+    const char* timestamp_str = get_timestamp();
     int bytes_received = net_receive(socket,
                                      bytes + packet_transmission_state->progress_bytes,
                                      size - packet_transmission_state->progress_bytes);
@@ -37,17 +42,27 @@ void _execute_receive_stage(NetSocket* socket,
         return;
     }
 
+    if (bytes_received == 0) {
+        return;
+    }
+
     packet_transmission_state->progress_bytes += bytes_received;
     if (packet_transmission_state->progress_bytes == size) {
         packet_transmission_state->stage = next_stage;
         packet_transmission_state->progress_bytes = 0;
-        net_log_after(bytes_received,
-                      packet->header.sequence,
-                      packet_type_description(packet->header.type));
+        net_action_log(timestamp_str,
+                       "RECV",
+                       size,
+                       bytes_received,
+                       packet->header.sequence,
+                       packet_type_description(packet->header.type));
     } else {
-        net_log_after(bytes_received,
-                      -1,
-                      packet_type_description(packet->header.type));
+        net_action_log(timestamp_str,
+                       "RECV",
+                       size,
+                       bytes_received,
+                       -1,
+                       packet_type_description(packet->header.type));
     }
 }
 

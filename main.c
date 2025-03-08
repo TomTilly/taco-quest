@@ -38,20 +38,20 @@ char* get_timestamp(void) {
     size_t length = strftime(buff, sizeof(buff), "%T", gmtime(&ts.tv_sec));
     long ms = ts.tv_nsec / 1000000;
     snprintf(buff + length, sizeof(buff) - length, ".%03ld", ms);
-    
     return buff;
 }
 
-void net_log_before(const char * type, int num_bytes) {
-    net_log("%s [tk %3d] %s: %4zu bytes | ", get_timestamp(), __tick, type, num_bytes);
-}
-
-/// If `seq` is not needed, pass in -1
-void net_log_after(int num_bytes, int seq, const char * desc) {
+void net_action_log(const char* timestamp_str,
+                    const char* type,
+                    size_t bytes_to_send,
+                    size_t bytes_sent,
+                    int seq,
+                    const char* desc) {
+    net_log("%s [tk %5d] %s: %4zu of %4zu bytes | ", timestamp_str, __tick, type, bytes_to_send, bytes_sent);
     if ( seq != -1 ) {
-        net_log("%4d bytes - seq %3d (%s)\n", num_bytes, seq, desc);
+        net_log(" seq %3d (%s)\n", seq, desc);
     } else {
-        net_log("%4d bytes -         (%s)\n", num_bytes, desc);
+        net_log("         (%s)\n", desc);
     }
 }
 
@@ -287,11 +287,18 @@ int main(S32 argc, char** argv) {
                     .sequence = client_sequence++
                 };
 
-                net_log_before("SEND", sizeof(packet_header));
+                const char* timestamp_str = get_timestamp();
                 int bytes_sent = net_send(client_socket,
                                           &packet_header,
                                           sizeof(packet_header));
-                net_log_after(bytes_sent, packet_header.sequence, "snake action packet header");
+                if (bytes_sent > 0) {
+                    net_action_log(timestamp_str,
+                                   "SEND",
+                                   sizeof(packet_header),
+                                   bytes_sent,
+                                   packet_header.sequence,
+                                   "snake action packet header");
+                }
 
                 if (bytes_sent == -1) {
                     fprintf(stderr, "%s\n", net_get_error());
@@ -300,11 +307,18 @@ int main(S32 argc, char** argv) {
                     return EXIT_FAILURE;
                 } else if (bytes_sent == sizeof(packet_header)) {
                     // Packet send success:
-                    net_log_before("SEND", sizeof(snake_action));
+                    timestamp_str = get_timestamp();
                     bytes_sent = net_send(client_socket,
                                           &snake_action,
                                           sizeof(snake_action));
-                    net_log_after(bytes_sent, -1, "snake action");
+                    if (bytes_sent > 0) {
+                        net_action_log(timestamp_str,
+                                       "SEND",
+                                       sizeof(snake_action),
+                                       bytes_sent,
+                                       packet_header.sequence,
+                                       "snake action");
+                    }
 
                     if (bytes_sent == -1) {
                         fprintf(stderr, "%s\n", net_get_error());
@@ -405,11 +419,18 @@ int main(S32 argc, char** argv) {
                     .sequence = server_sequence++
                 };
 
-                net_log_before("SEND", sizeof(packet_header));
+                const char* timestamp_str = get_timestamp();
                 int bytes_sent = net_send(server_client_socket,
                                           &packet_header,
                                           sizeof(packet_header));
-                net_log_after(bytes_sent, packet_header.sequence, "level state packet header");
+                if (bytes_sent > 0) {
+                    net_action_log(timestamp_str,
+                                   "SEND",
+                                   sizeof(packet_header),
+                                   bytes_sent,
+                                   packet_header.sequence,
+                                   "level state packet header");
+                }
 
                 if (bytes_sent == -1) {
                     fprintf(stderr, "%s\n", net_get_error());
@@ -419,11 +440,18 @@ int main(S32 argc, char** argv) {
                 }
 
                 // Send game state to client.
-                net_log_before("SEND", (size_t)msg_size);
+                timestamp_str = get_timestamp();
                 bytes_sent = net_send(server_client_socket,
                                       net_msg_buffer,
                                       (int)msg_size);
-                net_log_after(bytes_sent, -1, "game state");
+                if (bytes_sent > 0) {
+                    net_action_log(timestamp_str,
+                                   "SEND",
+                                   msg_size,
+                                   bytes_sent,
+                                   packet_header.sequence,
+                                   "game state");
+                }
 
                 if (bytes_sent == -1) {
                     fprintf(stderr, "%s\n", net_get_error());
