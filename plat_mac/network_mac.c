@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include <netdb.h>
+#include <sys/select.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -74,12 +75,42 @@ NetSocket* net_create_client(const char* ip, const char* port) {
         return NULL;
     }
 
-    // TODO: Set to non-blocking?
+    // Set socket file descriptor to non blocking.
+    int flags = fcntl(sock->fd, F_GETFL);
+    if (flags == -1){
+        set_err("fcntl(F_GETFL) failed: %s\n", strerror(errno));
+        return NULL;
+    }
+
+    flags |= O_NONBLOCK;
+    rc = fcntl(sock->fd, F_SETFL, flags);
+    if (rc != 0){
+        set_err("fcntl(F_SETFL) failed: %s\n", strerror(errno));
+        return NULL;
+    }
 
     rc = connect(sock->fd, server_info->ai_addr, (int)server_info->ai_addrlen);
     if (rc == -1) {
-        set_err("connect error: %s\n", strerror(errno));
-        return NULL;
+        if ( errno == EINPROGRESS ) {
+
+            fd_set set;
+            FD_ZERO(&set);
+            FD_SET(sock->fd, &set);
+            struct timeval timeout = { 5, 0 };
+
+            rc = select(sock->fd + 1, NULL, &set, NULL, &timeout);
+
+            if ( rc == -1 ) {
+                set_err("select failed: %s\n", strerror(errno));
+                return NULL;
+            } else if ( rc == 0 ) {
+                set_err("client connection timed out\n");
+                return NULL;
+            }
+        } else {
+            set_err("connect error: %s\n", strerror(errno));
+            return NULL;
+        }
     }
 
     freeaddrinfo(server_info);
