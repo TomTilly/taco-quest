@@ -1,0 +1,38 @@
+--------------------------------------------------------------------------------
+3/08/2025: 
+
+
+Question: Why does the server log start at tick 10 ???
+- Server ticks for while until the client connects, and client always starts at 0 because it doesn't start until it connects.
+
+TIMECIRCLE
+
+client
+19:23:52.222 [tk   5] RECV:    6 bytes |    6 bytes - seq   6 (level state)
+19:23:52.370 [tk   5] RECV:  546 bytes |  546 bytes - seq   6 (level state)
+19:23:52.372 [tk   6] SEND:    6 bytes |    6 bytes - seq   0 (snake action packet header)
+19:23:52.372 [tk   6] SEND:    1 bytes |    1 bytes -         (snake action)
+19:23:52.372 [tk   6] RECV:    6 bytes |    6 bytes - seq   7 (level state)
+19:23:52.520 [tk   6] RECV:  546 bytes |  546 bytes - seq   7 (level state)
+
+server
+19:23:52.370 [tk  16] RECV:    6 bytes |    0 bytes -         (none)
+19:23:52.370 [tk  16] SEND:    6 bytes |    6 bytes - seq   6 (level state packet header)
+19:23:52.370 [tk  16] SEND:  546 bytes |  546 bytes -         (game state)
+19:23:52.520 [tk  17] RECV:    6 bytes |    6 bytes - seq   0 (snake action)
+19:23:52.520 [tk  17] RECV:    1 bytes |    1 bytes - seq   0 (snake action)
+19:23:52.520 [tk  17] SEND:    6 bytes |    6 bytes - seq   7 (level state packet header)
+19:23:52.520 [tk  17] SEND:  546 bytes |  546 bytes -         (game state)
+19:23:52.669 [tk  18] RECV:    6 bytes |    0 bytes -         (none)
+
+
+- 52.222 client receives game state seq 6 header
+- 52.370 server sends game state seq 6 header and message
+- 52.370 client receives game state seq 6 message
+- 52.372 client sends input seq 0
+- 52.372 client receives game state seq 7 header
+- 52.520 server receives snake action seq 0
+- 52.520 server sends game state seq 7 header and message
+- 52.520 client receives game state seq 7 message
+
+Digging in, this caused us to realize the timestamp was before the receive and the receive was blocking.

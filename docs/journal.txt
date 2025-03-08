@@ -1,4 +1,13 @@
 --------------------------------------------------------------------------------
+3/08/2025: Discord
+
+Today:
+- Debugged client latency. Justin turned client socket into non-blocking on windows. And removed net log statements when 0 bytes are sent/received.
+
+Next Time:
+- 
+
+--------------------------------------------------------------------------------
 3/01/2025: Discord
 
 Today:
