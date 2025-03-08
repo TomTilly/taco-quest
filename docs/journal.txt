@@ -1,4 +1,17 @@
 --------------------------------------------------------------------------------
+3/08/2025: Discord
+
+Today:
+- Justin changed before/after logging to just after
+- ... windows network: set client to non-blocking
+- Tom: mac network: set client to non-blocking
+- ... make server listen for client input every frame
+
+Next Time:
+- Tom T is up.
+- Lag!
+
+--------------------------------------------------------------------------------
 3/01/2025: Discord
 
 Today:
