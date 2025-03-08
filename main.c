@@ -221,6 +221,7 @@ int main(S32 argc, char** argv) {
     int64_t time_since_update_us = 0;
 
     SnakeAction snake_action = SNAKE_ACTION_NONE;
+    SnakeAction client_snake_action = 0;
 
     size_t net_msg_buffer_size = 1024 * 1024;
     char* net_msg_buffer = (char*)malloc(net_msg_buffer_size);
@@ -364,11 +365,6 @@ int main(S32 argc, char** argv) {
             break;
         }
         case SESSION_TYPE_SERVER: {
-            if (!game_should_tick) {
-                break;
-            }
-
-            SnakeAction client_snake_action = 0;
 
             // Server receive input from client, update, then send game state to client
             // TODO: receive multiple snake actions, handle the last one.
@@ -391,6 +387,10 @@ int main(S32 argc, char** argv) {
                     net_destroy_socket(server_client_socket);
                     server_client_socket = NULL;
                 }
+            }
+
+            if (!game_should_tick) {
+                break;
             }
 
             game_update(&game, snake_action, client_snake_action);
@@ -463,6 +463,7 @@ int main(S32 argc, char** argv) {
 
             // Clear actions.
             snake_action = 0;
+            client_snake_action = 0;
             break;
         }
         case SESSION_TYPE_SINGLE_PLAYER: {
