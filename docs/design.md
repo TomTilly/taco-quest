@@ -17,6 +17,8 @@ Classic snake game with a multiplayer twist...and tacos!
 - Arrow keys allow you to control a second snake on one computer
 - Snake gets item to speed up/slow down time for oneself or all players
 - Easter egg for players who use port 6969
+- Sometimes it feels like inputs are dropped when doing things like diagonal movements ?
+  - Maybe queue up inputs within the same tick that could be executed in subsequent ticks
 
 ## 1/26 Brainstorming Session
 

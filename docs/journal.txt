@@ -1,4 +1,16 @@
 --------------------------------------------------------------------------------
+3/15/2025: Discord
+
+Today:
+- Tom T wrote a line with an ending curly brace (oh and packet_send())
+- Justin had main.c use packet_send()
+- Lag! fixed ? The main change was that we send messages and packet headers in a single net_send()
+- Ideas about queueing inputs.
+
+Next Time:
+- Tom F is up !
+
+--------------------------------------------------------------------------------
 3/08/2025: Discord
 
 Today:

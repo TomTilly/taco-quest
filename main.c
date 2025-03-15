@@ -16,7 +16,7 @@
 #define LEVEL_WIDTH 24
 #define LEVEL_HEIGHT 20
 #define MS_TO_US(ms) ((ms) * 1000)
-#define GAME_SIMULATE_TIME_INTERVAL_US MS_TO_US(500)
+#define GAME_SIMULATE_TIME_INTERVAL_US MS_TO_US(150)
 #define SERVER_ACCEPT_QUEUE_LIMIT 5
 
 typedef enum {
@@ -302,21 +302,23 @@ int main(S32 argc, char** argv) {
                            &recv_game_state_state);
 
             if ( recv_game_state_state.stage == PACKET_PROGRESS_STAGE_COMPLETE ) {
-                size_t bytes_deserialized = 0;
+                if (client_receive_packet.header.type == PACKET_TYPE_LEVEL_STATE) {
+                    size_t bytes_deserialized = 0;
 
-                bytes_deserialized += level_deserialize(client_receive_packet.payload + bytes_deserialized,
-                                                        client_receive_packet.header.payload_size - bytes_deserialized,
-                                                        &game.level);
-                bytes_deserialized += snake_deserialize(client_receive_packet.payload + bytes_deserialized,
-                                                        client_receive_packet.header.payload_size - bytes_deserialized,
-                                                        game.snakes + 0);
-                bytes_deserialized += snake_deserialize(client_receive_packet.payload + bytes_deserialized,
-                                                        client_receive_packet.header.payload_size - bytes_deserialized,
-                                                        game.snakes + 1);
+                    bytes_deserialized += level_deserialize(client_receive_packet.payload + bytes_deserialized,
+                                                            client_receive_packet.header.payload_size - bytes_deserialized,
+                                                            &game.level);
+                    bytes_deserialized += snake_deserialize(client_receive_packet.payload + bytes_deserialized,
+                                                            client_receive_packet.header.payload_size - bytes_deserialized,
+                                                            game.snakes + 0);
+                    bytes_deserialized += snake_deserialize(client_receive_packet.payload + bytes_deserialized,
+                                                            client_receive_packet.header.payload_size - bytes_deserialized,
+                                                            game.snakes + 1);
 
-                memset(&recv_game_state_state, 0, sizeof(recv_game_state_state));
-                free(client_receive_packet.payload);
-                memset(&client_receive_packet, 0, sizeof(client_receive_packet));
+                    memset(&recv_game_state_state, 0, sizeof(recv_game_state_state));
+                    free(client_receive_packet.payload);
+                    memset(&client_receive_packet, 0, sizeof(client_receive_packet));
+                }
             } else if ( recv_game_state_state.stage == PACKET_PROGRESS_STAGE_ERROR ) {
                 if ( client_receive_packet.payload != NULL ) {
                     free(client_receive_packet.payload);
