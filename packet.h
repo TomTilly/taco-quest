@@ -9,7 +9,8 @@ enum {
     PACKET_TYPE_NONE,
     PACKET_TYPE_SNAKE_ACTION,
     PACKET_TYPE_LEVEL_STATE,
-    PACKET_TYPE_SNAKE_STATE
+    PACKET_TYPE_SNAKE_STATE,
+    PACKET_TYPE_ACKNOWLEDGE
 };
 
 
@@ -44,5 +45,7 @@ const char* packet_type_description(PacketType type);
 void packet_receive(NetSocket* socket,
                     Packet* packet,
                     PacketTransmissionState* packet_transmission_state);
+
+bool packet_send(NetSocket* socket, const Packet* packet);
 
 #endif /* packet_h */
