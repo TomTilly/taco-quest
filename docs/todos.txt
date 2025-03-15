@@ -1,6 +1,8 @@
 BUGS
 - Windows seems to be, unhelpfully, optimizing out portions of the game update logic(!):
     -- Affects only test application.
+- Client disconnect assertion failure (net_destroy_socket) after server
+  quits while client is still running.
 
 TODO
 - Figure out client side lag and potentially do network actions more frequently (outside of game tick) to reduce client lag

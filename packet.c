@@ -1,6 +1,9 @@
 #include "packet.h"
 
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <assert.h>
 
 const char* packet_type_description(PacketType type) {
     switch (type) {
@@ -12,6 +15,8 @@ const char* packet_type_description(PacketType type) {
             return "level state";
         case PACKET_TYPE_SNAKE_STATE:
             return "snake";
+        case PACKET_TYPE_ACKNOWLEDGE:
+            return "acknowledge";
         default:
             return "unknown";
     }
@@ -89,4 +94,37 @@ void packet_receive(NetSocket* socket,
                                packet->header.payload_size,
                                PACKET_PROGRESS_STAGE_COMPLETE);
     }
+}
+
+bool packet_send(NetSocket* socket, const Packet* packet) {
+    int buf_size = sizeof(packet->header) + packet->header.payload_size;
+    void* buf = malloc(buf_size);
+
+    if (buf == NULL) {
+        fprintf(stderr, "packet_send: malloc failed. \n");
+    }
+    
+    memcpy(buf, &packet->header, sizeof(packet->header));
+    memcpy(buf + sizeof(packet->header), packet->payload, packet->header.payload_size);
+    
+    const char* timestamp_str = get_timestamp();
+    int bytes_sent = net_send(socket, buf, buf_size);
+    
+    if (bytes_sent > 0) {
+        net_action_log(timestamp_str,
+                       "SEND",
+                       buf_size,
+                       bytes_sent,
+                       packet->header.sequence,
+                       packet_type_description(packet->header.type));
+    } else if (bytes_sent == -1) {
+        free(buf);
+        return false;
+    }
+    
+    assert(bytes_sent == buf_size);
+    
+    free(buf);
+    
+    return true;
 }

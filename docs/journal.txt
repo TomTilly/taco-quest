@@ -3,9 +3,14 @@
 
 Today:
 - Debugged client latency. Justin turned client socket into non-blocking on windows. And removed net log statements when 0 bytes are sent/received.
+- Justin changed before/after logging to just after
+- ... windows network: set client to non-blocking
+- Tom: mac network: set client to non-blocking
+- ... make server listen for client input every frame
 
 Next Time:
-- 
+- Tom T is up.
+- Lag!
 
 --------------------------------------------------------------------------------
 3/01/2025: Discord
