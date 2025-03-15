@@ -283,51 +283,16 @@ int main(S32 argc, char** argv) {
 
             // Send our action to the server if there is one.
             if (snake_action != SNAKE_ACTION_NONE) {
-                PacketHeader packet_header = {
-                    .type = PACKET_TYPE_SNAKE_ACTION,
-                    .payload_size = sizeof(snake_action),
-                    .sequence = client_sequence++
+                Packet packet = {
+                    .header = {
+                        .type = PACKET_TYPE_SNAKE_ACTION,
+                        .payload_size = sizeof(snake_action),
+                        .sequence = client_sequence++
+                    },
+                    .payload = (U8*)&snake_action
                 };
 
-                const char* timestamp_str = get_timestamp();
-                int bytes_sent = net_send(client_socket,
-                                          &packet_header,
-                                          sizeof(packet_header));
-                if (bytes_sent > 0) {
-                    net_action_log(timestamp_str,
-                                   "SEND",
-                                   sizeof(packet_header),
-                                   bytes_sent,
-                                   packet_header.sequence,
-                                   "snake action packet header");
-                }
-
-                if (bytes_sent == -1) {
-                    fprintf(stderr, "%s\n", net_get_error());
-                    fprintf(stderr, "ending session.\n");
-                    // TODO: do we want to exit on action send failure?
-                    return EXIT_FAILURE;
-                } else if (bytes_sent == sizeof(packet_header)) {
-                    // Packet send success:
-                    timestamp_str = get_timestamp();
-                    bytes_sent = net_send(client_socket,
-                                          &snake_action,
-                                          sizeof(snake_action));
-                    if (bytes_sent > 0) {
-                        net_action_log(timestamp_str,
-                                       "SEND",
-                                       sizeof(snake_action),
-                                       bytes_sent,
-                                       packet_header.sequence,
-                                       "snake action");
-                    }
-
-                    if (bytes_sent == -1) {
-                        fprintf(stderr, "%s\n", net_get_error());
-                        fprintf(stderr, "ending session.\n");
-                        return EXIT_FAILURE;
-                    }
-                } else {
+                if (!packet_send(client_socket, &packet)) {
                     fprintf(stderr, "failed to send entire header for snake action\n");
                 }
             }
@@ -413,52 +378,17 @@ int main(S32 argc, char** argv) {
                 msg_size += snake_serialize(game.snakes + 1, net_msg_buffer + msg_size, net_msg_buffer_size - msg_size);
 
                 // Send packet header
-
-                PacketHeader packet_header = {
-                    .type = PACKET_TYPE_LEVEL_STATE,
-                    .payload_size = (U16)(msg_size),
-                    .sequence = server_sequence++
+                Packet packet = {
+                    .header = {
+                        .type = PACKET_TYPE_LEVEL_STATE,
+                        .payload_size = (U16)(msg_size),
+                        .sequence = server_sequence++
+                    },
+                    .payload = (U8*)net_msg_buffer
                 };
 
-                const char* timestamp_str = get_timestamp();
-                int bytes_sent = net_send(server_client_socket,
-                                          &packet_header,
-                                          sizeof(packet_header));
-                if (bytes_sent > 0) {
-                    net_action_log(timestamp_str,
-                                   "SEND",
-                                   sizeof(packet_header),
-                                   bytes_sent,
-                                   packet_header.sequence,
-                                   "level state packet header");
-                }
-
-                if (bytes_sent == -1) {
-                    fprintf(stderr, "%s\n", net_get_error());
-                } else if (bytes_sent != sizeof(packet_header)) {
-                    printf("sent only %d of %zu bytes of header\n",
-                           bytes_sent, sizeof(packet_header));
-                }
-
-                // Send game state to client.
-                timestamp_str = get_timestamp();
-                bytes_sent = net_send(server_client_socket,
-                                      net_msg_buffer,
-                                      (int)msg_size);
-                if (bytes_sent > 0) {
-                    net_action_log(timestamp_str,
-                                   "SEND",
-                                   msg_size,
-                                   bytes_sent,
-                                   packet_header.sequence,
-                                   "game state");
-                }
-
-                if (bytes_sent == -1) {
-                    fprintf(stderr, "%s\n", net_get_error());
-                } else if (bytes_sent != (int)msg_size) {
-                    assert(bytes_sent == (int)msg_size);
-                    printf("sent only %zu bytes\n", msg_size);
+                if (!packet_send(server_client_socket, &packet)) {
+                    printf("failed to send game state for tick: %d\n", __tick);
                 }
             }
 

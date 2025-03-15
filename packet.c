@@ -98,18 +98,18 @@ void packet_receive(NetSocket* socket,
 
 bool packet_send(NetSocket* socket, const Packet* packet) {
     int buf_size = sizeof(packet->header) + packet->header.payload_size;
-    void* buf = malloc(buf_size);
+    U8* buf = malloc(buf_size);
 
     if (buf == NULL) {
         fprintf(stderr, "packet_send: malloc failed. \n");
     }
-    
+
     memcpy(buf, &packet->header, sizeof(packet->header));
     memcpy(buf + sizeof(packet->header), packet->payload, packet->header.payload_size);
-    
+
     const char* timestamp_str = get_timestamp();
     int bytes_sent = net_send(socket, buf, buf_size);
-    
+
     if (bytes_sent > 0) {
         net_action_log(timestamp_str,
                        "SEND",
@@ -121,10 +121,9 @@ bool packet_send(NetSocket* socket, const Packet* packet) {
         free(buf);
         return false;
     }
-    
+
     assert(bytes_sent == buf_size);
-    
+
     free(buf);
-    
     return true;
 }
