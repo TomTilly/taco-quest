@@ -56,50 +56,45 @@ void net_action_log(const char* timestamp_str,
     }
 }
 
-#define ACTION_BUF_SIZE 5
+#define ACTION_BUF_SIZE 2
 typedef struct {
     int count;
     SnakeAction actions[ACTION_BUF_SIZE];
 } ActionBuffer;
 
-void AddAction(ActionBuffer * buf, SnakeAction action, Direction snake_current_direction)
-{
+void action_buffer_add(ActionBuffer * buf, SnakeAction action, Direction snake_current_direction) {
     if ( buf->count == ACTION_BUF_SIZE ) {
         return;
     }
 
-    if ( action == SNAKE_ACTION_NONE ) {
-        return; // Don't effing bother
+    if (action == SNAKE_ACTION_NONE) {
+        return;
     }
 
-    if ( get_direction(action) == snake_current_direction ) {
-        return; // Already moving in this direction.
+    SnakeAction prev_action = (buf->count == 0) ?
+        snake_action_from_direction(snake_current_direction) :
+        buf->actions[buf->count - 1];
+
+    if ( action == prev_action ) {
+        return; // Tried to press the same direction again, ignore
     }
 
-    // Adding a second action?
-    if ( buf->count == 1 ) {
-        if ( action == buf->actions[0] ) {
-            return; // Tried to press the same direction again, ignore
-        }
-
-        if ( snake_actions_are_opposite(action, buf->actions[0]) ) {
-            return;
-        }
+    if ( snake_actions_are_opposite(action, prev_action) ) {
+        return;
     }
 
     buf->actions[buf->count++] = action;
 }
 
-SnakeAction RemoveAction(ActionBuffer * buf)
-{
+SnakeAction action_buffer_remove(ActionBuffer * buf) {
     SnakeAction action = SNAKE_ACTION_NONE;
     if ( buf->count > 0 ) {
+        // grab the first element.
         action = buf->actions[0];
-
-        for ( int i = 1; i < buf->count - 1; i++ ) {
+        // shift over the all the elements overwriting the first element.
+        for ( int i = 0; i < buf->count - 1; i++ ) {
             buf->actions[i] = buf->actions[i + 1];
         }
-
         buf->count--;
     }
 
@@ -388,7 +383,7 @@ int main(S32 argc, char** argv) {
 
             // Every frame:
 
-            AddAction(&server_actions, snake_action, game.snakes[0].direction);
+            action_buffer_add(&server_actions, snake_action, game.snakes[0].direction);
 
             // Server receive input from client, update, then send game state to client
             // TODO: receive multiple snake actions, handle the last one.
@@ -399,7 +394,7 @@ int main(S32 argc, char** argv) {
 
                 if (recv_snake_action_state.stage == PACKET_PROGRESS_STAGE_COMPLETE) {
                     SnakeAction client_snake_action = *(SnakeAction*)server_receive_packet.payload;
-                    AddAction(&client_actions, client_snake_action, game.snakes[1].direction);
+                    action_buffer_add(&client_actions, client_snake_action, game.snakes[1].direction);
 
                     // Resent packet state
                     memset(&recv_snake_action_state, 0, sizeof(recv_snake_action_state));
@@ -422,8 +417,8 @@ int main(S32 argc, char** argv) {
 
             // Every Tick:
 
-            SnakeAction server_action = RemoveAction(&server_actions);
-            SnakeAction client_action = RemoveAction(&client_actions);
+            SnakeAction server_action = action_buffer_remove(&server_actions);
+            SnakeAction client_action = action_buffer_remove(&client_actions);
             game_update(&game, server_action, client_action);
 
             // Listen for client connections
@@ -462,7 +457,7 @@ int main(S32 argc, char** argv) {
         case SESSION_TYPE_SINGLE_PLAYER: {
 
             if ( snake_action != SNAKE_ACTION_NONE ) {
-                AddAction(&server_actions, snake_action,game.snakes[0].direction);
+                action_buffer_add(&server_actions, snake_action,game.snakes[0].direction);
             }
 
             if (!game_should_tick) {
@@ -470,7 +465,7 @@ int main(S32 argc, char** argv) {
             }
 
             SnakeAction other_snake_action = {0};
-            SnakeAction action = RemoveAction(&server_actions);
+            SnakeAction action = action_buffer_remove(&server_actions);
             game_update(&game, action, other_snake_action);
             break;
         }
