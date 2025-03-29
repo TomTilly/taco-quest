@@ -1,4 +1,15 @@
 --------------------------------------------------------------------------------
+3/29/2025: Discord
+
+Today:
+- Tom F implemented snake action buffer
+- Justin updated snake action buffer
+- Movement feels much more responsive
+
+Next Time:
+- Potential ideas: refactor, create sprites, game design?
+
+--------------------------------------------------------------------------------
 3/15/2025: Discord
 
 Today:
