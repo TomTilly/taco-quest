@@ -129,3 +129,29 @@ size_t snake_deserialize(void * buffer, size_t size, Snake* out) {
 
     return ptr - (U8 *)buffer;
 }
+
+Direction get_direction(SnakeAction action)
+{
+    switch ( action ) {
+        case SNAKE_ACTION_NONE:
+            return DIRECTION_NONE;
+        case SNAKE_ACTION_FACE_NORTH:
+            return DIRECTION_NORTH;
+        case SNAKE_ACTION_FACE_SOUTH:
+            return DIRECTION_SOUTH;
+        case SNAKE_ACTION_FACE_EAST:
+            return DIRECTION_EAST;
+        case SNAKE_ACTION_FACE_WEST:
+            return DIRECTION_WEST;
+        default:
+            return DIRECTION_NONE;
+    }
+}
+
+bool snake_actions_are_opposite(SnakeAction action1, SnakeAction action2)
+{
+    return (action1 == SNAKE_ACTION_FACE_NORTH && action2 == SNAKE_ACTION_FACE_SOUTH)
+    || (action1 == SNAKE_ACTION_FACE_SOUTH && action2 == SNAKE_ACTION_FACE_NORTH)
+    || (action1 == SNAKE_ACTION_FACE_EAST && action2 == SNAKE_ACTION_FACE_WEST)
+    || (action1 == SNAKE_ACTION_FACE_WEST && action2 == SNAKE_ACTION_FACE_EAST);
+}

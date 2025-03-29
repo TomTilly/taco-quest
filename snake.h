@@ -40,5 +40,7 @@ void snake_draw(SDL_Renderer* renderer, Snake* snake, int32_t cell_size);
 void snake_destroy(Snake* snake);
 size_t snake_serialize(const Snake* snake, void * buffer, size_t buffer_size);
 size_t snake_deserialize(void * buffer, size_t size, Snake* out);
+Direction get_direction(SnakeAction action);
+bool snake_actions_are_opposite(SnakeAction action1, SnakeAction action2);
 
 #endif /* snake_h */

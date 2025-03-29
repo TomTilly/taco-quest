@@ -13,8 +13,8 @@
 #include "network.h"
 #include "packet.h"
 
-#define LEVEL_WIDTH 24
-#define LEVEL_HEIGHT 20
+#define LEVEL_WIDTH 17
+#define LEVEL_HEIGHT 15
 #define MS_TO_US(ms) ((ms) * 1000)
 #define GAME_SIMULATE_TIME_INTERVAL_US MS_TO_US(150)
 #define SERVER_ACCEPT_QUEUE_LIMIT 5
@@ -54,6 +54,44 @@ void net_action_log(const char* timestamp_str,
     } else {
         net_log("         (%s)\n", desc);
     }
+}
+
+#define ACTION_BUF_SIZE 2
+typedef struct {
+    int count;
+    SnakeAction actions[ACTION_BUF_SIZE];
+} ActionBuffer;
+
+void AddAction(ActionBuffer * buf, SnakeAction action)
+{
+    if ( buf->count == ACTION_BUF_SIZE ) {
+        return;
+    }
+
+    // Adding a second action?
+    if ( buf->count == 1 ) {
+        if ( action == buf->actions[0] ) {
+            return; // Tried to press the same direction again, ignore
+        }
+
+        if ( snake_actions_are_opposite(action, buf->actions[0]) ) {
+            return;
+        }
+    }
+
+    buf->actions[buf->count++] = action;
+}
+
+SnakeAction RemoveAction(ActionBuffer * buf)
+{
+    SnakeAction action = SNAKE_ACTION_NONE;
+    if ( buf->count > 0 ) {
+        action = buf->actions[0];
+        buf->actions[0] = buf->actions[1];
+        buf->count--;
+    }
+
+    return action;
 }
 
 int main(S32 argc, char** argv) {
@@ -221,8 +259,8 @@ int main(S32 argc, char** argv) {
 
     int64_t time_since_update_us = 0;
 
-    SnakeAction snake_action = SNAKE_ACTION_NONE;
-    SnakeAction client_snake_action = 0;
+    ActionBuffer server_actions = { 0 };
+    ActionBuffer client_actions = { 0 };
 
     size_t net_msg_buffer_size = 1024 * 1024;
     char* net_msg_buffer = (char*)malloc(net_msg_buffer_size);
@@ -241,6 +279,8 @@ int main(S32 argc, char** argv) {
         timespec_get(&current_frame_timestamp, TIME_UTC);
         time_since_update_us += microseconds_between_timestamps(&last_frame_timestamp, &current_frame_timestamp);
         last_frame_timestamp = current_frame_timestamp;
+
+        SnakeAction snake_action = SNAKE_ACTION_NONE;
 
         // Handle events, such as input or window changes.
         SDL_Event event;
@@ -334,6 +374,14 @@ int main(S32 argc, char** argv) {
         }
         case SESSION_TYPE_SERVER: {
 
+            if ( snake_action != SNAKE_ACTION_NONE ) {
+                // Don't add the action if the player pressed in the direction
+                // they're already going.
+                if ( get_direction(snake_action) != game.snakes[0].direction ) {
+                    AddAction(&server_actions, snake_action);
+                }
+            }
+
             // Server receive input from client, update, then send game state to client
             // TODO: receive multiple snake actions, handle the last one.
             if (server_client_socket != NULL) {
@@ -342,7 +390,13 @@ int main(S32 argc, char** argv) {
                                &recv_snake_action_state);
 
                 if (recv_snake_action_state.stage == PACKET_PROGRESS_STAGE_COMPLETE) {
-                    client_snake_action = *(SnakeAction*)server_receive_packet.payload;
+                    SnakeAction client_snake_action = *(SnakeAction*)server_receive_packet.payload;
+
+                    if ( get_direction(client_snake_action) != game.snakes[1].direction ) {
+                        AddAction(&client_actions, client_snake_action);
+                    }
+
+                    // Resent packet state
                     memset(&recv_snake_action_state, 0, sizeof(recv_snake_action_state));
                     free(server_receive_packet.payload);
                     memset(&server_receive_packet, 0, sizeof(server_receive_packet));
@@ -361,7 +415,9 @@ int main(S32 argc, char** argv) {
                 break;
             }
 
-            game_update(&game, snake_action, client_snake_action);
+            SnakeAction server_action = RemoveAction(&server_actions);
+            SnakeAction client_action = RemoveAction(&client_actions);
+            game_update(&game, server_action, client_action);
 
             // Listen for client connections
             if (server_client_socket == NULL) {
@@ -395,19 +451,26 @@ int main(S32 argc, char** argv) {
             }
 
             // Clear actions.
-            snake_action = 0;
-            client_snake_action = 0;
+//            snake_action = 0;
             break;
         }
         case SESSION_TYPE_SINGLE_PLAYER: {
+
+            if ( snake_action != SNAKE_ACTION_NONE ) {
+                // Don't add the action if the player pressed in the direction
+                // they're already going.
+                if ( get_direction(snake_action) != game.snakes[0].direction ) {
+                    AddAction(&server_actions, snake_action);
+                }
+            }
+
             if (!game_should_tick) {
                 break;
             }
 
             SnakeAction other_snake_action = {0};
-            game_update(&game, snake_action, other_snake_action);
-            // Clear actions.
-            snake_action = 0;
+            SnakeAction action = RemoveAction(&server_actions);
+            game_update(&game, action, other_snake_action);
             break;
         }
         }
