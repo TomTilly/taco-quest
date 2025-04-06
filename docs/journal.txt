@@ -1,4 +1,18 @@
 --------------------------------------------------------------------------------
+4/05/2025: In Person
+
+Today:
+- Tom F created a snake sprite sheet
+- Justin loaded the bitmap to draw the snake's head, body with straight and turned parts, and tail. Also added a grid.
+
+Next Time:
+- Tom T's turn !
+- Maybe play the game a few times and take notes on
+  - Interesting things that can happen
+  - Ideas for game mechanics to try
+
+
+--------------------------------------------------------------------------------
 3/29/2025: Discord
 
 Today:

@@ -1,6 +1,7 @@
 #include "snake.h"
 
 #include <assert.h>
+#include <stdio.h>
 
 bool snake_init(Snake* snake, int32_t capacity) {
     snake->segments = calloc(capacity, sizeof(snake->segments[0]));
