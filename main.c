@@ -448,10 +448,6 @@ int main(S32 argc, char** argv) {
                 // TODO: Asserts
                 CellType cell_type = level_get_cell(level, x, y);
 
-                if (cell_type == CELL_TYPE_EMPTY) {
-                    continue;
-                }
-
                 SDL_Rect cell_rect = {
                     .x = x * cell_size,
                     .y = y * cell_size,
@@ -459,9 +455,19 @@ int main(S32 argc, char** argv) {
                     .h = cell_size
                 };
 
+                if (((x + y) % 2) == 0) {
+                    SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, 0xFF);
+                } else {
+                    SDL_SetRenderDrawColor(renderer, 0x22, 0x22, 0x22, 0xFF);
+                }
+                SDL_RenderFillRect(renderer, &cell_rect);
+
+                if (cell_type == CELL_TYPE_EMPTY) {
+                    continue;
+                }
+
                 switch (cell_type) {
                     case CELL_TYPE_EMPTY: {
-                        SDL_RenderFillRect(renderer, &cell_rect);
                         break;
                     }
                     case CELL_TYPE_WALL: {
