@@ -7,7 +7,7 @@
 
 #include "game.h"
 
-static void taco_spawn(Level* level) {
+static void taco_spawn(Level* level, Snake* snakes, S32 snake_count) {
     // If there are no tacos on the map, generate one in an empty cell.
     int32_t attempts = 0;
     while (attempts < 10) {
@@ -15,11 +15,27 @@ static void taco_spawn(Level* level) {
         int taco_y = rand() % level->height;
 
         CellType cell_type = level_get_cell(level, taco_x, taco_y);
-        if (cell_type == CELL_TYPE_EMPTY) {
-            level_set_cell(level, taco_x, taco_y, CELL_TYPE_TACO);
-            break;
+        if (cell_type != CELL_TYPE_EMPTY) {
+            attempts++;
+            continue;
         }
-        attempts++;
+        bool spawned_on_snake = false;
+        for (S32 s = 0; s < snake_count && !spawned_on_snake; s++) {
+            for (S32 e = 0; e < snakes[s].length; e++) {
+                if (snakes[s].segments[e].x == taco_x &&
+                    snakes[s].segments[e].y == taco_y) {
+                    spawned_on_snake = true;
+                    break;
+                }
+            }
+        }
+        if (spawned_on_snake) {
+            attempts++;
+            continue;
+        }
+
+        level_set_cell(level, taco_x, taco_y, CELL_TYPE_TACO);
+        break;
     }
 }
 
@@ -60,7 +76,7 @@ void snake_update(Snake* snake, Game* game) {
         if (cell_type == CELL_TYPE_TACO) {
             level_set_cell(&game->level, new_snake_x, new_snake_y, CELL_TYPE_EMPTY);
             snake_grow(snake);
-            taco_spawn(&game->level);
+            taco_spawn(&game->level, game->snakes, MAX_SNAKE_COUNT);
         }
     }
 }
