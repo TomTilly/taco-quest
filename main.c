@@ -151,7 +151,7 @@ int main(S32 argc, char** argv) {
 
     int window_x = SDL_WINDOWPOS_CENTERED;
     int window_y = display_size.h / 4;
-    S32 cell_size = 40;
+    S32 cell_size = 60;
     S32 window_width = LEVEL_WIDTH * cell_size;
     S32 window_height = LEVEL_HEIGHT * cell_size;
 
@@ -184,12 +184,6 @@ int main(S32 argc, char** argv) {
     game_init(&game, LEVEL_WIDTH, LEVEL_HEIGHT);
 
     Level* level = &game.level;
-
-    level_set_cell(level, 9, 5, CELL_TYPE_TACO);
-    level_set_cell(level, 14, 3, CELL_TYPE_TACO);
-    level_set_cell(level, 15, 9, CELL_TYPE_TACO);
-    level_set_cell(level, 2, 2, CELL_TYPE_TACO);
-    level_set_cell(level, 8, 10, CELL_TYPE_TACO);
 
     snake_spawn(game.snakes + 0,
                 level->width / 3,
