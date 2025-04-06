@@ -58,18 +58,123 @@ void snake_turn(Snake* snake, Direction direction) {
     }
 }
 
-void snake_draw(SDL_Renderer* renderer, Snake* snake, int32_t cell_size) {
+void snake_draw(SDL_Renderer* renderer, SDL_Texture* texture, Snake* snake, int32_t cell_size) {
+    int tail_index = snake->length - 1;
     for (int i = 0; i < snake->length; i++) {
-        SDL_SetRenderDrawColor(renderer, 0, (i == 0) ? 176 : 255, 0, 255);
-
-        SDL_Rect r = {
+        SDL_Rect dest_rect = {
             .x = snake->segments[i].x * cell_size,
             .y = snake->segments[i].y * cell_size,
             .w = cell_size,
             .h = cell_size
         };
 
-        SDL_RenderFillRect(renderer, &r);
+        double angle = 0.0;
+
+        SDL_Rect source_rect = {0};
+
+        source_rect.w = 16;
+        source_rect.h = 16;
+
+        if (i == 0) {
+            source_rect.x = 48;
+            source_rect.y = 0;
+            angle = 90.0 * snake->direction;
+        } else {
+            // detect straight vs corner vs tail
+            if (i == tail_index) {
+                // tail
+                source_rect.x = 0;
+                source_rect.y = 0;
+
+                int last_segment_x = 0;
+                int last_segment_y = 0;
+                if (snake->segments[i].y == snake->segments[i - 1].y &&
+                    snake->segments[i].x == snake->segments[i - 1].x) {
+                    last_segment_x = snake->segments[i - 2].x;
+                    last_segment_y = snake->segments[i - 2].y;
+                } else {
+                    last_segment_x = snake->segments[i - 1].x;
+                    last_segment_y = snake->segments[i - 1].y;
+                }
+
+                if (snake->segments[i].y == last_segment_y &&
+                    snake->segments[i].x == (last_segment_x - 1)) {
+                    // east
+                    angle = 90.0;
+                } else if (snake->segments[i].y == (last_segment_y - 1) &&
+                           snake->segments[i].x == last_segment_x) {
+                    // south
+                    angle = 180.0;
+                } else if (snake->segments[i].y == last_segment_y &&
+                           snake->segments[i].x == (last_segment_x + 1)) {
+                    // west
+                    angle = 270.0;
+                }
+            } else {
+                bool has_east = (snake->segments[i].x == (snake->segments[i - 1].x - 1) &&
+                                 snake->segments[i].y == snake->segments[i - 1].y) ||
+                                (snake->segments[i].x == (snake->segments[i + 1].x - 1) &&
+                                 snake->segments[i].y == snake->segments[i + 1].y);
+                bool has_west = (snake->segments[i].x == (snake->segments[i - 1].x + 1) &&
+                                  snake->segments[i].y == snake->segments[i - 1].y) ||
+                                 (snake->segments[i].x == (snake->segments[i + 1].x + 1) &&
+                                  snake->segments[i].y == snake->segments[i + 1].y);
+                bool has_north = (snake->segments[i].y == (snake->segments[i - 1].y + 1) &&
+                                 snake->segments[i].x == snake->segments[i - 1].x) ||
+                                 (snake->segments[i].y == (snake->segments[i + 1].y + 1) &&
+                                 snake->segments[i].x == snake->segments[i + 1].x);
+                bool has_south = (snake->segments[i].y == (snake->segments[i - 1].y - 1) &&
+                                 snake->segments[i].x == snake->segments[i - 1].x) ||
+                                 (snake->segments[i].y == (snake->segments[i + 1].y - 1) &&
+                                 snake->segments[i].x == snake->segments[i + 1].x);
+
+                if (has_north && has_south && !has_east && !has_west) {
+                    // vertical straight
+                    source_rect.x = 32;
+                    source_rect.y = 0;
+                    angle = 90.0;
+                } else if (has_east && has_west && !has_north && !has_south) {
+                    // horizontal straight
+                    source_rect.x = 32;
+                    source_rect.y = 0;
+                } else if (has_east && has_north && !has_west && !has_south) {
+                    // corner top right
+                    source_rect.x = 16;
+                    source_rect.y = 0;
+                } else if (has_east && has_south && !has_west && !has_north) {
+                    // corner bottom right
+                    source_rect.x = 16;
+                    source_rect.y = 0;
+                    angle = 90.0;
+                } else if (has_west && has_south && !has_east && !has_north) {
+                    // corner bottom left
+                    source_rect.x = 16;
+                    source_rect.y = 0;
+                    angle = 180.0;
+                } else if (has_west && has_north && !has_east && !has_south) {
+                    // corner top left
+                    source_rect.x = 16;
+                    source_rect.y = 0;
+                    angle = 270.0;
+                } else if (snake->segments[i].x == snake->segments[tail_index].x &&
+                           snake->segments[i].y == snake->segments[tail_index].y) {
+                    // The extra tail added when we eat a taco. Skip drawing it.
+                    continue;
+                }
+            }
+        }
+
+        int rc = SDL_RenderCopyEx(renderer,
+                                  texture,
+                                  &source_rect,
+                                  &dest_rect,
+                                  angle,
+                                  NULL,
+                                  SDL_FLIP_NONE);
+        if (rc != 0) {
+            fprintf(stderr, "Tom F was wrong: %s\n", SDL_GetError());
+            return;
+        }
     }
 }
 
@@ -171,4 +276,43 @@ const char* snake_action_string(SnakeAction action) {
         break;
     }
     return "unknown";
+}
+
+void action_buffer_add(ActionBuffer * buf, SnakeAction action, Direction snake_current_direction) {
+    if ( buf->count == ACTION_BUF_SIZE ) {
+        return;
+    }
+
+    if (action == SNAKE_ACTION_NONE) {
+        return;
+    }
+
+    SnakeAction prev_action = (buf->count == 0) ?
+    snake_action_from_direction(snake_current_direction) :
+    buf->actions[buf->count - 1];
+
+    if ( action == prev_action ) {
+        return; // Tried to press the same direction again, ignore
+    }
+
+    if ( snake_actions_are_opposite(action, prev_action) ) {
+        return;
+    }
+
+    buf->actions[buf->count++] = action;
+}
+
+SnakeAction action_buffer_remove(ActionBuffer * buf) {
+    SnakeAction action = SNAKE_ACTION_NONE;
+    if ( buf->count > 0 ) {
+        // grab the first element.
+        action = buf->actions[0];
+        // shift over the all the elements overwriting the first element.
+        for ( int i = 0; i < buf->count - 1; i++ ) {
+            buf->actions[i] = buf->actions[i + 1];
+        }
+        buf->count--;
+    }
+
+    return action;
 }

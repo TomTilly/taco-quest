@@ -56,51 +56,6 @@ void net_action_log(const char* timestamp_str,
     }
 }
 
-#define ACTION_BUF_SIZE 2
-typedef struct {
-    int count;
-    SnakeAction actions[ACTION_BUF_SIZE];
-} ActionBuffer;
-
-void action_buffer_add(ActionBuffer * buf, SnakeAction action, Direction snake_current_direction) {
-    if ( buf->count == ACTION_BUF_SIZE ) {
-        return;
-    }
-
-    if (action == SNAKE_ACTION_NONE) {
-        return;
-    }
-
-    SnakeAction prev_action = (buf->count == 0) ?
-        snake_action_from_direction(snake_current_direction) :
-        buf->actions[buf->count - 1];
-
-    if ( action == prev_action ) {
-        return; // Tried to press the same direction again, ignore
-    }
-
-    if ( snake_actions_are_opposite(action, prev_action) ) {
-        return;
-    }
-
-    buf->actions[buf->count++] = action;
-}
-
-SnakeAction action_buffer_remove(ActionBuffer * buf) {
-    SnakeAction action = SNAKE_ACTION_NONE;
-    if ( buf->count > 0 ) {
-        // grab the first element.
-        action = buf->actions[0];
-        // shift over the all the elements overwriting the first element.
-        for ( int i = 0; i < buf->count - 1; i++ ) {
-            buf->actions[i] = buf->actions[i + 1];
-        }
-        buf->count--;
-    }
-
-    return action;
-}
-
 int main(S32 argc, char** argv) {
     const char* port = NULL;
     const char* ip = NULL;
@@ -263,6 +218,18 @@ int main(S32 argc, char** argv) {
 
     // Seed random with time.
     srand((U32)(time(NULL)));
+
+    const char* snake_bitmap_filepath = "assets/sprite-sheet.bmp";
+    SDL_Surface* snake_surface = SDL_LoadBMP(snake_bitmap_filepath);
+    if (snake_surface == NULL) {
+        fprintf(stderr, "Failed to load bitmap %s: %s\n", snake_bitmap_filepath, SDL_GetError());
+        return EXIT_FAILURE;
+    }
+    SDL_Texture* snake_texture = SDL_CreateTextureFromSurface(renderer, snake_surface);
+    if (snake_surface == NULL) {
+        fprintf(stderr, "Failed to create texture from surface %s\n", SDL_GetError());
+        return EXIT_FAILURE;
+    }
 
     int64_t time_since_update_us = 0;
 
@@ -485,22 +452,6 @@ int main(S32 argc, char** argv) {
                     continue;
                 }
 
-                switch (cell_type) {
-                    case CELL_TYPE_EMPTY: {
-                        break;
-                    }
-                    case CELL_TYPE_WALL: {
-                        SDL_SetRenderDrawColor(renderer, 0xAD, 0x62, 0x00, 0xFF);
-                        break;
-                    }
-                    case CELL_TYPE_TACO: {
-                        SDL_SetRenderDrawColor(renderer, 0xEE, 0xFF, 0x00, 0xFF);
-                        break;
-                    }
-                    default:
-                        break;
-                }
-
                 SDL_Rect cell_rect = {
                     .x = x * cell_size,
                     .y = y * cell_size,
@@ -508,13 +459,43 @@ int main(S32 argc, char** argv) {
                     .h = cell_size
                 };
 
-                SDL_RenderFillRect(renderer, &cell_rect);
+                switch (cell_type) {
+                    case CELL_TYPE_EMPTY: {
+                        SDL_RenderFillRect(renderer, &cell_rect);
+                        break;
+                    }
+                    case CELL_TYPE_WALL: {
+                        SDL_SetRenderDrawColor(renderer, 0xAD, 0x62, 0x00, 0xFF);
+                        SDL_RenderFillRect(renderer, &cell_rect);
+                        break;
+                    }
+                    case CELL_TYPE_TACO: {
+                        SDL_Rect source_rect = {0, 16, 16, 16};
+                        int rc = SDL_RenderCopy(renderer,
+                                                snake_texture,
+                                                &source_rect,
+                                                &cell_rect);
+                        if (rc != 0) {
+                            fprintf(stderr, "Tom F was wrong: %s\n", SDL_GetError());
+                            return EXIT_FAILURE;
+                        }
+                        break;
+                    }
+                    default:
+                        break;
+                }
             }
         }
 
         for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
-            snake_draw(renderer, game.snakes + s, cell_size);
+            if (s == 0) {
+                SDL_SetTextureColorMod(snake_texture, 0, 255, 0);
+            } else {
+                SDL_SetTextureColorMod(snake_texture, 255, 0, 0);
+            }
+            snake_draw(renderer, snake_texture, game.snakes + s, cell_size);
         }
+        SDL_SetTextureColorMod(snake_texture, 255, 255, 255);
 
         // Render updates
         SDL_RenderPresent(renderer);

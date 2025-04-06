@@ -8,6 +8,7 @@
 #include <stdbool.h>
 
 #define INITIAL_SNAKE_LEN 3
+#define ACTION_BUF_SIZE 2
 
 typedef U8 SnakeAction;
 
@@ -32,16 +33,27 @@ typedef struct {
     Direction direction;
 } Snake;
 
+typedef struct {
+    int count;
+    SnakeAction actions[ACTION_BUF_SIZE];
+} ActionBuffer;
+
 bool snake_init(Snake* snake, S32 capacity);
+void snake_destroy(Snake* snake);
+
 void snake_spawn(Snake* snake, int x, int y, Direction direction);
 void snake_grow(Snake* snake);
 void snake_turn(Snake* snake, Direction direction);
-void snake_draw(SDL_Renderer* renderer, Snake* snake, int32_t cell_size);
-void snake_destroy(Snake* snake);
+void snake_draw(SDL_Renderer* renderer, SDL_Texture* texture, Snake* snake, int32_t cell_size);
+
 size_t snake_serialize(const Snake* snake, void * buffer, size_t buffer_size);
 size_t snake_deserialize(void * buffer, size_t size, Snake* out);
+
 SnakeAction snake_action_from_direction(Direction direction);
 bool snake_actions_are_opposite(SnakeAction action1, SnakeAction action2);
 const char* snake_action_string(SnakeAction action);
+
+void action_buffer_add(ActionBuffer * buf, SnakeAction action, Direction snake_current_direction);
+SnakeAction action_buffer_remove(ActionBuffer * buf);
 
 #endif /* snake_h */
