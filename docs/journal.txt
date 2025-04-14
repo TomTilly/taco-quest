@@ -1,4 +1,16 @@
 --------------------------------------------------------------------------------
+4/13/2025: In Person
+
+Today:
+- Tom T/Justin implemented snake chomping and turning the rest of the snake segment into tacos.
+- Now collecting tacos and snipping snakes seems to have no meaning.
+
+Next Time:
+- Tom F's turn
+- Play more and come up with ideas on how to give meaning. And motivate getting tacos.
+  - Limitting chomps is an idea.
+
+--------------------------------------------------------------------------------
 4/05/2025: In Person
 
 Today:
