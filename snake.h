@@ -7,7 +7,7 @@
 #include <SDL2/SDL_render.h>
 #include <stdbool.h>
 
-#define INITIAL_SNAKE_LEN 3
+#define INITIAL_SNAKE_LEN 5
 #define ACTION_BUF_SIZE 2
 
 typedef U8 SnakeAction;
@@ -19,11 +19,12 @@ typedef enum {
     SNAKE_ACTION_FACE_EAST = (1 << DIRECTION_EAST),   // 2
     SNAKE_ACTION_FACE_SOUTH = (1 << DIRECTION_SOUTH), // 4
     SNAKE_ACTION_FACE_WEST = (1 << DIRECTION_WEST),   // 8
+    SNAKE_ACTION_CHOMP = 16,
 } SnakeActionFlags;
 
 typedef struct {
-    int x;
-    int y;
+    S32 x;
+    S32 y;
 } SnakeSegment;
 
 typedef struct {

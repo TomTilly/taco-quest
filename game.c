@@ -7,8 +7,7 @@
 
 #include "game.h"
 
-
-void snake_update(Snake* snake, Game* game) {
+void snake_update(Snake* snake, Game* game, bool chomp) {
     int32_t new_snake_x = snake->segments[0].x;
     int32_t new_snake_y = snake->segments[0].y;
 
@@ -32,6 +31,10 @@ void snake_update(Snake* snake, Game* game) {
         }
     }
 
+    if (collide_with_snake && chomp) {
+        collide_with_snake = !game_snake_chomp(game, new_snake_x, new_snake_y);
+    }
+
     if ((cell_type == CELL_TYPE_EMPTY || cell_type == CELL_TYPE_TACO) &&
         !collide_with_snake) {
         for (int i = snake->length; i >= 1; i--) {
@@ -45,7 +48,10 @@ void snake_update(Snake* snake, Game* game) {
         if (cell_type == CELL_TYPE_TACO) {
             level_set_cell(&game->level, new_snake_x, new_snake_y, CELL_TYPE_EMPTY);
             snake_grow(snake);
-            game_spawn_taco(game);
+            S32 taco_count = game_count_tacos(game);
+            if (taco_count < MAX_TACO_COUNT){
+                game_spawn_taco(game);
+            }
         }
     }
 }
@@ -84,24 +90,39 @@ void game_apply_snake_action(Game* game, SnakeAction snake_action, S32 snake_ind
     snake_turn(snake, direction);
 }
 
-void game_update(Game* game, SnakeAction snake_action, SnakeAction other_snake_action) {
-    game_apply_snake_action(game, snake_action, false /* is_other_snake */);
-    game_apply_snake_action(game, other_snake_action, true /* is_other_snake */);
-
+bool game_snake_chomp(Game* game, int x, int y) {
+    // Loop through each snake's segments, see if chomp target is matching
     for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
-        snake_update(game->snakes + s, game);
-    }
-
-    size_t taco_count = 0;
-    for(S32 y = 0; y < game->level.height; y++) {
-        for(S32 x = 0; x < game->level.width; x++) {
-            CellType cell_type = level_get_cell(&game->level, x, y);
-            if (cell_type == CELL_TYPE_TACO) {
-                taco_count++;
+        Snake* snake = game->snakes + s;
+        bool snipping = false;
+        S32 new_length = snake->length;
+        for (S32 e = 0; e < snake->length; e++) {
+            SnakeSegment* segment = snake->segments + e;
+            if (snipping) {
+              level_set_cell(&game->level, segment->x, segment->y, CELL_TYPE_TACO);
+            } else if (segment->x == x && segment->y == y) {
+                // snip snip
+                snipping = true;
+                new_length = e;
             }
+        }
+        snake->length = new_length;
+        if (snipping) {
+            return true;
         }
     }
 
+    return false;
+}
+
+void game_update(Game* game, SnakeAction* snake_actions) {
+    for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
+        SnakeAction snake_action = snake_actions[s];
+        game_apply_snake_action(game, snake_action, s);
+        snake_update(game->snakes + s, game, snake_action & SNAKE_ACTION_CHOMP);
+    }
+
+    S32 taco_count = game_count_tacos(game);
     for (size_t i = taco_count; i < MAX_TACO_COUNT; i++) {
         game_spawn_taco(game);
     }
@@ -144,4 +165,17 @@ void game_spawn_taco(Game* game) {
         level_set_cell(&game->level, taco_x, taco_y, CELL_TYPE_TACO);
         break;
     }
+}
+
+S32 game_count_tacos(Game* game) {
+    size_t taco_count = 0;
+    for(S32 y = 0; y < game->level.height; y++) {
+        for(S32 x = 0; x < game->level.width; x++) {
+            CellType cell_type = level_get_cell(&game->level, x, y);
+            if (cell_type == CELL_TYPE_TACO) {
+                taco_count++;
+            }
+        }
+    }
+    return taco_count;
 }

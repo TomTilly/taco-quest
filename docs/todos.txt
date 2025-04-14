@@ -6,6 +6,7 @@ BUGS
 
 TODO
 - Figure out client side lag and potentially do network actions more frequently (outside of game tick) to reduce client lag
+- When run in server mode, wait until client connects before starting game
 
 HOMEWORK
 - Research Steam networking code. There may be security restrictions

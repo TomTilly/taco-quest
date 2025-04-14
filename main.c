@@ -186,14 +186,14 @@ int main(S32 argc, char** argv) {
     Level* level = &game.level;
 
     snake_spawn(game.snakes + 0,
-                level->width / 3,
-                level->height / 2,
+                1,
+                level->height / 3,
                 DIRECTION_EAST);
 
     snake_spawn(game.snakes + 1,
-                (level->width / 3) + (level->width / 3),
-                level->height / 2,
-                DIRECTION_EAST);
+                level->width - 2,
+                level->height / 3 + level->height / 3,
+                DIRECTION_WEST);
 
     for (S32 y = 0; y < level->height; y++) {
         for (S32 x = 0; x < level->width; x++) {
@@ -270,6 +270,9 @@ int main(S32 argc, char** argv) {
                     break;
                 case SDLK_d:
                     snake_action |= SNAKE_ACTION_FACE_EAST;
+                    break;
+                case SDLK_SPACE:
+                    snake_action |= SNAKE_ACTION_CHOMP;
                     break;
                 }
                 break;
@@ -378,9 +381,10 @@ int main(S32 argc, char** argv) {
 
             // Every Tick:
 
-            SnakeAction server_action = action_buffer_remove(&server_actions);
-            SnakeAction client_action = action_buffer_remove(&client_actions);
-            game_update(&game, server_action, client_action);
+            SnakeAction snake_actions[MAX_SNAKE_COUNT];
+            snake_actions[0] = action_buffer_remove(&server_actions);
+            snake_actions[1] = action_buffer_remove(&client_actions);
+            game_update(&game, snake_actions);
 
             // Listen for client connections
             if (server_client_socket == NULL) {
@@ -425,9 +429,10 @@ int main(S32 argc, char** argv) {
                 break;
             }
 
-            SnakeAction other_snake_action = {0};
-            SnakeAction action = action_buffer_remove(&server_actions);
-            game_update(&game, action, other_snake_action);
+            SnakeAction snake_actions[MAX_SNAKE_COUNT];
+            snake_actions[0] = action_buffer_remove(&server_actions);
+            snake_actions[1] = SNAKE_ACTION_NONE;
+            game_update(&game, snake_actions);
             break;
         }
         }
