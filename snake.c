@@ -200,6 +200,9 @@ size_t snake_serialize(const Snake* snake, void* buffer, size_t buffer_size) {
 
     *ptr = (U8)snake->direction;
 
+    ptr += sizeof(U8);
+    *(U32*)(ptr) = snake->chomp_energy;
+
     return total_size;
 }
 
@@ -232,6 +235,9 @@ size_t snake_deserialize(void * buffer, size_t size, Snake* out) {
 
     out->direction = (Direction)*ptr;
     ptr++;
+
+    out->chomp_energy = (U32)*ptr;
+    ptr += sizeof(U32);
 
     return ptr - (U8 *)buffer;
 }
