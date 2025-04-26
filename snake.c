@@ -187,7 +187,7 @@ void snake_destroy(Snake* snake) {
 size_t snake_serialize(const Snake* snake, void* buffer, size_t buffer_size) {
     // Segments plus the direction as a single byte.
     size_t segments_size = (snake->length * sizeof(*snake->segments));
-    size_t total_size = sizeof(snake->length) + segments_size + 1;
+    size_t total_size = sizeof(snake->length) + segments_size + sizeof(U8) + sizeof(U32);
     assert(total_size <= buffer_size && "buffer too small!");
 
     U8 * ptr = buffer;
@@ -199,8 +199,8 @@ size_t snake_serialize(const Snake* snake, void* buffer, size_t buffer_size) {
     ptr += segments_size;
 
     *ptr = (U8)snake->direction;
-
     ptr += sizeof(U8);
+
     *(U32*)(ptr) = snake->chomp_energy;
 
     return total_size;
@@ -236,7 +236,7 @@ size_t snake_deserialize(void * buffer, size_t size, Snake* out) {
     out->direction = (Direction)*ptr;
     ptr++;
 
-    out->chomp_energy = (U32)*ptr;
+    out->chomp_energy = *(U32*)ptr;
     ptr += sizeof(U32);
 
     return ptr - (U8 *)buffer;
