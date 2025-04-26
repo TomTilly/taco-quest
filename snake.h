@@ -9,7 +9,7 @@
 
 #define INITIAL_SNAKE_LEN 5
 #define ACTION_BUF_SIZE 2
-
+#define SNAKE_SEGMENT_MAX_HEALTH 3
 typedef U8 SnakeAction;
 
 // Acts as a bitfield for actions to apply to a snake.
@@ -23,8 +23,9 @@ typedef enum {
 } SnakeActionFlags;
 
 typedef struct {
-    S32 x;
-    S32 y;
+    S16 x;
+    S16 y;
+    S8 health;
 } SnakeSegment;
 
 typedef struct {
@@ -45,7 +46,10 @@ void snake_destroy(Snake* snake);
 void snake_spawn(Snake* snake, int x, int y, Direction direction);
 void snake_grow(Snake* snake);
 void snake_turn(Snake* snake, Direction direction);
-void snake_draw(SDL_Renderer* renderer, SDL_Texture* texture, Snake* snake, int32_t cell_size);
+void snake_draw(SDL_Renderer* renderer,
+                SDL_Texture* texture,
+                Snake* snake,
+                int32_t cell_size);
 
 size_t snake_serialize(const Snake* snake, void * buffer, size_t buffer_size);
 size_t snake_deserialize(void * buffer, size_t size, Snake* out);

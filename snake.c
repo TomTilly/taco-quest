@@ -12,13 +12,20 @@ bool snake_init(Snake* snake, int32_t capacity) {
     return true;
 }
 
+SnakeSegment snake_init_segment(int x, int y) {
+    return (SnakeSegment){
+        .x = x,
+        .y = y,
+        .health = SNAKE_SEGMENT_MAX_HEALTH
+    };
+}
+
 void snake_spawn(Snake* snake, int x, int y, Direction direction) {
     snake->length = INITIAL_SNAKE_LEN;
     snake->direction = direction;
 
     for (int i = 0; i < snake->length; i++) {
-        snake->segments[i].x = x;
-        snake->segments[i].y = y;
+        snake->segments[i] = snake_init_segment(x, y);
     }
 }
 
@@ -27,8 +34,8 @@ void snake_grow(Snake* snake) {
 
     int last_segment_index = snake->length - 1;
     int new_segment_index = snake->length;
-    snake->segments[new_segment_index].x = snake->segments[last_segment_index].x;
-    snake->segments[new_segment_index].y = snake->segments[last_segment_index].y;
+    snake->segments[new_segment_index] = snake_init_segment(snake->segments[last_segment_index].x,
+                                                            snake->segments[last_segment_index].y);
     snake->length++;
 }
 
@@ -59,7 +66,11 @@ void snake_turn(Snake* snake, Direction direction) {
     }
 }
 
-void snake_draw(SDL_Renderer* renderer, SDL_Texture* texture, Snake* snake, int32_t cell_size) {
+void snake_draw(SDL_Renderer* renderer,
+                SDL_Texture* texture,
+                Snake* snake,
+                int32_t cell_size) {
+
     int tail_index = snake->length - 1;
     for (int i = 0; i < snake->length; i++) {
         SDL_Rect dest_rect = {
@@ -164,6 +175,8 @@ void snake_draw(SDL_Renderer* renderer, SDL_Texture* texture, Snake* snake, int3
                 }
             }
         }
+
+        source_rect.y += (snake->segments[i].health - 1) * source_rect.w;
 
         int rc = SDL_RenderCopyEx(renderer,
                                   texture,

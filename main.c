@@ -475,7 +475,7 @@ int main(S32 argc, char** argv) {
                         break;
                     }
                     case CELL_TYPE_TACO: {
-                        SDL_Rect source_rect = {0, 16, 16, 16};
+                        SDL_Rect source_rect = {64, 0, 16, 16};
                         rc = SDL_RenderCopy(renderer,
                                                 snake_texture,
                                                 &source_rect,

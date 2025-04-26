@@ -17,9 +17,9 @@ void snake_update(Snake* snake, Game* game, bool chomp) {
 
     CellType cell_type = level_get_cell(&game->level, new_snake_x, new_snake_y);
 
-    bool collide_with_snake = false;
-
+    // Check if collided with other snake
     // TODO: This simplifies when we have an array of snakes.
+    bool collide_with_snake = false;
     for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
         for (int i = 0; i < game->snakes[s].length; i++) {
             SnakeSegment* segment = game->snakes[s].segments + i;
@@ -96,16 +96,20 @@ bool game_snake_chomp(Game* game, int x, int y) {
         Snake* snake = game->snakes + s;
         bool snipping = false;
         S32 new_length = snake->length;
+
         for (S32 e = 0; e < snake->length; e++) {
             SnakeSegment* segment = snake->segments + e;
             if (snipping) {
               level_set_cell(&game->level, segment->x, segment->y, CELL_TYPE_TACO);
             } else if (segment->x == x && segment->y == y) {
-                // snip snip
-                snipping = true;
-                new_length = e;
+                if (--segment->health <= 0) {
+                    // snip snip
+                    snipping = true;
+                    new_length = e;
+                }
             }
         }
+
         snake->length = new_length;
         if (snipping) {
             return true;
