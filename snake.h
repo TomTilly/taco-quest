@@ -9,6 +9,9 @@
 
 #define INITIAL_SNAKE_LEN 5
 #define ACTION_BUF_SIZE 2
+#define MAX_SNAKE_CHOMP_ENERGY 900
+#define SNAKE_ENERGY_PER_CHOMP 300
+#define SNAKE_TACO_CHOMP_ENERGY 30
 
 typedef U8 SnakeAction;
 
@@ -32,6 +35,7 @@ typedef struct {
     S32 length;
     S32 capacity; // I hate STL
     Direction direction;
+    U32 chomp_energy;
 } Snake;
 
 typedef struct {

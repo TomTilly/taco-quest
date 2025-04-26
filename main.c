@@ -502,6 +502,66 @@ int main(S32 argc, char** argv) {
         }
         SDL_SetTextureColorMod(snake_texture, 255, 255, 255);
 
+        // Draw available chomps for both snakes.
+        {
+            U32 chomp_ui_element_size = 54;
+            U32 chomp_ui_initial_offset = 4;
+            U32 chomp_ui_bg_size = 50;
+            U32 chomp_ui_fg_size = 46;
+            U32 chomp_ui_fg_offset = 2;
+            U32 max_chomp_count = MAX_SNAKE_CHOMP_ENERGY / SNAKE_ENERGY_PER_CHOMP;
+            U32 chomp_ui_snake_offset = window_width - (max_chomp_count * chomp_ui_element_size) - chomp_ui_initial_offset;
+            for (U32 s = 0; s < MAX_SNAKE_COUNT; s++) {
+                SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, 0x00);
+                for (U32 i = 0; i < max_chomp_count; i++) {
+                    SDL_Rect ui_rect = {
+                        .x = (chomp_ui_snake_offset * s) + chomp_ui_initial_offset + chomp_ui_element_size * i,
+                        .y = chomp_ui_initial_offset,
+                        .w = chomp_ui_bg_size,
+                        .h = chomp_ui_bg_size
+                    };
+                    SDL_RenderFillRect(renderer, &ui_rect);
+                }
+
+                SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
+                for (U32 i = 0; i < max_chomp_count; i++) {
+                    SDL_Rect ui_rect = {
+                        .x = (chomp_ui_snake_offset * s) + chomp_ui_initial_offset + chomp_ui_element_size * i + chomp_ui_fg_offset,
+                        .y = chomp_ui_initial_offset + chomp_ui_fg_offset,
+                        .w = chomp_ui_fg_size,
+                        .h = chomp_ui_fg_size
+                    };
+                    SDL_RenderFillRect(renderer, &ui_rect);
+                }
+
+                SDL_SetRenderDrawColor(renderer, 0x00, 0xFF, 0xFF, 0xFF);
+                for (U32 i = 0; i < max_chomp_count; i++) {
+                    U32 enery_req_for_current_ui_element = SNAKE_ENERGY_PER_CHOMP + (i * SNAKE_ENERGY_PER_CHOMP);
+                    if (game.snakes[s].chomp_energy >= enery_req_for_current_ui_element) {
+                        SDL_Rect ui_rect = {
+                            .x = (chomp_ui_snake_offset * s) + chomp_ui_initial_offset + chomp_ui_element_size * i + chomp_ui_fg_offset,
+                            .y = chomp_ui_initial_offset + chomp_ui_fg_offset,
+                            .w = chomp_ui_fg_size,
+                            .h = chomp_ui_fg_size
+                        };
+                        SDL_RenderFillRect(renderer, &ui_rect);
+                    } else {
+                        SDL_SetRenderDrawColor(renderer, 0xFF, 0x00, 0xFF, 0xFF);
+                        U32 remaining_energy = game.snakes[s].chomp_energy % SNAKE_ENERGY_PER_CHOMP;
+                        U32 progress_width = (U32)( (float)(chomp_ui_fg_size) * ((float)(remaining_energy) / (float)(SNAKE_ENERGY_PER_CHOMP)) );
+                        SDL_Rect ui_rect = {
+                            .x = (chomp_ui_snake_offset * s) + chomp_ui_initial_offset + chomp_ui_element_size * i + chomp_ui_fg_offset,
+                            .y = chomp_ui_initial_offset + chomp_ui_fg_offset,
+                            .w = progress_width,
+                            .h = chomp_ui_fg_size
+                        };
+                        SDL_RenderFillRect(renderer, &ui_rect);
+                        break;
+                    }
+                }
+            }
+        }
+
         // Render updates
         SDL_RenderPresent(renderer);
 

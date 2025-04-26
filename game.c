@@ -31,8 +31,9 @@ void snake_update(Snake* snake, Game* game, bool chomp) {
         }
     }
 
-    if (collide_with_snake && chomp) {
+    if (collide_with_snake && chomp && snake->chomp_energy >= SNAKE_ENERGY_PER_CHOMP) {
         collide_with_snake = !game_snake_chomp(game, new_snake_x, new_snake_y);
+        snake->chomp_energy -= SNAKE_ENERGY_PER_CHOMP;
     }
 
     if ((cell_type == CELL_TYPE_EMPTY || cell_type == CELL_TYPE_TACO) &&
@@ -48,11 +49,15 @@ void snake_update(Snake* snake, Game* game, bool chomp) {
         if (cell_type == CELL_TYPE_TACO) {
             level_set_cell(&game->level, new_snake_x, new_snake_y, CELL_TYPE_EMPTY);
             snake_grow(snake);
+            snake->chomp_energy += SNAKE_TACO_CHOMP_ENERGY;
             S32 taco_count = game_count_tacos(game);
             if (taco_count < MAX_TACO_COUNT){
                 game_spawn_taco(game);
             }
         }
+    } else {
+        // If we weren't able to move, generate some chomp energy.
+        snake->chomp_energy++;
     }
 }
 
@@ -168,7 +173,7 @@ void game_spawn_taco(Game* game) {
 }
 
 S32 game_count_tacos(Game* game) {
-    size_t taco_count = 0;
+    S32 taco_count = 0;
     for(S32 y = 0; y < game->level.height; y++) {
         for(S32 x = 0; x < game->level.width; x++) {
             CellType cell_type = level_get_cell(&game->level, x, y);
