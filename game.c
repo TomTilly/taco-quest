@@ -50,6 +50,9 @@ void snake_update(Snake* snake, Game* game, bool chomp) {
             level_set_cell(&game->level, new_snake_x, new_snake_y, CELL_TYPE_EMPTY);
             snake_grow(snake);
             snake->chomp_energy += SNAKE_TACO_CHOMP_ENERGY;
+            if (snake->chomp_energy > MAX_SNAKE_CHOMP_ENERGY) {
+                snake->chomp_energy = MAX_SNAKE_CHOMP_ENERGY;
+            }
             S32 taco_count = game_count_tacos(game);
             if (taco_count < MAX_TACO_COUNT){
                 game_spawn_taco(game);
@@ -58,6 +61,9 @@ void snake_update(Snake* snake, Game* game, bool chomp) {
     } else {
         // If we weren't able to move, generate some chomp energy.
         snake->chomp_energy++;
+        if (snake->chomp_energy > MAX_SNAKE_CHOMP_ENERGY) {
+            snake->chomp_energy = MAX_SNAKE_CHOMP_ENERGY;
+        }
     }
 }
 
