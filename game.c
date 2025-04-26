@@ -104,7 +104,7 @@ bool game_snake_chomp(Game* game, int x, int y) {
         for (S32 e = 0; e < snake->length; e++) {
             SnakeSegment* segment = snake->segments + e;
             if (snipping) {
-              level_set_cell(&game->level, segment->x, segment->y, CELL_TYPE_TACO);
+              // level_set_cell(&game->level, segment->x, segment->y, CELL_TYPE_TACO);
             } else if (segment->x == x && segment->y == y) {
                 // snip snip
                 snipping = true;
