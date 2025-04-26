@@ -9,27 +9,25 @@ bool snake_init(Snake* snake, int32_t capacity) {
         return false;
     }
     snake->capacity = capacity;
+    snake->chomp_cooldown = 0;
     return true;
 }
 
-void snake_spawn(Snake* snake, int x, int y, Direction direction) {
+SnakeSegment snake_init_segment(S16 x, S16 y) {
+    return (SnakeSegment){
+        .x = x,
+        .y = y,
+        .health = SNAKE_SEGMENT_MAX_HEALTH
+    };
+}
+
+void snake_spawn(Snake* snake, S16 x, S16 y, Direction direction) {
     snake->length = INITIAL_SNAKE_LEN;
     snake->direction = direction;
 
     for (int i = 0; i < snake->length; i++) {
-        snake->segments[i].x = x;
-        snake->segments[i].y = y;
+        snake->segments[i] = snake_init_segment(x, y);
     }
-}
-
-void snake_grow(Snake* snake) {
-    assert(snake->length < snake->capacity);
-
-    int last_segment_index = snake->length - 1;
-    int new_segment_index = snake->length;
-    snake->segments[new_segment_index].x = snake->segments[last_segment_index].x;
-    snake->segments[new_segment_index].y = snake->segments[last_segment_index].y;
-    snake->length++;
 }
 
 void snake_turn(Snake* snake, Direction direction) {
@@ -59,7 +57,11 @@ void snake_turn(Snake* snake, Direction direction) {
     }
 }
 
-void snake_draw(SDL_Renderer* renderer, SDL_Texture* texture, Snake* snake, int32_t cell_size) {
+void snake_draw(SDL_Renderer* renderer,
+                SDL_Texture* texture,
+                Snake* snake,
+                int32_t cell_size) {
+
     int tail_index = snake->length - 1;
     for (int i = 0; i < snake->length; i++) {
         SDL_Rect dest_rect = {
@@ -87,16 +89,8 @@ void snake_draw(SDL_Renderer* renderer, SDL_Texture* texture, Snake* snake, int3
                 source_rect.x = 0;
                 source_rect.y = 0;
 
-                int last_segment_x = 0;
-                int last_segment_y = 0;
-                if (snake->segments[i].y == snake->segments[i - 1].y &&
-                    snake->segments[i].x == snake->segments[i - 1].x) {
-                    last_segment_x = snake->segments[i - 2].x;
-                    last_segment_y = snake->segments[i - 2].y;
-                } else {
-                    last_segment_x = snake->segments[i - 1].x;
-                    last_segment_y = snake->segments[i - 1].y;
-                }
+                int last_segment_x = snake->segments[i - 1].x;
+                int last_segment_y = snake->segments[i - 1].y;
 
                 if (snake->segments[i].y == last_segment_y &&
                     snake->segments[i].x == (last_segment_x - 1)) {
@@ -157,13 +151,11 @@ void snake_draw(SDL_Renderer* renderer, SDL_Texture* texture, Snake* snake, int3
                     source_rect.x = 16;
                     source_rect.y = 0;
                     angle = 270.0;
-                } else if (snake->segments[i].x == snake->segments[tail_index].x &&
-                           snake->segments[i].y == snake->segments[tail_index].y) {
-                    // The extra tail added when we eat a taco. Skip drawing it.
-                    continue;
                 }
             }
         }
+
+        source_rect.y += (snake->segments[i].health - 1) * source_rect.w;
 
         int rc = SDL_RenderCopyEx(renderer,
                                   texture,

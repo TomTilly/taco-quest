@@ -16,7 +16,7 @@
 #define LEVEL_WIDTH 17
 #define LEVEL_HEIGHT 15
 #define MS_TO_US(ms) ((ms) * 1000)
-#define GAME_SIMULATE_TIME_INTERVAL_US MS_TO_US(150)
+#define GAME_SIMULATE_TIME_INTERVAL_US MS_TO_US(150) // default = 150
 #define SERVER_ACCEPT_QUEUE_LIMIT 5
 
 typedef enum {
@@ -187,12 +187,12 @@ int main(S32 argc, char** argv) {
 
     snake_spawn(game.snakes + 0,
                 1,
-                level->height / 3,
+                (S16)(level->height / 3),
                 DIRECTION_EAST);
 
     snake_spawn(game.snakes + 1,
-                level->width - 2,
-                level->height / 3 + level->height / 3,
+                (S16)(level->width - 2),
+                (S16)(level->height / 3 + level->height / 3),
                 DIRECTION_WEST);
 
     for (S32 y = 0; y < level->height; y++) {
@@ -475,7 +475,7 @@ int main(S32 argc, char** argv) {
                         break;
                     }
                     case CELL_TYPE_TACO: {
-                        SDL_Rect source_rect = {0, 16, 16, 16};
+                        SDL_Rect source_rect = {64, 0, 16, 16};
                         rc = SDL_RenderCopy(renderer,
                                                 snake_texture,
                                                 &source_rect,

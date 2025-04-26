@@ -7,9 +7,31 @@
 
 #include "game.h"
 
+typedef struct {
+    S16 snake_index;
+    S16 segment_index;
+} SnakeCollision;
+
+void _snake_chomp(Game* game, SnakeCollision* snake_collision) {
+    Snake* snake = game->snakes + snake_collision->snake_index;
+    SnakeSegment* chomped_segment = snake->segments + snake_collision->segment_index;
+    chomped_segment->health--;
+    if (chomped_segment->health <= 0) {
+        for (S32 e = snake_collision->segment_index; e < snake->length; e++) {
+            SnakeSegment* segment = snake->segments + e;
+            level_set_cell(&game->level, segment->x, segment->y, CELL_TYPE_TACO);
+        }
+        snake->length = snake_collision->segment_index;
+    }
+}
+
 void snake_update(Snake* snake, Game* game, bool chomp) {
-    int32_t new_snake_x = snake->segments[0].x;
-    int32_t new_snake_y = snake->segments[0].y;
+    if (snake->chomp_cooldown > 0) {
+        snake->chomp_cooldown--;
+    }
+
+    S32 new_snake_x = (S32)(snake->segments[0].x);
+    S32 new_snake_y = (S32)(snake->segments[0].y);
 
     adjacent_cell(snake->direction,
                   &new_snake_x,
@@ -17,42 +39,59 @@ void snake_update(Snake* snake, Game* game, bool chomp) {
 
     CellType cell_type = level_get_cell(&game->level, new_snake_x, new_snake_y);
 
-    bool collide_with_snake = false;
-
+    // Check if collided with other snake
     // TODO: This simplifies when we have an array of snakes.
-    for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
-        for (int i = 0; i < game->snakes[s].length; i++) {
+    SnakeCollision snake_collision = {
+        .snake_index = -1,
+        .segment_index = -1
+    };
+    for (S16 s = 0; s < MAX_SNAKE_COUNT; s++) {
+        for (S16 i = 0; i < game->snakes[s].length; i++) {
             SnakeSegment* segment = game->snakes[s].segments + i;
             if (segment->x == new_snake_x &&
                 segment->y == new_snake_y) {
-                collide_with_snake = true;
+                snake_collision.snake_index = s;
+                snake_collision.segment_index = i;
                 break;
             }
         }
     }
 
-    if (collide_with_snake && chomp) {
-        collide_with_snake = !game_snake_chomp(game, new_snake_x, new_snake_y);
+    if (snake_collision.snake_index >= 0) {
+        if (chomp && snake_collision.snake_index >= 0 && snake->chomp_cooldown <= 0) {
+            _snake_chomp(game, &snake_collision);
+            snake->chomp_cooldown = SNAKE_CHOMP_COOLDOWN;
+        }
+        return;
     }
 
-    if ((cell_type == CELL_TYPE_EMPTY || cell_type == CELL_TYPE_TACO) &&
-        !collide_with_snake) {
-        for (int i = snake->length; i >= 1; i--) {
+    switch (cell_type) {
+    case CELL_TYPE_EMPTY: {
+        // Move the snake in the directon it is heading by moving all segments.
+        for (int i = snake->length - 1; i >= 1; i--) {
             snake->segments[i].x = snake->segments[i - 1].x;
             snake->segments[i].y = snake->segments[i - 1].y;
         }
-
-        snake->segments[0].x = new_snake_x;
-        snake->segments[0].y = new_snake_y;
-
-        if (cell_type == CELL_TYPE_TACO) {
-            level_set_cell(&game->level, new_snake_x, new_snake_y, CELL_TYPE_EMPTY);
-            snake_grow(snake);
-            S32 taco_count = game_count_tacos(game);
-            if (taco_count < MAX_TACO_COUNT){
-                game_spawn_taco(game);
-            }
+        snake->segments[0].x = (S16)(new_snake_x);
+        snake->segments[0].y = (S16)(new_snake_y);
+        break;
+    }
+    case CELL_TYPE_TACO: {
+        // Grow the snake length by consuming the taco.
+        level_set_cell(&game->level, new_snake_x, new_snake_y, CELL_TYPE_EMPTY);
+        snake->length++;
+        // Shift all segments one over toward the tail. The new segment is added where the head is.
+        for ( int i = snake->length - 1; i >= 1; i-- ) {
+            snake->segments[i] = snake->segments[i - 1];
         }
+        // The head is moved into the position where the taco was.
+        snake->segments[0].x = (S16)(new_snake_x);
+        snake->segments[0].y = (S16)(new_snake_y);
+        break;
+    }
+    case CELL_TYPE_WALL:
+    default:
+        break;
     }
 }
 
@@ -88,31 +127,6 @@ void game_apply_snake_action(Game* game, SnakeAction snake_action, S32 snake_ind
         direction = DIRECTION_WEST;
     }
     snake_turn(snake, direction);
-}
-
-bool game_snake_chomp(Game* game, int x, int y) {
-    // Loop through each snake's segments, see if chomp target is matching
-    for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
-        Snake* snake = game->snakes + s;
-        bool snipping = false;
-        S32 new_length = snake->length;
-        for (S32 e = 0; e < snake->length; e++) {
-            SnakeSegment* segment = snake->segments + e;
-            if (snipping) {
-              level_set_cell(&game->level, segment->x, segment->y, CELL_TYPE_TACO);
-            } else if (segment->x == x && segment->y == y) {
-                // snip snip
-                snipping = true;
-                new_length = e;
-            }
-        }
-        snake->length = new_length;
-        if (snipping) {
-            return true;
-        }
-    }
-
-    return false;
 }
 
 void game_update(Game* game, SnakeAction* snake_actions) {
@@ -168,7 +182,7 @@ void game_spawn_taco(Game* game) {
 }
 
 S32 game_count_tacos(Game* game) {
-    size_t taco_count = 0;
+    S32 taco_count = 0;
     for(S32 y = 0; y < game->level.height; y++) {
         for(S32 x = 0; x < game->level.width; x++) {
             CellType cell_type = level_get_cell(&game->level, x, y);
