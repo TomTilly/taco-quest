@@ -36,3 +36,28 @@ server
 - 52.520 client receives game state seq 7 message
 
 Digging in, this caused us to realize the timestamp was before the receive and the receive was blocking.
+
+--------------------------------------------------------------------------------
+4/26/25
+
+Tried out branch: limit-chomp-count-test
+- limits the chomps to 1
+- allows gaining a chomp
+  - slowly through not moving
+  - quickly through eating tacos
+- tacos do not spawn when body is chomped
+
+pros:
+- Switching between objectives: chomping, collecting tacos
+- Can no longer get stuck and there is a long time penalty for getting stuck without a chomp
+- 
+
+cons:
+- Tacos can now be removed from the game economy, so its difficult to get longer.
+- Don't feel like we can do anything about getting chomped. No defense, except maybe running away to force a chomp to happen further away from our head.
+- Lack of progress over the course of the game. A single chomp can remove most of the snake's body.
+- 
+
+TODO: try out branch: segment-health-test
+
+

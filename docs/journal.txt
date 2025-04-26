@@ -1,4 +1,17 @@
 --------------------------------------------------------------------------------
+4/26/2025: Discord
+
+Today:
+- Tom F put together a segment-health-test branch, still a few changes to make
+- Justin put together limit-chomp-count-test branch. Put notes about playtest in notes.txt
+
+Next Time:
+- Tom T's turn.
+- Make changes to segment health test branch, playtest and put together notes.
+  - chomp delay
+  - damaged segment staying fixed to tail
+
+--------------------------------------------------------------------------------
 4/13/2025: In Person
 
 Today:

@@ -77,4 +77,3 @@ What if chomping the other snake's head kills the snake ?
   or allow you to chomp.
 - What if you can use some length to allow yourself to chomp ?
 - What if you can poop ? Setting up land-mines for the enemy
-
