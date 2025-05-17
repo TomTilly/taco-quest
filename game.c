@@ -35,9 +35,35 @@ void snake_update(Snake* snake, Game* game, bool chomp) {
         collide_with_snake = !game_snake_chomp(game, new_snake_x, new_snake_y);
     }
 
+    if ( collide_with_snake || cell_type == CELL_TYPE_WALL ) {
+        return;
+    }
+
+    if ( cell_type == CELL_TYPE_EMPTY ) {
+        // Move all segments
+        for (int i = snake->length - 1; i >= 1; i--) {
+            snake->segments[i].x = snake->segments[i - 1].x;
+            snake->segments[i].y = snake->segments[i - 1].y;
+        }
+
+    } else if ( cell_type == CELL_TYPE_TACO ) {
+        level_set_cell(&game->level, new_snake_x, new_snake_y, CELL_TYPE_EMPTY);
+
+        snake->length++;
+        // Move all segments one over toward the tail.
+        for ( int i = snake->length - 1; i >= 1; i-- ) {
+            snake->segments[i] = snake->segments[i - 1];
+        }
+
+    }
+
+    snake->segments[0].x = new_snake_x;
+    snake->segments[0].y = new_snake_y;
+
+#if 0
     if ((cell_type == CELL_TYPE_EMPTY || cell_type == CELL_TYPE_TACO) &&
         !collide_with_snake) {
-        for (int i = snake->length; i >= 1; i--) {
+        for (int i = snake->length - 1; i >= 1; i--) {
             snake->segments[i].x = snake->segments[i - 1].x;
             snake->segments[i].y = snake->segments[i - 1].y;
         }
@@ -54,6 +80,7 @@ void snake_update(Snake* snake, Game* game, bool chomp) {
             }
         }
     }
+#endif
 }
 
 bool game_init(Game* game, int32_t level_width, int32_t level_height) {
