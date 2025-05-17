@@ -10,6 +10,7 @@
 #define INITIAL_SNAKE_LEN 5
 #define ACTION_BUF_SIZE 2
 #define SNAKE_SEGMENT_MAX_HEALTH 3
+#define SNAKE_CHOMP_COOLDOWN 10
 typedef U8 SnakeAction;
 
 // Acts as a bitfield for actions to apply to a snake.
@@ -33,6 +34,7 @@ typedef struct {
     S32 length;
     S32 capacity; // I hate STL
     Direction direction;
+    S8 chomp_cooldown;
 } Snake;
 
 typedef struct {

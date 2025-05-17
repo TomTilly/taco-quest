@@ -9,6 +9,7 @@ bool snake_init(Snake* snake, int32_t capacity) {
         return false;
     }
     snake->capacity = capacity;
+    snake->chomp_cooldown = 0;
     return true;
 }
 
@@ -180,10 +181,6 @@ void snake_draw(SDL_Renderer* renderer,
                     source_rect.x = 16;
                     source_rect.y = 0;
                     angle = 270.0;
-                } else if (snake->segments[i].x == snake->segments[tail_index].x &&
-                           snake->segments[i].y == snake->segments[tail_index].y) {
-                    // The extra tail added when we eat a taco. Skip drawing it.
-                    continue;
                 }
             }
         }
