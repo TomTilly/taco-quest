@@ -1,4 +1,17 @@
 --------------------------------------------------------------------------------
+5/17/2025: Discord
+
+Today:
+- Tom F had the grown segment start at the head so that it stays relative to the tail
+- Tom T added a chomp delay
+- Justin cleaned up game snake update
+
+Next Time:
+- Tom F's Turn
+- Try out a larger level with some obstacles
+- Brainstorm and experiment with some goals/win conditions
+
+--------------------------------------------------------------------------------
 4/26/2025: Discord
 
 Today:

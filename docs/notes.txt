@@ -58,6 +58,17 @@ cons:
 - Lack of progress over the course of the game. A single chomp can remove most of the snake's body.
 - 
 
-TODO: try out branch: segment-health-test
+--------------------------------------------------------------------------------
+5/17/25
 
+tried out branch: segment-health-test
+- Rounds lasting much longer
+- Mitigating problem of chomping lost all progress
+  - Planning what happens after your and your enemies chomp can help you gain a lot back
+- Can still section off parts of the map
+- Continuing moving while other snake is stuck hurts their ability to escape since your segments are moving
+- Chomp delay creates time penalty when you need to use it multiple times in a row
+- Still really need some kind of goal/win condition.
+  - Idea about coiling around the other snake ?
+  - Filling a meter to 100%, being longer fills it faster.
 
