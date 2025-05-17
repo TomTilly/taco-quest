@@ -45,8 +45,7 @@ typedef struct {
 bool snake_init(Snake* snake, S32 capacity);
 void snake_destroy(Snake* snake);
 
-void snake_spawn(Snake* snake, int x, int y, Direction direction);
-void snake_grow(Snake* snake);
+void snake_spawn(Snake* snake, S16 x, S16 y, Direction direction);
 void snake_turn(Snake* snake, Direction direction);
 void snake_draw(SDL_Renderer* renderer,
                 SDL_Texture* texture,

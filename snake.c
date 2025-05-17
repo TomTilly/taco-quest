@@ -13,7 +13,7 @@ bool snake_init(Snake* snake, int32_t capacity) {
     return true;
 }
 
-SnakeSegment snake_init_segment(int x, int y) {
+SnakeSegment snake_init_segment(S16 x, S16 y) {
     return (SnakeSegment){
         .x = x,
         .y = y,
@@ -21,35 +21,13 @@ SnakeSegment snake_init_segment(int x, int y) {
     };
 }
 
-void snake_spawn(Snake* snake, int x, int y, Direction direction) {
+void snake_spawn(Snake* snake, S16 x, S16 y, Direction direction) {
     snake->length = INITIAL_SNAKE_LEN;
     snake->direction = direction;
 
     for (int i = 0; i < snake->length; i++) {
         snake->segments[i] = snake_init_segment(x, y);
     }
-}
-
-void snake_grow(Snake* snake) {
-    assert(snake->length < snake->capacity);
-
-    snake->length++;
-    int head_x = snake->segments[0].x;
-    int head_y = snake->segments[0].y;
-
-    // Move all segments one over toward the tail.
-    for ( int i = snake->length - 1; i >= 1; i-- ) {
-        snake->segments[i] = snake->segments[i - 1];
-    }
-
-    snake->segments[0] = snake_init_segment(head_x, head_y);
-
-    // Old version:
-//    int last_segment_index = snake->length - 1;
-//    int new_segment_index = snake->length;
-//    snake->segments[new_segment_index] = snake_init_segment(snake->segments[last_segment_index].x,
-//                                                            snake->segments[last_segment_index].y);
-//    snake->length++;
 }
 
 void snake_turn(Snake* snake, Direction direction) {
@@ -111,16 +89,8 @@ void snake_draw(SDL_Renderer* renderer,
                 source_rect.x = 0;
                 source_rect.y = 0;
 
-                int last_segment_x = 0;
-                int last_segment_y = 0;
-                if (snake->segments[i].y == snake->segments[i - 1].y &&
-                    snake->segments[i].x == snake->segments[i - 1].x) {
-//                    last_segment_x = snake->segments[i - 2].x;
-//                    last_segment_y = snake->segments[i - 2].y;
-                } else {
-                    last_segment_x = snake->segments[i - 1].x;
-                    last_segment_y = snake->segments[i - 1].y;
-                }
+                int last_segment_x = snake->segments[i - 1].x;
+                int last_segment_y = snake->segments[i - 1].y;
 
                 if (snake->segments[i].y == last_segment_y &&
                     snake->segments[i].x == (last_segment_x - 1)) {

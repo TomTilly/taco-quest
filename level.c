@@ -31,11 +31,11 @@ void level_destroy(Level* level) {
     memset(level, 0, sizeof(*level));
 }
 
-int32_t level_get_cell_index(Level* level, int32_t x, int32_t y) {
+int32_t level_get_cell_index(Level* level, S32 x, S32 y) {
     return y * level->width + x;
 }
 
-bool level_set_cell(Level* level, int32_t x, int32_t y, CellType value) {
+bool level_set_cell(Level* level, S32 x, S32 y, CellType value) {
     if (x < 0 || x >= level->width) {
         return false;
     }
@@ -49,7 +49,7 @@ bool level_set_cell(Level* level, int32_t x, int32_t y, CellType value) {
     return true;
 }
 
-CellType level_get_cell(Level* level, int32_t x, int32_t y) {
+CellType level_get_cell(Level* level, S32 x, S32 y) {
     if (x < 0 || x >= level->width) {
         return CELL_TYPE_INVALID;
     }

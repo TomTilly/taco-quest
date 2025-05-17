@@ -187,12 +187,12 @@ int main(S32 argc, char** argv) {
 
     snake_spawn(game.snakes + 0,
                 1,
-                level->height / 3,
+                (S16)(level->height / 3),
                 DIRECTION_EAST);
 
     snake_spawn(game.snakes + 1,
-                level->width - 2,
-                level->height / 3 + level->height / 3,
+                (S16)(level->width - 2),
+                (S16)(level->height / 3 + level->height / 3),
                 DIRECTION_WEST);
 
     for (S32 y = 0; y < level->height; y++) {
