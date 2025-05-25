@@ -14,7 +14,7 @@
 #include "packet.h"
 
 #define MS_TO_US(ms) ((ms) * 1000)
-#define GAME_SIMULATE_TIME_INTERVAL_US MS_TO_US(250) // default = 150
+#define GAME_SIMULATE_TIME_INTERVAL_US MS_TO_US(200) // default = 150
 #define SERVER_ACCEPT_QUEUE_LIMIT 5
 
 // Minus one due to the server itself not needing a client socket.
