@@ -265,7 +265,7 @@ int main(S32 argc, char** argv) {
     U16 server_sequence = 0;
     U16 client_sequence = 0;
     Packet client_receive_packet = {0};
-    Packet server_receive_packet = {0};
+    Packet server_receive_packets[MAX_SERVER_CLIENT_COUNT] = {0};
     PacketTransmissionState recv_game_state_state = {0};
     PacketTransmissionState recv_snake_action_state = {0};
 
@@ -382,22 +382,22 @@ int main(S32 argc, char** argv) {
             for (S32 i = 0; i < MAX_SERVER_CLIENT_COUNT; i++) {
                 if (server_client_sockets[i] != NULL) {
                     packet_receive(server_client_sockets[i],
-                                   &server_receive_packet,
+                                   &server_receive_packets[i],
                                    &recv_snake_action_state);
 
                     if (recv_snake_action_state.stage == PACKET_PROGRESS_STAGE_COMPLETE) {
-                        SnakeAction client_snake_action = *(SnakeAction*)server_receive_packet.payload;
+                        SnakeAction client_snake_action = *(SnakeAction*)server_receive_packets[i].payload;
                         action_buffer_add(&clients_actions[i], client_snake_action, game.snakes[i].direction);
 
                         // Resent packet state
                         memset(&recv_snake_action_state, 0, sizeof(recv_snake_action_state));
-                        free(server_receive_packet.payload);
-                        memset(&server_receive_packet, 0, sizeof(server_receive_packet));
+                        free(server_receive_packets[i].payload);
+                        memset(&server_receive_packets[i], 0, sizeof(server_receive_packets[i]));
                     } else if ( recv_snake_action_state.stage == PACKET_PROGRESS_STAGE_ERROR ) {
-                        if ( server_receive_packet.payload != NULL ) {
-                            free(server_receive_packet.payload);
+                        if ( server_receive_packets[i].payload != NULL ) {
+                            free(server_receive_packets[i].payload);
                         }
-                        memset(&server_receive_packet, 0, sizeof(server_receive_packet));
+                        memset(&server_receive_packets[i], 0, sizeof(server_receive_packets[i]));
                         fputs(net_get_error(), stderr);
                         net_destroy_socket(server_client_sockets[i]);
                         server_client_sockets[i] = NULL;
