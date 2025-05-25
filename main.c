@@ -348,12 +348,11 @@ int main(S32 argc, char** argv) {
                     bytes_deserialized += level_deserialize(client_receive_packet.payload + bytes_deserialized,
                                                             client_receive_packet.header.payload_size - bytes_deserialized,
                                                             &game.level);
-                    bytes_deserialized += snake_deserialize(client_receive_packet.payload + bytes_deserialized,
-                                                            client_receive_packet.header.payload_size - bytes_deserialized,
-                                                            game.snakes + 0);
-                    bytes_deserialized += snake_deserialize(client_receive_packet.payload + bytes_deserialized,
-                                                            client_receive_packet.header.payload_size - bytes_deserialized,
-                                                            game.snakes + 1);
+                    for (S32 i = 0; i < MAX_SNAKE_COUNT; i++) {
+                        bytes_deserialized += snake_deserialize(client_receive_packet.payload + bytes_deserialized,
+                                                                client_receive_packet.header.payload_size - bytes_deserialized,
+                                                                game.snakes + i);
+                    }
 
                     memset(&recv_game_state_state, 0, sizeof(recv_game_state_state));
                     free(client_receive_packet.payload);
@@ -433,8 +432,9 @@ int main(S32 argc, char** argv) {
                 } else {
                     // Serialize game state
                     size_t msg_size = level_serialize(&game.level, net_msg_buffer, net_msg_buffer_size);
-                    msg_size += snake_serialize(game.snakes + 0, net_msg_buffer + msg_size, net_msg_buffer_size - msg_size);
-                    msg_size += snake_serialize(game.snakes + 1, net_msg_buffer + msg_size, net_msg_buffer_size - msg_size);
+                    for (S32 s = 0; i < MAX_SNAKE_COUNT; i++) {
+                        msg_size += snake_serialize(game.snakes + s, net_msg_buffer + msg_size, net_msg_buffer_size - msg_size);
+                    }
 
                     // Send packet header
                     Packet packet = {
