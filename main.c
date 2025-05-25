@@ -387,7 +387,7 @@ int main(S32 argc, char** argv) {
 
                     if (recv_snake_action_state.stage == PACKET_PROGRESS_STAGE_COMPLETE) {
                         SnakeAction client_snake_action = *(SnakeAction*)server_receive_packet.payload;
-                        action_buffer_add(&clients_actions[i], client_snake_action, game.snakes[1].direction);
+                        action_buffer_add(&clients_actions[i], client_snake_action, game.snakes[i].direction);
 
                         // Resent packet state
                         memset(&recv_snake_action_state, 0, sizeof(recv_snake_action_state));
