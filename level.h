@@ -13,9 +13,9 @@
 
 #include "ints.h"
 
-#define LEVEL_WIDTH 17
-#define LEVEL_HEIGHT 15
-#define CELL_SIZE 60
+#define LEVEL_WIDTH 32
+#define LEVEL_HEIGHT 32
+#define CELL_SIZE 32
 
 typedef S8 CellType;
 enum {
