@@ -84,6 +84,8 @@ void snake_update(Snake* snake, Game* game, bool chomp) {
         for ( int i = snake->length - 1; i >= 1; i-- ) {
             snake->segments[i] = snake->segments[i - 1];
         }
+        // The new segment has max health.
+        snake->segments[1].health = SNAKE_SEGMENT_MAX_HEALTH;
         // The head is moved into the position where the taco was.
         snake->segments[0].x = (S16)(new_snake_x);
         snake->segments[0].y = (S16)(new_snake_y);
