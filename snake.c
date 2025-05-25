@@ -61,14 +61,15 @@ void snake_turn(Snake* snake, Direction direction) {
 void snake_draw(SDL_Renderer* renderer,
                 SDL_Texture* texture,
                 Snake* snake,
-                S32 snake_index) {
+                S32 snake_index,
+                S32 cell_size) {
     int tail_index = snake->length - 1;
     for (int i = 0; i < snake->length; i++) {
         SDL_Rect dest_rect = {
-            .x = snake->segments[i].x * CELL_SIZE,
-            .y = snake->segments[i].y * CELL_SIZE,
-            .w = CELL_SIZE,
-            .h = CELL_SIZE
+            .x = snake->segments[i].x * cell_size,
+            .y = snake->segments[i].y * cell_size,
+            .w = cell_size,
+            .h = cell_size
         };
 
         double angle = 0.0;
@@ -162,9 +163,9 @@ void snake_draw(SDL_Renderer* renderer,
         if (snake_index == 0) {
             SDL_SetTextureColorMod(texture, 0, hue, 0);
         } else if (snake_index == 1) {
-            SDL_SetTextureColorMod(texture, hue, 0, 0);
+            SDL_SetTextureColorMod(texture, hue, hue / 2, hue / 2);
         } else {
-            SDL_SetTextureColorMod(texture, 0, 0, hue);
+            SDL_SetTextureColorMod(texture, 0, hue, hue);
         }
 
         int rc = SDL_RenderCopyEx(renderer,

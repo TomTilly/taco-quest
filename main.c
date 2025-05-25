@@ -14,7 +14,7 @@
 #include "packet.h"
 
 #define MS_TO_US(ms) ((ms) * 1000)
-#define GAME_SIMULATE_TIME_INTERVAL_US MS_TO_US(200) // default = 150
+#define GAME_SIMULATE_TIME_INTERVAL_US MS_TO_US(175) // default = 150
 #define SERVER_ACCEPT_QUEUE_LIMIT 5
 
 // Minus one due to the server itself not needing a client socket.
@@ -151,10 +151,18 @@ int main(S32 argc, char** argv) {
     SDL_Rect display_size;
     SDL_GetDisplayBounds(0, &display_size);
 
+    S32 min_display_dimension = (display_size.h < display_size.w) ? display_size.h : display_size.w;
+    S32 max_level_dimension = (LEVEL_HEIGHT > LEVEL_WIDTH) ? LEVEL_HEIGHT : LEVEL_WIDTH;
+    // stupid hack to account for title bar and start menu.
+    min_display_dimension -= 100;
+    // Make sure the window dimention is a multiple of the level dimension so the level fits in the
+    // window.
+    min_display_dimension -= (min_display_dimension % max_level_dimension);
+
     int window_x = SDL_WINDOWPOS_CENTERED;
     int window_y = display_size.h / 4;
-    S32 window_width = LEVEL_WIDTH * CELL_SIZE;
-    S32 window_height = LEVEL_HEIGHT * CELL_SIZE;
+    S32 window_width = min_display_dimension;
+    S32 window_height = min_display_dimension;
 
     if ( session_type == SESSION_TYPE_SERVER ) {
         window_x = display_size.w / 2 - window_width;
@@ -476,16 +484,17 @@ int main(S32 argc, char** argv) {
         SDL_RenderClear(renderer);
 
         // Draw level
+        S32 cell_size = min_display_dimension / max_level_dimension;
         for(S32 y = 0; y < level->height; y++) {
             for(S32 x = 0; x < level->width; x++) {
                 // TODO: Asserts
                 CellType cell_type = level_get_cell(level, x, y);
 
                 SDL_Rect cell_rect = {
-                    .x = x * CELL_SIZE,
-                    .y = y * CELL_SIZE,
-                    .w = CELL_SIZE,
-                    .h = CELL_SIZE
+                    .x = x * cell_size,
+                    .y = y * cell_size,
+                    .w = cell_size,
+                    .h = cell_size
                 };
 
                 if (((x + y) % 2) == 0) {
@@ -527,7 +536,7 @@ int main(S32 argc, char** argv) {
         }
 
         for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
-            snake_draw(renderer, snake_texture, game.snakes + s, s);
+            snake_draw(renderer, snake_texture, game.snakes + s, s, cell_size);
         }
         SDL_SetTextureColorMod(snake_texture, 255, 255, 255);
 
