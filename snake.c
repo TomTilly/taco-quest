@@ -157,7 +157,8 @@ void snake_draw(SDL_Renderer* renderer,
 
         source_rect.y += (snake->segments[i].health - 1) * source_rect.w;
 
-        S8 hue = 255 - (snake->chomp_cooldown * 10);
+        U8 hue = snake->chomp_cooldown ? 128 : 255;
+
         if (snake_index == 0) {
             SDL_SetTextureColorMod(texture, 0, hue, 0);
         } else {
@@ -186,7 +187,14 @@ void snake_destroy(Snake* snake) {
 size_t snake_serialize(const Snake* snake, void* buffer, size_t buffer_size) {
     // Segments plus the direction as a single byte.
     size_t segments_size = (snake->length * sizeof(*snake->segments));
-    size_t total_size = sizeof(snake->length) + segments_size + 1;
+
+    // Total size of snake buffer as sent over network.
+    size_t total_size = 0;
+    total_size += sizeof(snake->length);
+    total_size += segments_size;
+    total_size += sizeof(U8); // direction
+    total_size += sizeof(U8); // chomp cooldown
+
     assert(total_size <= buffer_size && "buffer too small!");
 
     U8 * ptr = buffer;
@@ -198,6 +206,10 @@ size_t snake_serialize(const Snake* snake, void* buffer, size_t buffer_size) {
     ptr += segments_size;
 
     *ptr = (U8)snake->direction;
+    ptr += sizeof(U8);
+
+    *ptr = snake->chomp_cooldown;
+    ptr += sizeof(snake->chomp_cooldown);
 
     return total_size;
 }
@@ -230,6 +242,9 @@ size_t snake_deserialize(void * buffer, size_t size, Snake* out) {
     size -= segments_size;
 
     out->direction = (Direction)*ptr;
+    ptr++;
+
+    out->chomp_cooldown = *ptr;
     ptr++;
 
     return ptr - (U8 *)buffer;
