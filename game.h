@@ -13,7 +13,7 @@
 #include "direction.h"
 
 #define MAX_TACO_COUNT 6
-#define MAX_SNAKE_COUNT 2
+#define MAX_SNAKE_COUNT 3
 
 typedef struct {
     Level level;

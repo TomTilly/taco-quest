@@ -161,8 +161,10 @@ void snake_draw(SDL_Renderer* renderer,
 
         if (snake_index == 0) {
             SDL_SetTextureColorMod(texture, 0, hue, 0);
-        } else {
+        } else if (snake_index == 1) {
             SDL_SetTextureColorMod(texture, hue, 0, 0);
+        } else {
+            SDL_SetTextureColorMod(texture, 0, 0, hue);
         }
 
         int rc = SDL_RenderCopyEx(renderer,
