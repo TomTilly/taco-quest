@@ -267,7 +267,7 @@ int main(S32 argc, char** argv) {
     Packet client_receive_packet = {0};
     Packet server_receive_packets[MAX_SERVER_CLIENT_COUNT] = {0};
     PacketTransmissionState recv_game_state_state = {0};
-    PacketTransmissionState recv_snake_action_state = {0};
+    PacketTransmissionState recv_snake_action_states[MAX_SERVER_CLIENT_COUNT] = {0};
 
     bool quit = false;
     while (!quit) {
@@ -372,9 +372,7 @@ int main(S32 argc, char** argv) {
             break;
         }
         case SESSION_TYPE_SERVER: {
-
             // Every frame:
-
             action_buffer_add(&server_actions, snake_action, game.snakes[0].direction);
 
             // Server receive input from client, update, then send game state to client
@@ -383,17 +381,17 @@ int main(S32 argc, char** argv) {
                 if (server_client_sockets[i] != NULL) {
                     packet_receive(server_client_sockets[i],
                                    &server_receive_packets[i],
-                                   &recv_snake_action_state);
+                                   &recv_snake_action_states[i]);
 
-                    if (recv_snake_action_state.stage == PACKET_PROGRESS_STAGE_COMPLETE) {
+                    if (recv_snake_action_states[i].stage == PACKET_PROGRESS_STAGE_COMPLETE) {
                         SnakeAction client_snake_action = *(SnakeAction*)server_receive_packets[i].payload;
                         action_buffer_add(&clients_actions[i], client_snake_action, game.snakes[i].direction);
 
                         // Resent packet state
-                        memset(&recv_snake_action_state, 0, sizeof(recv_snake_action_state));
+                        memset(&recv_snake_action_states[i], 0, sizeof(recv_snake_action_states[i]));
                         free(server_receive_packets[i].payload);
                         memset(&server_receive_packets[i], 0, sizeof(server_receive_packets[i]));
-                    } else if ( recv_snake_action_state.stage == PACKET_PROGRESS_STAGE_ERROR ) {
+                    } else if ( recv_snake_action_states[i].stage == PACKET_PROGRESS_STAGE_ERROR ) {
                         if ( server_receive_packets[i].payload != NULL ) {
                             free(server_receive_packets[i].payload);
                         }
