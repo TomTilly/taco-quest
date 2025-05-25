@@ -1,4 +1,5 @@
 #include "snake.h"
+#include "level.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -60,15 +61,14 @@ void snake_turn(Snake* snake, Direction direction) {
 void snake_draw(SDL_Renderer* renderer,
                 SDL_Texture* texture,
                 Snake* snake,
-                int32_t cell_size) {
-
+                S32 snake_index) {
     int tail_index = snake->length - 1;
     for (int i = 0; i < snake->length; i++) {
         SDL_Rect dest_rect = {
-            .x = snake->segments[i].x * cell_size,
-            .y = snake->segments[i].y * cell_size,
-            .w = cell_size,
-            .h = cell_size
+            .x = snake->segments[i].x * CELL_SIZE,
+            .y = snake->segments[i].y * CELL_SIZE,
+            .w = CELL_SIZE,
+            .h = CELL_SIZE
         };
 
         double angle = 0.0;
@@ -156,6 +156,13 @@ void snake_draw(SDL_Renderer* renderer,
         }
 
         source_rect.y += (snake->segments[i].health - 1) * source_rect.w;
+
+        S8 hue = 255 - (snake->chomp_cooldown * 10);
+        if (snake_index == 0) {
+            SDL_SetTextureColorMod(texture, 0, hue, 0);
+        } else {
+            SDL_SetTextureColorMod(texture, hue, 0, 0);
+        }
 
         int rc = SDL_RenderCopyEx(renderer,
                                   texture,

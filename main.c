@@ -13,8 +13,6 @@
 #include "network.h"
 #include "packet.h"
 
-#define LEVEL_WIDTH 17
-#define LEVEL_HEIGHT 15
 #define MS_TO_US(ms) ((ms) * 1000)
 #define GAME_SIMULATE_TIME_INTERVAL_US MS_TO_US(150) // default = 150
 #define SERVER_ACCEPT_QUEUE_LIMIT 5
@@ -151,9 +149,8 @@ int main(S32 argc, char** argv) {
 
     int window_x = SDL_WINDOWPOS_CENTERED;
     int window_y = display_size.h / 4;
-    S32 cell_size = 60;
-    S32 window_width = LEVEL_WIDTH * cell_size;
-    S32 window_height = LEVEL_HEIGHT * cell_size;
+    S32 window_width = LEVEL_WIDTH * CELL_SIZE;
+    S32 window_height = LEVEL_HEIGHT * CELL_SIZE;
 
     if ( session_type == SESSION_TYPE_SERVER ) {
         window_x = display_size.w / 2 - window_width;
@@ -448,10 +445,10 @@ int main(S32 argc, char** argv) {
                 CellType cell_type = level_get_cell(level, x, y);
 
                 SDL_Rect cell_rect = {
-                    .x = x * cell_size,
-                    .y = y * cell_size,
-                    .w = cell_size,
-                    .h = cell_size
+                    .x = x * CELL_SIZE,
+                    .y = y * CELL_SIZE,
+                    .w = CELL_SIZE,
+                    .h = CELL_SIZE
                 };
 
                 if (((x + y) % 2) == 0) {
@@ -493,12 +490,7 @@ int main(S32 argc, char** argv) {
         }
 
         for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
-            if (s == 0) {
-                SDL_SetTextureColorMod(snake_texture, 0, 255, 0);
-            } else {
-                SDL_SetTextureColorMod(snake_texture, 255, 0, 0);
-            }
-            snake_draw(renderer, snake_texture, game.snakes + s, cell_size);
+            snake_draw(renderer, snake_texture, game.snakes + s, s);
         }
         SDL_SetTextureColorMod(snake_texture, 255, 255, 255);
 

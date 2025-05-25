@@ -50,7 +50,7 @@ void snake_turn(Snake* snake, Direction direction);
 void snake_draw(SDL_Renderer* renderer,
                 SDL_Texture* texture,
                 Snake* snake,
-                int32_t cell_size);
+                S32 snake_index);
 
 size_t snake_serialize(const Snake* snake, void * buffer, size_t buffer_size);
 size_t snake_deserialize(void * buffer, size_t size, Snake* out);
