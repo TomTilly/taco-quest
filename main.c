@@ -385,7 +385,7 @@ int main(S32 argc, char** argv) {
 
                     if (recv_snake_action_states[i].stage == PACKET_PROGRESS_STAGE_COMPLETE) {
                         SnakeAction client_snake_action = *(SnakeAction*)server_receive_packets[i].payload;
-                        action_buffer_add(&clients_actions[i], client_snake_action, game.snakes[i].direction);
+                        action_buffer_add(&clients_actions[i], client_snake_action, game.snakes[i + 1].direction);
 
                         // Resent packet state
                         memset(&recv_snake_action_states[i], 0, sizeof(recv_snake_action_states[i]));
@@ -408,7 +408,6 @@ int main(S32 argc, char** argv) {
             }
 
             // Every Tick:
-
             SnakeAction snake_actions[MAX_SNAKE_COUNT];
             snake_actions[0] = action_buffer_remove(&server_actions);
             for (S32 i = 0; i < MAX_SERVER_CLIENT_COUNT; i++) {
