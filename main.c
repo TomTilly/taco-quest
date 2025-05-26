@@ -605,6 +605,7 @@ int main(S32 argc, char** argv) {
 
         PF_SetScale(font, scale * 2.0f);
         PF_SetForeground(font, 255, 255, 255, 255);
+        PF_SetHorizontalPositioning(font, PF_HPOS_LEFT);
         switch(game.state) {
         case GAME_STATE_WAITING:
             switch(session_type) {
