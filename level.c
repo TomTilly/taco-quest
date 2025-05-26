@@ -82,6 +82,8 @@ size_t level_serialize(const Level* level, void * buffer, size_t buffer_size) {
 }
 
 size_t level_deserialize(void * buffer, size_t size, Level * out) {
+    assert(out != NULL && "level_deserialize out param is NULL!");
+
     U8 * ptr = buffer;
 
     assert(size >= sizeof(out->width) * sizeof(out->height)

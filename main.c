@@ -376,6 +376,10 @@ int main(S32 argc, char** argv) {
 
             if ( recv_game_state_state.stage == PACKET_PROGRESS_STAGE_COMPLETE ) {
                 if (client_receive_packet.header.type == PACKET_TYPE_LEVEL_STATE) {
+                    game_deserialize(client_receive_packet.payload,
+                                     client_receive_packet.header.payload_size,
+                                     &game);
+#if 0
                     size_t bytes_deserialized = 0;
 
                     bytes_deserialized += level_deserialize(client_receive_packet.payload + bytes_deserialized,
@@ -386,6 +390,7 @@ int main(S32 argc, char** argv) {
                                                                 client_receive_packet.header.payload_size - bytes_deserialized,
                                                                 game.snakes + s);
                     }
+#endif
 
                     memset(&recv_game_state_state, 0, sizeof(recv_game_state_state));
                     free(client_receive_packet.payload);
@@ -461,10 +466,15 @@ int main(S32 argc, char** argv) {
                     }
                 } else {
                     // Serialize game state
+                    size_t msg_size = game_serialize(&game,
+                                                     net_msg_buffer,
+                                                     net_msg_buffer_size);
+#if 0
                     size_t msg_size = level_serialize(&game.level, net_msg_buffer, net_msg_buffer_size);
                     for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
                         msg_size += snake_serialize(game.snakes + s, net_msg_buffer + msg_size, net_msg_buffer_size - msg_size);
                     }
+#endif
 
                     // Send packet header
                     Packet packet = {

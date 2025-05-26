@@ -197,3 +197,44 @@ S32 game_count_tacos(Game* game) {
     }
     return taco_count;
 }
+
+size_t game_serialize(const Game* game, void* buffer, size_t buffer_size)
+{
+    U8 * byte_buffer = buffer;
+
+    size_t msg_size = level_serialize(&game->level, byte_buffer, buffer_size);
+    byte_buffer += msg_size;
+
+    for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
+        msg_size = snake_serialize(game->snakes + s,
+                                   byte_buffer,
+                                   buffer_size - (byte_buffer - (U8*)buffer));
+        byte_buffer += msg_size;
+    }
+
+    *byte_buffer = (U8)game->state;
+    byte_buffer += sizeof(U8);
+
+    return byte_buffer - (U8*)buffer;
+}
+
+size_t game_deserialize(void * buffer, size_t size, Game * out)
+{
+    U8 * byte_buffer = buffer;
+
+    size_t msg_size = level_deserialize(byte_buffer, size, &out->level);
+    byte_buffer += msg_size;
+
+    for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
+        msg_size += snake_deserialize(byte_buffer,
+                                                size - (byte_buffer - (U8*)buffer),
+                                                &out->snakes[s]);
+        byte_buffer += msg_size;
+    }
+
+    size_t size_of_serialized_game_state = sizeof(U8);
+    out->state = *byte_buffer;
+    byte_buffer += size_of_serialized_game_state;
+
+    return byte_buffer - (U8*)buffer;
+}

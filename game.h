@@ -36,4 +36,7 @@ void game_destroy(Game* game);
 void game_spawn_taco(Game* game);
 S32 game_count_tacos(Game* game);
 
+size_t game_serialize(const Game* game, void* buffer, size_t buffer_size);
+size_t game_deserialize(void * buffer, size_t size, Game * out);
+
 #endif /* game_h */
