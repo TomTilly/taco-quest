@@ -58,6 +58,62 @@ void net_action_log(const char* timestamp_str,
     }
 }
 
+void reset_game(Game* game) {
+    Level* level = &game->level;
+
+    snake_spawn(game->snakes + 0,
+                3,
+                2,
+                DIRECTION_EAST);
+
+    snake_spawn(game->snakes + 1,
+                (S16)(level->width - 3),
+                2,
+                DIRECTION_SOUTH);
+
+    snake_spawn(game->snakes + 2,
+                (S16)(level->width - 3),
+                (S16)(level->height - 3),
+                DIRECTION_WEST);
+
+    const char tile_map[LEVEL_HEIGHT][LEVEL_WIDTH + 1] = {
+        "XXXXXXXXXXXXXXXXXXXXXXXX",
+        "X......................X",
+        "X......................X",
+        "X.....X................X",
+        "X.....X................X",
+        "X.....X................X",
+        "X.....X........X.......X",
+        "X.....X........X.......X",
+        "X.....X........X.......X",
+        "X.....X........X.......X",
+        "X.....X.....XXXX.......X",
+        "X.....X........X.......X",
+        "X.....X........X.......X",
+        "X.....X........X.......X",
+        "X.....X........X.......X",
+        "X..............XXXXX...X",
+        "X......................X",
+        "X......................X",
+        "X......................X",
+        "X.................X....X",
+        "X....XXXXX........X....X",
+        "X.................X....X",
+        "X......................X",
+        "XXXXXXXXXXXXXXXXXXXXXXXX",
+    };
+
+    for (S32 y = 0; y < level->height; y++) {
+        for (S32 x = 0; x < level->width; x++) {
+            if (tile_map[y][x] == 'X') {
+                level_set_cell(level, x, y, CELL_TYPE_WALL);
+            } else {
+                level_set_cell(level, x, y, CELL_TYPE_EMPTY);
+            }
+        }
+    }
+}
+
 int main(S32 argc, char** argv) {
     const char* port = NULL;
     const char* ip = NULL;
@@ -98,55 +154,7 @@ int main(S32 argc, char** argv) {
 
     Level* level = &game.level;
 
-    snake_spawn(game.snakes + 0,
-                3,
-                2,
-                DIRECTION_EAST);
-
-    snake_spawn(game.snakes + 1,
-                (S16)(level->width - 3),
-                2,
-                DIRECTION_WEST);
-
-    snake_spawn(game.snakes + 2,
-                (S16)(level->width - 3),
-                (S16)(level->height - 3),
-                DIRECTION_WEST);
-
-    const char tile_map[LEVEL_HEIGHT][LEVEL_WIDTH + 1] = {
-        "XXXXXXXXXXXXXXXXXXXXXXXX",
-        "X......................X",
-        "X......................X",
-        "X.....X................X",
-        "X.....X................X",
-        "X.....X................X",
-        "X.....X........X.......X",
-        "X.....X........X.......X",
-        "X.....X........X.......X",
-        "X.....X........X.......X",
-        "X.....X.....XXXX.......X",
-        "X.....X........X.......X",
-        "X.....X........X.......X",
-        "X.....X........X.......X",
-        "X.....X........X.......X",
-        "X..............XXXXX...X",
-        "X......................X",
-        "X......................X",
-        "X......................X",
-        "X.................X....X",
-        "X....XXXXX........X....X",
-        "X.................X....X",
-        "X......................X",
-        "XXXXXXXXXXXXXXXXXXXXXXXX",
-    };
-
-    for (S32 y = 0; y < level->height; y++) {
-        for (S32 x = 0; x < level->width; x++) {
-            if (tile_map[y][x] == 'X') {
-                level_set_cell(level, x, y, CELL_TYPE_WALL);
-            }
-        }
-    }
+    reset_game(&game);
 
     NetSocket* server_socket = NULL; // Used by server to listen for client connections.
     NetSocket* client_socket = NULL; // Used by client to send and receive.
@@ -331,6 +339,12 @@ int main(S32 argc, char** argv) {
                     }
                 } else if (game.state == GAME_STATE_WAITING) {
                     if (event.key.keysym.sym == SDLK_RETURN && session_type == SESSION_TYPE_SERVER) {
+                        game.state = GAME_STATE_PLAYING;
+                    }
+                } else if (game.state == GAME_STATE_GAME_OVER) {
+                    if (event.key.keysym.sym == SDLK_RETURN &&
+                        (session_type == SESSION_TYPE_SERVER || session_type == SESSION_TYPE_SINGLE_PLAYER)) {
+                        reset_game(&game);
                         game.state = GAME_STATE_PLAYING;
                     }
                 }
@@ -524,7 +538,7 @@ int main(S32 argc, char** argv) {
 
         // Draw level
         S32 cell_size = min_display_dimension / max_level_dimension;
-        float scale = cell_size / 16; // 16 is the sprite sheet tile size.
+        float scale = (float)(cell_size / 16); // 16 is the sprite sheet tile size.
 
         for(S32 y = 0; y < level->height; y++) {
             for(S32 x = 0; x < level->width; x++) {
@@ -599,6 +613,9 @@ int main(S32 argc, char** argv) {
             }
             break;
         case SESSION_TYPE_SINGLE_PLAYER:
+            if (game.state == GAME_STATE_GAME_OVER) {
+                PF_RenderString(font, 0, 0, "Game Over!");
+            }
             break;
         }
 

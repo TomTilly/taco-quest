@@ -1,6 +1,7 @@
 #include "pixelfont.h"
 #include <stdio.h>
 #include <stdarg.h>
+#include <stdint.h>
 
 #define PF_BUFFER_SIZE 255
 #define PF_SET_ERROR(fmt, ...) \
@@ -55,8 +56,8 @@ RenderChar(PF_Font * font, int x, int y, char ch)
 {
     ch -= font->first_char;
 
-    const Uint8 char_w = font->info.char_width;
-    const Uint8 char_h = font->info.char_height;
+    const uint8_t char_w = (uint8_t)(font->info.char_width);
+    const uint8_t char_h = (uint8_t)(font->info.char_height);
 
     SDL_Rect src = {
         .x = (ch % font->cols) * char_w,
@@ -68,8 +69,8 @@ RenderChar(PF_Font * font, int x, int y, char ch)
     SDL_Rect dst = {
         .x = x,
         .y = y,
-        .w = char_w * font->info.scale,
-        .h = char_h * font->info.scale
+        .w = (int32_t)(char_w * font->info.scale),
+        .h = (int32_t)(char_h * font->info.scale)
     };
 
     SDL_SetTextureColorMod(font->texture,
@@ -157,12 +158,12 @@ PF_LoadFont(const PF_Config * config)
     }
 
     font->renderer = config->renderer;
-    font->first_char = config->first_char;
+    font->first_char = (char)(config->first_char);
     font->info.char_width = config->char_width;
     font->info.char_height = config->char_height;
     font->info.scale = 1;
 
-    font->cols = surface->w / config->char_width;
+    font->cols = (Uint16)(surface->w / config->char_width);
 
     SDL_FreeSurface(surface);
 
@@ -291,7 +292,7 @@ PF_RenderString(PF_Font * font, int x, int y, const char * format, ...)
     Uint32 x1 = x;
     while ( *ch ) {
         RenderChar(font, x1, y, *ch);
-        x1 += (font->info.char_width + font->info.letter_spacing) * font->info.scale;
+        x1 += (Uint32)((font->info.char_width + font->info.letter_spacing) * font->info.scale);
         ch++;
     }
 

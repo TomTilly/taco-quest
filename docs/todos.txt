@@ -3,6 +3,7 @@ BUGS
     -- Affects only test application.
 - Client disconnect assertion failure (net_destroy_socket) after server
   quits while client is still running.
+- There is some kind of bug with killing a non-unfurled snake and it being invisible with a length of 1.
 
 TODO
 - Figure out client side lag and potentially do network actions more frequently (outside of game tick) to reduce client lag
@@ -18,3 +19,4 @@ NOTES
         - Client receives game state
         - Server receives input
         - Server sends game state
+
