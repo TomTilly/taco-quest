@@ -226,7 +226,7 @@ size_t game_deserialize(void * buffer, size_t size, Game * out)
     byte_buffer += msg_size;
 
     for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
-        msg_size += snake_deserialize(byte_buffer,
+        msg_size = snake_deserialize(byte_buffer,
                                                 size - (byte_buffer - (U8*)buffer),
                                                 &out->snakes[s]);
         byte_buffer += msg_size;
