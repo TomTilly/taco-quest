@@ -311,27 +311,28 @@ int main(S32 argc, char** argv) {
                 quit = true;
                 break;
             case SDL_KEYDOWN:
-                switch (event.key.keysym.sym) {
-                case SDLK_w:
-                    snake_action |= SNAKE_ACTION_FACE_NORTH;
-                    break;
-                case SDLK_a:
-                    snake_action |= SNAKE_ACTION_FACE_WEST;
-                    break;
-                case SDLK_s:
-                    snake_action |= SNAKE_ACTION_FACE_SOUTH;
-                    break;
-                case SDLK_d:
-                    snake_action |= SNAKE_ACTION_FACE_EAST;
-                    break;
-                case SDLK_SPACE:
-                    snake_action |= SNAKE_ACTION_CHOMP;
-                    break;
-                case SDLK_RETURN:
-                    if (session_type == SESSION_TYPE_SERVER && game.state == GAME_STATE_WAITING) {
+                if (game.state == GAME_STATE_PLAYING) {
+                    switch (event.key.keysym.sym) {
+                    case SDLK_w:
+                        snake_action |= SNAKE_ACTION_FACE_NORTH;
+                        break;
+                    case SDLK_a:
+                        snake_action |= SNAKE_ACTION_FACE_WEST;
+                        break;
+                    case SDLK_s:
+                        snake_action |= SNAKE_ACTION_FACE_SOUTH;
+                        break;
+                    case SDLK_d:
+                        snake_action |= SNAKE_ACTION_FACE_EAST;
+                        break;
+                    case SDLK_SPACE:
+                        snake_action |= SNAKE_ACTION_CHOMP;
+                        break;
+                    }
+                } else if (game.state == GAME_STATE_WAITING) {
+                    if (event.key.keysym.sym == SDLK_RETURN && session_type == SESSION_TYPE_SERVER) {
                         game.state = GAME_STATE_PLAYING;
                     }
-                    break;
                 }
                 break;
             }
