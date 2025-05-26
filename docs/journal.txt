@@ -1,4 +1,20 @@
 --------------------------------------------------------------------------------
+5/26/2025: Discord
+
+Today:
+- Made level bigger and added inside map barriers
+- Lots of tweaking mechanics
+- 3 snake support over network
+- Added text support
+- Added game state transitions
+- First experiment in win condition
+- Justin wins first game by making himself invincible by "accident"
+
+Next Time:
+- Play a initial win condition branch a bit more and take notes
+- Try other win condition ideas
+
+--------------------------------------------------------------------------------
 5/17/2025: Discord
 
 Today:
