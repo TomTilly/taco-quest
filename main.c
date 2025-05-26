@@ -12,6 +12,7 @@
 
 #include "network.h"
 #include "packet.h"
+#include "pixelfont.h"
 
 #define MS_TO_US(ms) ((ms) * 1000)
 #define GAME_SIMULATE_TIME_INTERVAL_US MS_TO_US(175) // default = 150
@@ -188,6 +189,16 @@ int main(S32 argc, char** argv) {
         printf("SDL_CreateRenderer failed %s\n", SDL_GetError());
         return 1;
     }
+
+    PF_Config font_config = {
+        .renderer = renderer,
+        .bmp_file = "assets/arcade.bmp",
+        .char_width = 8,
+        .char_height = 8,
+        .first_char = ' ',
+        .bmp_background = { 0, 0, 0, 0 }
+    };
+    PF_Font * font = PF_LoadFont(&font_config);
 
     Game game = {0};
     game_init(&game, LEVEL_WIDTH, LEVEL_HEIGHT);
@@ -485,6 +496,8 @@ int main(S32 argc, char** argv) {
 
         // Draw level
         S32 cell_size = min_display_dimension / max_level_dimension;
+        float scale = cell_size / 16; // 16 is the sprite sheet tile size.
+
         for(S32 y = 0; y < level->height; y++) {
             for(S32 x = 0; x < level->width; x++) {
                 // TODO: Asserts
@@ -539,6 +552,10 @@ int main(S32 argc, char** argv) {
             snake_draw(renderer, snake_texture, game.snakes + s, s, cell_size);
         }
         SDL_SetTextureColorMod(snake_texture, 255, 255, 255);
+
+        PF_SetScale(font, scale * 2.0f);
+        PF_SetForeground(font, 255, 255, 255, 255);
+        PF_RenderString(font, 0, 0, "Hello, taco!");
 
         // Render updates
         SDL_RenderPresent(renderer);
