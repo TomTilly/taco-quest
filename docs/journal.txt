@@ -12,6 +12,7 @@ Today:
 
 Next Time:
 - Play a initial win condition branch a bit more and take notes
+- Fix the problem where trying to chomp a particulr segment is challenging as the client but not the server
 - Try other win condition ideas
 
 --------------------------------------------------------------------------------
