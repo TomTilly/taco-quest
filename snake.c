@@ -215,6 +215,9 @@ size_t snake_serialize(const Snake* snake, void* buffer, size_t buffer_size) {
     *ptr = snake->chomp_cooldown;
     ptr += sizeof(snake->chomp_cooldown);
 
+    *(S32*)(ptr) = snake->score;
+    ptr += sizeof(snake->score);
+
     return total_size;
 }
 
@@ -250,6 +253,9 @@ size_t snake_deserialize(void * buffer, size_t size, Snake* out) {
 
     out->chomp_cooldown = *ptr;
     ptr++;
+
+    out->score = *(S32*)(ptr);
+    ptr += sizeof(S32);
 
     return ptr - (U8 *)buffer;
 }
