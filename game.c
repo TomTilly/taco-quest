@@ -14,7 +14,7 @@ typedef struct {
 
 void _snake_chomp(Game* game, SnakeCollision* snake_collision) {
     // No head chomps allowed, for now.
-    if (snake_collision->snake_index == 0) {
+    if (snake_collision->segment_index == 0) {
         return;
     }
     Snake* snake = game->snakes + snake_collision->snake_index;
