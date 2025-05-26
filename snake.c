@@ -11,6 +11,7 @@ bool snake_init(Snake* snake, int32_t capacity) {
     }
     snake->capacity = capacity;
     snake->chomp_cooldown = 0;
+    snake->score = 0;
     return true;
 }
 

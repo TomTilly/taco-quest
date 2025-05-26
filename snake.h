@@ -35,6 +35,7 @@ typedef struct {
     S32 capacity; // I hate STL
     Direction direction;
     S8 chomp_cooldown;
+    S32 score;
 } Snake;
 
 typedef struct {

@@ -58,6 +58,14 @@ void net_action_log(const char* timestamp_str,
     }
 }
 
+float score_to_percent(S32 score) {
+    return ((float)(score) / (float)(SCORE_TO_WIN)) * 100.0f;
+}
+
+char longest_snake_text_indicator(bool is_longest_snake) {
+    return is_longest_snake ? '*' : ' ';
+}
+
 void reset_game(Game* game) {
     Level* level = &game->level;
 
@@ -568,7 +576,7 @@ int main(S32 argc, char** argv) {
                         break;
                     }
                     case CELL_TYPE_WALL: {
-                        SDL_SetRenderDrawColor(renderer, 0xAD, 0x62, 0x00, 0xFF);
+                        SDL_SetRenderDrawColor(renderer, 0x55, 0x55, 0x55, 0xFF);
                         SDL_RenderFillRect(renderer, &cell_rect);
                         break;
                     }
@@ -597,27 +605,51 @@ int main(S32 argc, char** argv) {
 
         PF_SetScale(font, scale * 2.0f);
         PF_SetForeground(font, 255, 255, 255, 255);
-        switch(session_type) {
-        case SESSION_TYPE_CLIENT:
-            if (game.state == GAME_STATE_WAITING) {
+        switch(game.state) {
+        case GAME_STATE_WAITING:
+            switch(session_type) {
+            case SESSION_TYPE_CLIENT:
                 PF_RenderString(font, 0, 0, "Waiting for game to start");
-            } else if (game.state == GAME_STATE_GAME_OVER) {
-                PF_RenderString(font, 0, 0, "Game Over!");
-            }
-            break;
-        case SESSION_TYPE_SERVER:
-            if (game.state == GAME_STATE_WAITING) {
+                break;
+            case SESSION_TYPE_SERVER:
                 PF_RenderString(font, 0, 0, "Press enter to start game");
-            } else if (game.state == GAME_STATE_GAME_OVER) {
-                PF_RenderString(font, 0, 0, "Game Over!");
+                break;
+            case SESSION_TYPE_SINGLE_PLAYER:
+                break;
             }
             break;
-        case SESSION_TYPE_SINGLE_PLAYER:
-            if (game.state == GAME_STATE_GAME_OVER) {
-                PF_RenderString(font, 0, 0, "Game Over!");
+        case GAME_STATE_PLAYING: {
+            S32 longest_snake_length = 0;
+            S32 longest_snake_index = 0;
+            for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
+                if (game.snakes[s].length >= longest_snake_length) {
+                    longest_snake_length = game.snakes[s].length;
+                    longest_snake_index = s;
+                }
             }
+            PF_SetHorizontalPositioning(font, PF_HPOS_RIGHT);
+            PF_SetForeground(font, 0, 255, 0, 255);
+            PF_RenderString(font, cell_size / 2, 0, "%.0f%%%c", score_to_percent(game.snakes[0].score), longest_snake_text_indicator(longest_snake_index == 0));
+            PF_SetForeground(font, 255, 125, 125, 255);
+            PF_RenderString(font, min_display_dimension - (S32)(2.5 * cell_size), 0, "%.0f%%%c", score_to_percent(game.snakes[1].score), longest_snake_text_indicator(longest_snake_index == 1));
+            PF_SetForeground(font, 0, 255, 255, 255);
+            PF_RenderString(font, min_display_dimension - (S32)(2.5 * cell_size), (min_display_dimension - cell_size), "%.0f%%%c", score_to_percent(game.snakes[2].score), longest_snake_text_indicator(longest_snake_index == 2));
             break;
         }
+        case GAME_STATE_GAME_OVER: {
+            const char* winning_player = "invalid";
+            if (game.snakes[0].score == SCORE_TO_WIN) {
+                winning_player = "Green";
+            } else if (game.snakes[1].score == SCORE_TO_WIN) {
+                winning_player = "Pink";
+            } else if (game.snakes[2].score == SCORE_TO_WIN) {
+                winning_player = "Cyan";
+            }
+            PF_RenderString(font, 0, 0, "Game Over! %s Snake Wins !", winning_player);
+            break;
+        }
+        }
+
 
         // Render updates
         SDL_RenderPresent(renderer);

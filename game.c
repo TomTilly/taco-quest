@@ -144,13 +144,35 @@ void game_update(Game* game, SnakeAction* snake_actions) {
         }
     }
 
+    // Find the longest length snake.
+    S32 longest_snake_length = 0;
+    S32 longest_snake_index = 0;
+    for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
+        if (game->snakes[s].length >= longest_snake_length) {
+            longest_snake_length = game->snakes[s].length;
+            longest_snake_index = s;
+        }
+    }
+
+    // Check if multiple are at the longest length.
+    S32 snakes_at_longest_length = 0;
+    for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
+        if (game->snakes[s].length == longest_snake_length) {
+            snakes_at_longest_length++;
+        }
+    }
+
+    // Only give points to 1 snake if it is the longest.
+    if (snakes_at_longest_length == 1) {
+        game->snakes[longest_snake_index].score++;
+        if (game->snakes[longest_snake_index].score >= SCORE_TO_WIN) {
+            game->state = GAME_STATE_GAME_OVER;
+        }
+    }
+
     S32 taco_count = game_count_tacos(game);
     for (size_t i = taco_count; i < MAX_TACO_COUNT; i++) {
         game_spawn_taco(game);
-    }
-
-    if (snakes_alive == 1) {
-        game->state = GAME_STATE_GAME_OVER;
     }
 }
 

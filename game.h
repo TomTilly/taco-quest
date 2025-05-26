@@ -14,6 +14,7 @@
 
 #define MAX_TACO_COUNT 6
 #define MAX_SNAKE_COUNT 3
+#define SCORE_TO_WIN 1080
 
 typedef enum {
     GAME_STATE_WAITING,
