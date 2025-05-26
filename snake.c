@@ -198,6 +198,7 @@ size_t snake_serialize(const Snake* snake, void* buffer, size_t buffer_size) {
     total_size += segments_size;
     total_size += sizeof(U8); // direction
     total_size += sizeof(U8); // chomp cooldown
+    total_size += sizeof(S32); // score
 
     assert(total_size <= buffer_size && "buffer too small!");
 
