@@ -109,6 +109,8 @@ bool game_init(Game* game, int32_t level_width, int32_t level_height) {
         }
     }
 
+    game->state = GAME_STATE_WAITING;
+
     return true;
 }
 

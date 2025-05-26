@@ -15,9 +15,16 @@
 #define MAX_TACO_COUNT 6
 #define MAX_SNAKE_COUNT 3
 
+typedef enum {
+    GAME_STATE_WAITING,
+    GAME_STATE_PLAYING,
+    GAME_STATE_GAME_OVER
+} GameState;
+
 typedef struct {
     Level level;
     Snake snakes[MAX_SNAKE_COUNT];
+    GameState state;
 } Game;
 
 void snake_update(Snake* snake, Game* game, bool chomp);

@@ -40,14 +40,15 @@ SetColor(SDL_Color * color, Uint8 r, Uint8 g, Uint8 b, Uint8 a)
     *color = (SDL_Color){ r, g, b, a };
 }
 
-static inline void
-GetColor(const SDL_Color * color, Uint8 * r, Uint8 * g, Uint8 * b, Uint8 * a)
-{
-    if ( r ) *r = color->r;
-    if ( g ) *g = color->g;
-    if ( b ) *b = color->b;
-    if ( a ) *a = color->a;
-}
+// TODO: What is this
+//static inline void
+//GetColor(const SDL_Color * color, Uint8 * r, Uint8 * g, Uint8 * b, Uint8 * a)
+//{
+//    if ( r ) *r = color->r;
+//    if ( g ) *g = color->g;
+//    if ( b ) *b = color->b;
+//    if ( a ) *a = color->a;
+//}
 
 static void
 RenderChar(PF_Font * font, int x, int y, char ch)

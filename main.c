@@ -90,6 +90,64 @@ int main(S32 argc, char** argv) {
         }
     }
 
+    //
+    // Init game and level
+    //
+    Game game = {0};
+    game_init(&game, LEVEL_WIDTH, LEVEL_HEIGHT);
+
+    Level* level = &game.level;
+
+    snake_spawn(game.snakes + 0,
+                3,
+                2,
+                DIRECTION_EAST);
+
+    snake_spawn(game.snakes + 1,
+                (S16)(level->width - 3),
+                2,
+                DIRECTION_WEST);
+
+    snake_spawn(game.snakes + 2,
+                (S16)(level->width - 3),
+                (S16)(level->height - 3),
+                DIRECTION_WEST);
+
+    const char tile_map[LEVEL_HEIGHT][LEVEL_WIDTH + 1] = {
+        "XXXXXXXXXXXXXXXXXXXXXXXX",
+        "X......................X",
+        "X......................X",
+        "X.....X................X",
+        "X.....X................X",
+        "X.....X................X",
+        "X.....X........X.......X",
+        "X.....X........X.......X",
+        "X.....X........X.......X",
+        "X.....X........X.......X",
+        "X.....X.....XXXX.......X",
+        "X.....X........X.......X",
+        "X.....X........X.......X",
+        "X.....X........X.......X",
+        "X.....X........X.......X",
+        "X..............XXXXX...X",
+        "X......................X",
+        "X......................X",
+        "X......................X",
+        "X.................X....X",
+        "X....XXXXX........X....X",
+        "X.................X....X",
+        "X......................X",
+        "XXXXXXXXXXXXXXXXXXXXXXXX",
+    };
+
+    for (S32 y = 0; y < level->height; y++) {
+        for (S32 x = 0; x < level->width; x++) {
+            if (tile_map[y][x] == 'X') {
+                level_set_cell(level, x, y, CELL_TYPE_WALL);
+            }
+        }
+    }
+
     NetSocket* server_socket = NULL; // Used by server to listen for client connections.
     NetSocket* client_socket = NULL; // Used by client to send and receive.
 
@@ -108,6 +166,8 @@ int main(S32 argc, char** argv) {
         puts("Starting single player session.\n");
 
         window_title = "Taco Quest";
+
+        game.state = GAME_STATE_PLAYING;
 
         break;
     case SESSION_TYPE_CLIENT: {
@@ -200,61 +260,6 @@ int main(S32 argc, char** argv) {
     };
     PF_Font * font = PF_LoadFont(&font_config);
 
-    Game game = {0};
-    game_init(&game, LEVEL_WIDTH, LEVEL_HEIGHT);
-
-    Level* level = &game.level;
-
-    snake_spawn(game.snakes + 0,
-                3,
-                2,
-                DIRECTION_EAST);
-
-    snake_spawn(game.snakes + 1,
-                (S16)(level->width - 3),
-                2,
-                DIRECTION_WEST);
-
-    snake_spawn(game.snakes + 2,
-                (S16)(level->width - 3),
-                (S16)(level->height - 3),
-                DIRECTION_WEST);
-
-    const char tile_map[LEVEL_HEIGHT][LEVEL_WIDTH + 1] = {
-        "XXXXXXXXXXXXXXXXXXXXXXXX",
-        "X......................X",
-        "X......................X",
-        "X.....X................X",
-        "X.....X................X",
-        "X.....X................X",
-        "X.....X........X.......X",
-        "X.....X........X.......X",
-        "X.....X........X.......X",
-        "X.....X........X.......X",
-        "X.....X.....XXXX.......X",
-        "X.....X........X.......X",
-        "X.....X........X.......X",
-        "X.....X........X.......X",
-        "X.....X........X.......X",
-        "X..............XXXXX...X",
-        "X......................X",
-        "X......................X",
-        "X......................X",
-        "X.................X....X",
-        "X....XXXXX........X....X",
-        "X.................X....X",
-        "X......................X",
-        "XXXXXXXXXXXXXXXXXXXXXXXX",
-    };
-
-    for (S32 y = 0; y < level->height; y++) {
-        for (S32 x = 0; x < level->width; x++) {
-            if (tile_map[y][x] == 'X') {
-                level_set_cell(level, x, y, CELL_TYPE_WALL);
-            }
-        }
-    }
-
     struct timespec last_frame_timestamp = {0};
     timespec_get(&last_frame_timestamp, TIME_UTC);
 
@@ -322,6 +327,11 @@ int main(S32 argc, char** argv) {
                 case SDLK_SPACE:
                     snake_action |= SNAKE_ACTION_CHOMP;
                     break;
+                case SDLK_RETURN:
+                    if (session_type == SESSION_TYPE_SERVER && game.state == GAME_STATE_WAITING) {
+                        game.state = GAME_STATE_PLAYING;
+                    }
+                    break;
                 }
                 break;
             }
@@ -331,8 +341,11 @@ int main(S32 argc, char** argv) {
         bool game_should_tick = false;
         if (time_since_update_us >= GAME_SIMULATE_TIME_INTERVAL_US) {
             time_since_update_us -= GAME_SIMULATE_TIME_INTERVAL_US;
-            game_should_tick = true;
-            __tick++;
+
+            if (game.state == GAME_STATE_PLAYING) {
+                game_should_tick = true;
+                __tick++;
+            }
         }
 
         switch (session_type) {
@@ -490,6 +503,10 @@ int main(S32 argc, char** argv) {
         }
         }
 
+        //
+        // Render game
+        //
+
         // Clear window
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0xFF);
         SDL_RenderClear(renderer);
@@ -555,7 +572,24 @@ int main(S32 argc, char** argv) {
 
         PF_SetScale(font, scale * 2.0f);
         PF_SetForeground(font, 255, 255, 255, 255);
-        PF_RenderString(font, 0, 0, "Hello, taco!");
+        switch(session_type) {
+        case SESSION_TYPE_CLIENT:
+            if (game.state == GAME_STATE_WAITING) {
+                PF_RenderString(font, 0, 0, "Waiting for game to start");
+            } else if (game.state == GAME_STATE_GAME_OVER) {
+                PF_RenderString(font, 0, 0, "Game Over!");
+            }
+            break;
+        case SESSION_TYPE_SERVER:
+            if (game.state == GAME_STATE_WAITING) {
+                PF_RenderString(font, 0, 0, "Press enter to start game");
+            } else if (game.state == GAME_STATE_GAME_OVER) {
+                PF_RenderString(font, 0, 0, "Game Over!");
+            }
+            break;
+        case SESSION_TYPE_SINGLE_PLAYER:
+            break;
+        }
 
         // Render updates
         SDL_RenderPresent(renderer);
@@ -570,7 +604,7 @@ int main(S32 argc, char** argv) {
             net_destroy_socket(client_socket);
         }
         break;
-    case SESSION_TYPE_SERVER: {
+    case SESSION_TYPE_SERVER:
         net_destroy_socket(server_socket);
         for (S32 i = 0; i < MAX_SERVER_CLIENT_COUNT; i++) {
             if ( server_client_sockets[i] ) {
@@ -578,7 +612,6 @@ int main(S32 argc, char** argv) {
             }
         }
         break;
-    }
     case SESSION_TYPE_SINGLE_PLAYER:
         break;
     }
