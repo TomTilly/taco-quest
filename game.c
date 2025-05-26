@@ -134,14 +134,10 @@ void game_apply_snake_action(Game* game, SnakeAction snake_action, S32 snake_ind
 }
 
 void game_update(Game* game, SnakeAction* snake_actions) {
-    S32 snakes_alive = 0;
     for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
         SnakeAction snake_action = snake_actions[s];
         game_apply_snake_action(game, snake_action, s);
         snake_update(game->snakes + s, game, snake_action & SNAKE_ACTION_CHOMP);
-        if (game->snakes[s].length != 0) {
-            snakes_alive++;
-        }
     }
 
     // Find the longest length snake.
