@@ -9,6 +9,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include "buffer.h"
+
+static size_t level_size_bytes(const Level* level)
+{
+    return level->width * level->height * sizeof(*level->cells);
+}
 
 bool level_init(Level* level, int32_t width, int32_t height) {
     size_t size = width * height * sizeof(level->cells[0]);
@@ -81,6 +87,40 @@ size_t level_serialize(const Level* level, void * buffer, size_t buffer_size) {
     return total_size;
 }
 
+size_t level_serialize2(const Level* level, Buffer* buffer) {
+    size_t size = 0;
+
+    size += buffer_insert(buffer, &level->width, sizeof(level->width));
+    size += buffer_insert(buffer, &level->height, sizeof(level->height));
+    size += buffer_insert(buffer, level->cells, level_size_bytes(level));
+
+    return size;
+}
+
+size_t level_deserialize2(Buffer* buffer, Level* out) {
+
+    size_t size = 0;
+
+    S32 width, height;
+    size += buffer_remove(buffer, &width, sizeof(width));
+    size += buffer_remove(buffer, &height, sizeof(height));
+
+    if ( out->width != width || out->height != height ) {
+        if ( width * height > out->width * out->height ) {
+            level_destroy(out);
+            bool success = level_init(out, width, height);
+            assert(success && "level_init failed!");
+        } else {
+            out->width = width;
+            out->height = height;
+        }
+    }
+
+    size += buffer_remove(buffer, out->cells, level_size_bytes(out));
+
+    return size;
+}
+
 size_t level_deserialize(void * buffer, size_t size, Level * out) {
     assert(out != NULL && "level_deserialize out param is NULL!");
 
@@ -117,4 +157,60 @@ size_t level_deserialize(void * buffer, size_t size, Level * out) {
     size -= cells_size;
 
     return ptr - (U8 *)buffer;
+}
+
+#include <stdio.h>
+void test_level_serialize_deserialize(void)
+{
+    puts("--------------------\ntest level serialize:");
+
+    Level level = { 0 };
+    level_init(&level, 16, 16);
+    for ( int i = 0; i < 16 * 16; i++ ) {
+        level_set_cell(&level, i % 16, i / 16, rand() & CELL_TYPE_COUNT);
+    }
+
+    U8 array[BUFFER_CAPACITY];
+    size_t size1 = level_serialize(&level, array, sizeof(array));
+
+    Buffer buffer = { 0 };
+    size_t size2 = level_serialize2(&level, &buffer);
+
+    printf("size1: %zi\n", size1);
+    printf("size2: %zi\n", size2);
+
+    bool failed = false;
+    for ( int i = 0; i < size1; i++ ) {
+        if ( array[i] != buffer.data[i] ) {
+            failed = true;
+        }
+    }
+
+    printf("level_serialize2: %s\n", failed ? "FAILED" : "PASSED");
+
+    puts("\n---------------\ntest level deserialize:");
+
+    Level level1, level2;
+    level_init(&level1, 0, 0);
+    level_init(&level2, 0, 0);
+
+    size1 = level_deserialize(array, BUFFER_CAPACITY, &level1);
+    size2 = level_deserialize2(&buffer, &level2);
+
+    printf("size1: %zi\n", size1);
+    printf("size2: %zi\n", size2);
+
+    if ( level1.width != level2.width
+        || level1.height != level2.height ) {
+        printf("level_deserialize2: FAILED (level size differs)\n");
+    }
+
+    failed = false;
+    for ( int i = 0; i < level1.width * level1.height; i++ ) {
+        if ( level1.cells[i] != level2.cells[i] ) {
+            failed = true;
+        }
+    }
+
+    printf("level_serialize2: %s\n", failed ? "FAILED (cells)" : "PASSED");
 }

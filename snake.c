@@ -1,8 +1,13 @@
 #include "snake.h"
+#include "buffer.h"
 #include "level.h"
 
 #include <assert.h>
 #include <stdio.h>
+
+size_t segments_size_bytes(const Snake* snake) {
+    return snake->length * sizeof(*snake->segments);
+}
 
 bool snake_init(Snake* snake, int32_t capacity) {
     snake->segments = calloc(capacity, sizeof(snake->segments[0]));
@@ -217,6 +222,21 @@ size_t snake_serialize(const Snake* snake, void* buffer, size_t buffer_size) {
     return total_size;
 }
 
+size_t snake_serialize2(const Snake* snake, Buffer* buffer) {
+
+    size_t size = 0;
+
+    // Use single bytes for enum values
+    U8 direction = snake->direction;
+
+    size += buffer_insert(buffer, &snake->length, sizeof(snake->length));
+    size += buffer_insert(buffer, snake->segments, segments_size_bytes(snake));
+    size += buffer_insert(buffer, &direction, sizeof(direction));
+    size += buffer_insert(buffer, &snake->chomp_cooldown, sizeof(snake->chomp_cooldown));
+
+    return size;
+}
+
 size_t snake_deserialize(void * buffer, size_t size, Snake* out) {
     U8 * ptr = buffer;
 
@@ -251,6 +271,33 @@ size_t snake_deserialize(void * buffer, size_t size, Snake* out) {
     ptr++;
 
     return ptr - (U8 *)buffer;
+}
+
+size_t snake_deserialize2(Buffer* buffer, Snake* out) {
+    size_t size = 0;
+
+    S32 length = 0;
+    size += buffer_remove(buffer, &length, sizeof(length));
+
+    if ( out->length != length ) {
+        // TODO: a proper snake function to set the length.
+        if ( length > out->length ) {
+            snake_destroy(out);
+            bool success = snake_init(out, length);
+            assert(success && "snake_init() failed!");
+        }
+        out->length = length;
+    }
+
+    size += buffer_remove(buffer, out->segments, segments_size_bytes(out));
+
+    U8 direction;
+    size += buffer_remove(buffer, &direction, sizeof(direction));
+    out->direction = direction;
+
+    size += buffer_remove(buffer, &out->chomp_cooldown, sizeof(out->chomp_cooldown));
+
+    return size;
 }
 
 SnakeAction snake_action_from_direction(Direction direction) {

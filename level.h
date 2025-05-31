@@ -21,7 +21,9 @@ enum {
     CELL_TYPE_INVALID = -1,
     CELL_TYPE_EMPTY,
     CELL_TYPE_WALL,
-    CELL_TYPE_TACO
+    CELL_TYPE_TACO,
+
+    CELL_TYPE_COUNT,
 };
 
 typedef struct {
@@ -37,5 +39,7 @@ bool level_set_cell(Level* level, S32 x, S32 y, CellType value);
 CellType level_get_cell(Level* level, S32 x, S32 y);
 size_t level_serialize(const Level* level, void * buffer, size_t buffer_size);
 size_t level_deserialize(void * buffer, size_t size, Level * out);
+
+void test_level_serialize_deserialize(void);
 
 #endif /* level_h */
