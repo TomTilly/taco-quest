@@ -15,20 +15,13 @@
 
 #include <SDL2/SDL_render.h>
 
+#define PF_CENTER   0x10000
+#define PF_RIGHT    0x20000
+#define PF_BOTTOM   0x20000
+
 typedef struct PF_PixelFont PF_Font;
 
-typedef enum {
-    PF_HPOS_LEFT, // Render text left-justified at given coordinate.
-    PF_HPOS_CENTER, // Render text centered at given coordinate.
-    PF_HPOS_RIGHT // Render text right-justified at given coordinate.
-} PF_HorizontalPositioning;
-
-typedef enum {
-    PF_VPOS_TOP,
-    PF_VPOS_CENTER,
-    PF_VPOS_BOTTOM
-} PF_VerticalPositioning;
-
+/** Configuration info used when loading a font. */
 typedef struct {
     /** The renderer used to load the `PF_Font`. */
     SDL_Renderer * renderer;
@@ -49,6 +42,9 @@ typedef struct {
     SDL_Color bmp_background;
 } PF_Config;
 
+/** The current state of a `PF_Font`: the current foreground color, the current
+ *  foreground color, the current letter spacing, etc.
+ */
 typedef struct {
     /** Width of font characters in pixels. */
     int char_width;
@@ -65,14 +61,9 @@ typedef struct {
     /** The current background rendering color, as set with `PF_SetBackground`. */
     SDL_Color background;
 
-    /** The current horizontal text positioning. */
-    PF_HorizontalPositioning h_positioning;
-
-    /** The current vertical text positioning. */
-    PF_VerticalPositioning v_positioning;
-
+    /** The current rending scale, as set with `PF_SetScale`. */
     float scale;
-} PF_FontInfo;
+} PF_FontState;
 
 /**
  *  Load a character sprite sheet bitmap.
@@ -89,7 +80,7 @@ void PF_DestroyFont(PF_Font * font);
 /** Get a string describing the most recent error. */
 const char * PF_GetError(void);
 
-PF_FontInfo PF_GetInfo(PF_Font * font);
+PF_FontState PF_GetState(PF_Font * font);
 
 void PF_SetLetterSpacing(PF_Font * font, int new_spacing);
 
@@ -99,21 +90,21 @@ void PF_SetForeground(PF_Font * font, Uint8 r, Uint8 g, Uint8 b, Uint8 a);
 /** Set the current color for rendering text background. */
 void PF_SetBackground(PF_Font * font, Uint8 r, Uint8 g, Uint8 b, Uint8 a);
 
-void PF_SetHorizontalPositioning(PF_Font * font, PF_HorizontalPositioning hpos);
-void PF_SetVerticalPositioning(PF_Font * font, PF_VerticalPositioning vpos);
+/** Set the current rendering scale. */
 void PF_SetScale(PF_Font * font, float scale);
 
 /**
- *  Render character at pixel coordinate with current rendering color
- *  as set with `PF_SetForeground` and `PF_SetBackground`.
+ *  Render character at pixel coordinate with the font's current rendering color.
  */
 void PF_RenderChar(PF_Font * font, int x, int y, char character);
 
 /**
- *  Render format string at pixel coordinate with current rendering color
- *  as set with `PF_SetForeground` and `PF_SetBackground`.
- *
- *  - returns: The width of the rendered string in pixels.
+ *  Render format string at pixel coordinate with the font's current rendering
+ *  color.
+ *  - note: By default, text is positioned with its top-left corner at `x`, `y`.
+ *      To justify text, `x` may be bitwise OR'd with `PF_CENTER` or `PF_RIGHT`
+ *      and `y` may be OR'd with `PF_CENTER` or `PF_BOTTOM`.
+ *  - returns: Returns the width of the rendered string in pixels.
  */
 Uint32 PF_RenderString(PF_Font * font, int x, int y, const char * format, ...);
 

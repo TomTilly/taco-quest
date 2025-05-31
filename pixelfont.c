@@ -5,14 +5,14 @@
 
 #define PF_BUFFER_SIZE 255
 #define PF_SET_ERROR(fmt, ...) \
-snprintf(pf_error, PF_BUFFER_SIZE, "%s Error: " fmt, __func__, ##__VA_ARGS__)
+snprintf(pf_error, PF_BUFFER_SIZE, fmt, ##__VA_ARGS__)
 
 static char pf_error[PF_BUFFER_SIZE + 1];
 
 struct PF_PixelFont {
     SDL_Renderer * renderer;
     SDL_Texture * texture;
-    PF_FontInfo info;
+    PF_FontState state;
 
     // Number of character columns in the texture.
     char first_char;
@@ -56,8 +56,8 @@ RenderChar(PF_Font * font, int x, int y, char ch)
 {
     ch -= font->first_char;
 
-    const uint8_t char_w = (uint8_t)(font->info.char_width);
-    const uint8_t char_h = (uint8_t)(font->info.char_height);
+    const uint8_t char_w = (uint8_t)(font->state.char_width);
+    const uint8_t char_h = (uint8_t)(font->state.char_height);
 
     SDL_Rect src = {
         .x = (ch % font->cols) * char_w,
@@ -69,15 +69,15 @@ RenderChar(PF_Font * font, int x, int y, char ch)
     SDL_Rect dst = {
         .x = x,
         .y = y,
-        .w = (int32_t)(char_w * font->info.scale),
-        .h = (int32_t)(char_h * font->info.scale)
+        .w = (int32_t)(char_w * font->state.scale),
+        .h = (int32_t)(char_h * font->state.scale)
     };
 
     SDL_SetTextureColorMod(font->texture,
-                           font->info.foreground.r,
-                           font->info.foreground.g,
-                           font->info.foreground.b);
-    SDL_SetTextureAlphaMod(font->texture, font->info.foreground.a);
+                           font->state.foreground.r,
+                           font->state.foreground.g,
+                           font->state.foreground.b);
+    SDL_SetTextureAlphaMod(font->texture, font->state.foreground.a);
     SDL_RenderCopy(font->renderer, font->texture, &src, &dst);
 }
 
@@ -85,19 +85,19 @@ RenderChar(PF_Font * font, int x, int y, char ch)
 static inline void
 RenderBackground(PF_Font * font, int x, int y, int width)
 {
-    if ( font->info.background.a == 0 ) {
+    if ( font->state.background.a == 0 ) {
         return;
     }
 
     SDL_Rect dst = {
         .x = x,
         .y = y,
-        .w = width * font->info.char_width,
-        .h = font->info.char_height
+        .w = width * font->state.char_width,
+        .h = font->state.char_height
     };
 
     SDL_Color saved = GetRenderColor(font->renderer);
-    SetRenderColor(font->renderer, font->info.background);
+    SetRenderColor(font->renderer, font->state.background);
     SDL_RenderFillRect(font->renderer, &dst);
     SetRenderColor(font->renderer, saved); // Set it back!
 }
@@ -159,9 +159,9 @@ PF_LoadFont(const PF_Config * config)
 
     font->renderer = config->renderer;
     font->first_char = (char)(config->first_char);
-    font->info.char_width = config->char_width;
-    font->info.char_height = config->char_height;
-    font->info.scale = 1;
+    font->state.char_width = config->char_width;
+    font->state.char_height = config->char_height;
+    font->state.scale = 1;
 
     font->cols = (Uint16)(surface->w / config->char_width);
 
@@ -199,49 +199,36 @@ PF_DestroyFont(PF_Font * font)
 void
 PF_SetLetterSpacing(PF_Font * font, int new_value)
 {
-    font->info.letter_spacing = new_value;
+    font->state.letter_spacing = new_value;
 }
 
 int
 PF_GetLetterSpacing(PF_Font * font)
 {
-    return font->info.letter_spacing;
+    return font->state.letter_spacing;
 }
 
 void
 PF_SetForeground(PF_Font * font, Uint8 r, Uint8 g, Uint8 b, Uint8 a)
 {
-    SetColor(&font->info.foreground, r, g, b, a);
+    SetColor(&font->state.foreground, r, g, b, a);
 }
 
 void
 PF_SetBackground(PF_Font * font, Uint8 r, Uint8 g, Uint8 b, Uint8 a)
 {
-    SetColor(&font->info.background, r, g, b, a);
-}
-
-void
-PF_SetHorizontalPositioning(PF_Font * font, PF_HorizontalPositioning hpos)
-{
-    font->info.h_positioning = hpos;
+    SetColor(&font->state.background, r, g, b, a);
 }
 
 void
 PF_SetScale(PF_Font * font, float scale)
 {
-    font->info.scale = scale;
+    font->state.scale = scale;
 }
 
-void
-PF_SetVerticalPositioning(PF_Font * font, PF_VerticalPositioning vpos)
+PF_FontState PF_GetState(PF_Font * font)
 {
-    font->info.v_positioning = vpos;
-}
-
-
-PF_FontInfo PF_GetInfo(PF_Font * font)
-{
-    return font->info;
+    return font->state;
 }
 
 void
@@ -269,22 +256,30 @@ PF_RenderString(PF_Font * font, int x, int y, const char * format, ...)
                      buffer, PF_BUFFER_SIZE);
     }
 
-    Uint32 text_w = len * font->info.char_width;
-    Uint32 text_h = font->info.char_height;
+    Uint32 text_w = len * font->state.char_width * font->state.scale;
+    Uint32 text_h = font->state.char_height * font->state.scale;
 
-    // Apply horizontal positing
-    if ( font->info.h_positioning == PF_HPOS_CENTER ) {
+    // Apply horizontal positing.
+    if ( x & PF_CENTER ) {
         x -= text_w / 2;
-    } else if ( font->info.h_positioning == PF_HPOS_RIGHT ) {
+    }
+
+    if ( x & PF_RIGHT ) {
         x -= text_w;
     }
 
-    // Apply vertical positing
-    if ( font->info.v_positioning == PF_VPOS_CENTER ) {
+    // Apply vertical positing.
+    if ( y & PF_CENTER ) {
         y -= text_h / 2;
-    } else if ( font->info.v_positioning == PF_VPOS_BOTTOM ) {
+    }
+
+    if ( y & PF_BOTTOM ) {
         y -= text_h;
     }
+
+    // Clear positioning bits.
+    x &= 0xFFFF;
+    y &= 0xFFFF;
 
     RenderBackground(font, x, y, len);
 
@@ -292,7 +287,7 @@ PF_RenderString(PF_Font * font, int x, int y, const char * format, ...)
     Uint32 x1 = x;
     while ( *ch ) {
         RenderChar(font, x1, y, *ch);
-        x1 += (Uint32)((font->info.char_width + font->info.letter_spacing) * font->info.scale);
+        x1 += (Uint32)((font->state.char_width + font->state.letter_spacing) * font->state.scale);
         ch++;
     }
 

@@ -267,6 +267,10 @@ int main(S32 argc, char** argv) {
         .bmp_background = { 0, 0, 0, 0 }
     };
     PF_Font * font = PF_LoadFont(&font_config);
+    if ( font == NULL ) {
+        fprintf(stderr, "PF_LoadFont failed: %s", PF_GetError());
+        return EXIT_FAILURE;
+    }
 
     struct timespec last_frame_timestamp = {0};
     timespec_get(&last_frame_timestamp, TIME_UTC);
