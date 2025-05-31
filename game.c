@@ -6,28 +6,44 @@
 //
 
 #include "game.h"
+#include "beeper.h"
 
 typedef struct {
     S16 snake_index;
     S16 segment_index;
 } SnakeCollision;
 
+static const char * _sounds[] = {
+    [SOUND_NONE] = "",
+    [SOUND_DESTROY_SNAKE] = "t138 l32 o4 g c < f+ > d < g c+ a d < g+",
+    [SOUND_DAMAGE_SNAKE] = "t120 l32 o4 g c < f+",
+    [SOUND_SNAKE_RECHARGE] = "t160 l32 o5 e b f+ > c+",
+    [SOUND_EAT_TACO] = "t200 l32 o5 f c",
+};
+
 void _snake_chomp(Game* game, SnakeCollision* snake_collision) {
     Snake* snake = game->snakes + snake_collision->snake_index;
     SnakeSegment* chomped_segment = snake->segments + snake_collision->segment_index;
+
     chomped_segment->health--;
+    game_set_sound(game, SOUND_DAMAGE_SNAKE);
+
     if (chomped_segment->health <= 0) {
         for (S32 e = snake_collision->segment_index; e < snake->length; e++) {
             SnakeSegment* segment = snake->segments + e;
             level_set_cell(&game->level, segment->x, segment->y, CELL_TYPE_TACO);
         }
         snake->length = snake_collision->segment_index;
+        game_set_sound(game, SOUND_DESTROY_SNAKE);
     }
 }
 
 void snake_update(Snake* snake, Game* game, bool chomp) {
     if (snake->chomp_cooldown > 0) {
         snake->chomp_cooldown--;
+        if (snake->chomp_cooldown == 0) { // Recharged.
+            game_set_sound(game, SOUND_SNAKE_RECHARGE);
+        }
     }
 
     S32 new_snake_x = (S32)(snake->segments[0].x);
@@ -89,6 +105,7 @@ void snake_update(Snake* snake, Game* game, bool chomp) {
         // The head is moved into the position where the taco was.
         snake->segments[0].x = (S16)(new_snake_x);
         snake->segments[0].y = (S16)(new_snake_y);
+        game_set_sound(game, SOUND_EAT_TACO);
         break;
     }
     case CELL_TYPE_WALL:
@@ -245,4 +262,19 @@ size_t game_deserialize(void * buffer, size_t size, Game * out)
     byte_buffer += size_of_serialized_game_state;
 
     return byte_buffer - (U8*)buffer;
+}
+
+void game_set_sound(Game* game, Sound sound)
+{
+    if ( sound > game->current_sound ) {
+        game->current_sound = sound;
+    }
+}
+
+void game_play_current_sound(Game* game)
+{
+    if ( game->current_sound != SOUND_NONE ) {
+        PlayMusic(_sounds[game->current_sound]);
+        game->current_sound = SOUND_NONE;
+    }
 }

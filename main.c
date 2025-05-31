@@ -13,6 +13,7 @@
 #include "network.h"
 #include "packet.h"
 #include "pixelfont.h"
+#include "beeper.h"
 
 #define MS_TO_US(ms) ((ms) * 1000)
 #define GAME_SIMULATE_TIME_INTERVAL_US MS_TO_US(175) // default = 150
@@ -216,6 +217,8 @@ int main(S32 argc, char** argv) {
         printf("SDL_Init failed %s\n", SDL_GetError());
         return EXIT_FAILURE;
     }
+
+    InitSound();
 
     SDL_Rect display_size;
     SDL_GetDisplayBounds(0, &display_size);
@@ -625,6 +628,8 @@ int main(S32 argc, char** argv) {
 
         // Render updates
         SDL_RenderPresent(renderer);
+
+        game_play_current_sound(&game);
 
         // Allow process to go to sleep so we don't use 100% of CPU
         SDL_Delay(1);
