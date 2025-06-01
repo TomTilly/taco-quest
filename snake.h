@@ -21,7 +21,20 @@ typedef enum {
     SNAKE_ACTION_FACE_SOUTH = (1 << DIRECTION_SOUTH), // 4
     SNAKE_ACTION_FACE_WEST = (1 << DIRECTION_WEST),   // 8
     SNAKE_ACTION_CHOMP = 16,
+    SNAKE_ACTION_CONSTRICT_LEFT = 32,
+    SNAKE_ACTION_CONSTRICT_RIGHT = 64,
 } SnakeActionFlags;
+
+typedef enum {
+    SNAKE_SEGMENT_SHAPE_UNKNOWN,
+    SNAKE_SEGMENT_SHAPE_HEAD,
+    SNAKE_SEGMENT_SHAPE_VERTICAL,
+    SNAKE_SEGMENT_SHAPE_HORIZONTAL,
+    SNAKE_SEGMENT_SHAPE_NORTH_WEST_CORNER,
+    SNAKE_SEGMENT_SHAPE_NORTH_EAST_CORNER,
+    SNAKE_SEGMENT_SHAPE_SOUTH_WEST_CORNER,
+    SNAKE_SEGMENT_SHAPE_SOUTH_EAST_CORNER,
+} SnakeSegmentShape;
 
 typedef struct {
     S16 x;
@@ -62,5 +75,8 @@ const char* snake_action_string(SnakeAction action);
 
 void action_buffer_add(ActionBuffer * buf, SnakeAction action, Direction snake_current_direction);
 SnakeAction action_buffer_remove(ActionBuffer * buf);
+
+SnakeSegmentShape snake_segment_shape(Snake* snake, S32 segment_index);
+Direction snake_segment_direction_from_head(Snake* snake, S32 segment_index);
 
 #endif /* snake_h */

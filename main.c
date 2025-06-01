@@ -337,6 +337,12 @@ int main(S32 argc, char** argv) {
                     case SDLK_d:
                         snake_action |= SNAKE_ACTION_FACE_EAST;
                         break;
+                    case SDLK_q:
+                        snake_action |= SNAKE_ACTION_CONSTRICT_LEFT;
+                        break;
+                    case SDLK_e:
+                        snake_action |= SNAKE_ACTION_CONSTRICT_RIGHT;
+                        break;
                     case SDLK_SPACE:
                         snake_action |= SNAKE_ACTION_CHOMP;
                         break;
