@@ -21,7 +21,7 @@ static const char * _sounds[] = {
     [SOUND_EAT_TACO] = "t200 l32 o5 f c",
 };
 
-void _snake_chomp(Game* game, SnakeCollision* snake_collision) {
+void _snake_chomp_segment(Game* game, SnakeCollision* snake_collision) {
     Snake* snake = game->snakes + snake_collision->snake_index;
     SnakeSegment* chomped_segment = snake->segments + snake_collision->segment_index;
 
@@ -38,22 +38,13 @@ void _snake_chomp(Game* game, SnakeCollision* snake_collision) {
     }
 }
 
-void snake_update(Snake* snake, Game* game, bool chomp) {
-    if (snake->chomp_cooldown > 0) {
-        snake->chomp_cooldown--;
-        if (snake->chomp_cooldown == 0) { // Recharged.
-            game_set_sound(game, SOUND_SNAKE_RECHARGE);
-        }
-    }
-
+void _snake_chomp(Snake* snake, Game* game) {
     S32 new_snake_x = (S32)(snake->segments[0].x);
     S32 new_snake_y = (S32)(snake->segments[0].y);
 
     adjacent_cell(snake->direction,
                   &new_snake_x,
                   &new_snake_y);
-
-    CellType cell_type = level_get_cell(&game->level, new_snake_x, new_snake_y);
 
     // Check if collided with other snake
     // TODO: This simplifies when we have an array of snakes.
@@ -74,10 +65,41 @@ void snake_update(Snake* snake, Game* game, bool chomp) {
     }
 
     if (snake_collision.snake_index >= 0) {
-        if (chomp && snake_collision.snake_index >= 0 && snake->chomp_cooldown <= 0) {
-            _snake_chomp(game, &snake_collision);
+        if (snake_collision.snake_index >= 0 && snake->chomp_cooldown <= 0) {
+            _snake_chomp_segment(game, &snake_collision);
             snake->chomp_cooldown = SNAKE_CHOMP_COOLDOWN;
         }
+    }
+}
+
+void _snake_move(Snake* snake, Game* game) {
+    S32 new_snake_x = (S32)(snake->segments[0].x);
+    S32 new_snake_y = (S32)(snake->segments[0].y);
+
+    adjacent_cell(snake->direction,
+                  &new_snake_x,
+                  &new_snake_y);
+
+    CellType cell_type = level_get_cell(&game->level, new_snake_x, new_snake_y);
+
+    // TODO: Duplication with _snake_chomp() to figure out.
+    SnakeCollision snake_collision = {
+        .snake_index = -1,
+        .segment_index = -1
+    };
+    for (S16 s = 0; s < MAX_SNAKE_COUNT; s++) {
+        for (S16 i = 0; i < game->snakes[s].length; i++) {
+            SnakeSegment* segment = game->snakes[s].segments + i;
+            if (segment->x == new_snake_x &&
+                segment->y == new_snake_y) {
+                snake_collision.snake_index = s;
+                snake_collision.segment_index = i;
+                break;
+            }
+        }
+    }
+
+    if (snake_collision.snake_index >= 0) {
         return;
     }
 
@@ -131,7 +153,7 @@ bool game_init(Game* game, int32_t level_width, int32_t level_height) {
     return true;
 }
 
-void game_apply_snake_action(Game* game, SnakeAction snake_action, S32 snake_index) {
+void _snake_turn(Game* game, SnakeAction snake_action, S32 snake_index) {
     Direction direction = DIRECTION_NONE;
     // TODO: snake_index check
     Snake* snake = game->snakes + snake_index;
@@ -147,6 +169,7 @@ void game_apply_snake_action(Game* game, SnakeAction snake_action, S32 snake_ind
     if (snake_action & SNAKE_ACTION_FACE_WEST) {
         direction = DIRECTION_WEST;
     }
+    // TODO: Should native snake_turn() take the SnakeAction instead of having to convert to a direction here ?
     snake_turn(snake, direction);
 }
 
@@ -154,8 +177,24 @@ void game_update(Game* game, SnakeAction* snake_actions) {
     S32 snakes_alive = 0;
     for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
         SnakeAction snake_action = snake_actions[s];
-        game_apply_snake_action(game, snake_action, s);
-        snake_update(game->snakes + s, game, snake_action & SNAKE_ACTION_CHOMP);
+        _snake_turn(game, snake_action, s);
+    }
+
+    for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
+        if (game->snakes[s].chomp_cooldown > 0) {
+            game->snakes[s].chomp_cooldown--;
+            if (game->snakes[s].chomp_cooldown == 0) { // Recharged.
+                game_set_sound(game, SOUND_SNAKE_RECHARGE);
+            }
+        }
+        SnakeAction snake_action = snake_actions[s];
+        if (snake_action & SNAKE_ACTION_CHOMP) {
+            _snake_chomp(game->snakes + s, game);
+        }
+    }
+
+    for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
+        _snake_move(game->snakes + s, game);
         if (game->snakes[s].length != 0) {
             snakes_alive++;
         }
