@@ -256,8 +256,8 @@ PF_RenderString(PF_Font * font, int x, int y, const char * format, ...)
                      buffer, PF_BUFFER_SIZE);
     }
 
-    Uint32 text_w = len * font->state.char_width * font->state.scale;
-    Uint32 text_h = font->state.char_height * font->state.scale;
+    Uint32 text_w = (Uint32)(len * font->state.char_width * font->state.scale);
+    Uint32 text_h = (Uint32)(font->state.char_height * font->state.scale);
 
     // Apply horizontal positing.
     if ( x & PF_CENTER ) {
