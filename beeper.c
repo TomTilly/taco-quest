@@ -2,6 +2,9 @@
 
 #include <SDL2/SDL.h>
 #include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <ctype.h>
 
 static SDL_AudioSpec spec;
 static SDL_AudioDeviceID device;
@@ -38,7 +41,7 @@ static double NoteNumberToFrequency(int note_num)
 void PlaySound(unsigned frequency, unsigned milliseconds)
 {
     float period = (float)spec.freq / (float)frequency;
-    int len = (float)spec.freq * ((float)milliseconds / 1000.0f);
+    int len = (int)((float)spec.freq * ((float)milliseconds / 1000.0f));
 
     for ( int i = 0; i < len; i++ ) {
         int8_t sample;
@@ -46,9 +49,9 @@ void PlaySound(unsigned frequency, unsigned milliseconds)
         if ( frequency == 0 ) {
             sample = spec.silence;
         }
-        else if ( frequency & NOISE && arc4random_uniform(256) == 0 ) {
-            sample = arc4random_uniform(2) == 0 ? beeper_volume : -beeper_volume;
-        }
+        // else if ( frequency & NOISE && arc4random_uniform(256) == 0 ) {
+        //     sample = arc4random_uniform(2) == 0 ? beeper_volume : -beeper_volume;
+        // }
         else {
             sample = (int)((float)i / period) % 2 ? beeper_volume : -beeper_volume;
         }
@@ -89,7 +92,7 @@ void SetVolume(unsigned value)
         return;
     }
 
-    beeper_volume = value;
+    beeper_volume = (uint8_t)value;
 }
 
 void StopSound(void)
@@ -106,7 +109,7 @@ static void PlayError(const char * msg, int line_position)
 
 static void QueueNoteNumber(int note_num, int note_ms, int silence_ms)
 {
-    PlaySound(NoteNumberToFrequency(note_num), note_ms);
+    PlaySound((unsigned)(NoteNumberToFrequency(note_num)), note_ms);
     PlaySound(0, silence_ms);
 }
 
@@ -157,7 +160,7 @@ void PlayMusic(const char * string, ...)
 
     const char * str = buffer;
     while ( *str != '\0') {
-        char c = toupper(*str++);
+        char c = (char)(toupper(*str++));
         switch ( c ) {
             case 'A': case 'B': case 'C': case 'D': case 'E': case 'F': case 'G':
             case 'N': case 'P':
@@ -173,8 +176,10 @@ void PlayMusic(const char * string, ...)
                         break;
                     case 'N': {
                         int number = strtol(str, (char **)&str, 10);
-                        if ( number < 0 || number > 84 )
-                            return PlayError("bad note number", (int)(str - string));
+                        if ( number < 0 || number > 84 ) {
+                            PlayError("bad note number", (int)(str - string));
+                            return;
+                        }
                         if ( number > 0 )
                             note = number;
                         break;
@@ -201,8 +206,10 @@ void PlayMusic(const char * string, ...)
                 // get note value:
                 if ( c != 'N' ) {
                     int number = strtol(str, (char **)&str, 10);
-                    if ( number < 0 || number > 64 )
-                        return PlayError("bad note value", (int)(str - string));
+                    if ( number < 0 || number > 64 ) {
+                        PlayError("bad note value", (int)(str - string));
+                        return;
+                    }
                     if ( number > 0 )
                         d = number;
                 }
@@ -223,8 +230,8 @@ void PlayMusic(const char * string, ...)
                 }
 
                 // calculate articulation silence:
-                int note_ms = total_ms * ((float)mode / 8.0f);
-                int silence_ms = total_ms * ((8.0f - (float)mode) / 8.0f);
+                int note_ms = (int)(total_ms * ((float)mode / 8.0f));
+                int silence_ms = (int)(total_ms * ((8.0f - (float)mode) / 8.0f));
 
                 // and finally, queue it
                 QueueNoteNumber(note, note_ms, silence_ms);
@@ -233,16 +240,20 @@ void PlayMusic(const char * string, ...)
 
             case 'T':
                 bmp = strtol(str, (char **)&str, 10);
-                if ( bmp == 0 )
-                    return PlayError("bad tempo", (int)(str - string));
+                if ( bmp == 0 ) {
+                    PlayError("bad tempo", (int)(str - string));
+                    return;
+                }
 #if PLAY_DEBUG
                 printf("set tempo to %d\n", bmp); // TODO: make this a macro or something
 #endif
                 break;
 
             case 'O':
-                if ( *str < '0' || *str > '6' )
-                    return PlayError("bad octave", (int)(str - string));
+                if ( *str < '0' || *str > '6' ) {
+                    PlayError("bad octave", (int)(str - string));
+                    return;
+                }
                 oct = strtol(str, (char **)&str, 10);
 #if PLAY_DEBUG
                 printf("set octave to %d\n", oct);
@@ -251,8 +262,10 @@ void PlayMusic(const char * string, ...)
 
             case 'L':
                 len = strtol(str, (char **)&str, 10);
-                if ( len < 1 || len > 64 )
-                    return PlayError("bad length", (int)(str - string));
+                if ( len < 1 || len > 64 ) {
+                    PlayError("bad length", (int)(str - string));
+                    return;
+                }
 #if PLAY_DEBUG
                 printf("set length to %d\n", len);
 #endif
@@ -275,7 +288,7 @@ void PlayMusic(const char * string, ...)
                 break;
 
             case 'M': {
-                char option = toupper(*str++);
+                char option = (char)(toupper(*str++));
                 switch ( option ) {
                     case 'L': mode = mode_legato; break;
                     case 'N': mode = mode_normal; break;
@@ -283,8 +296,8 @@ void PlayMusic(const char * string, ...)
                     case 'B': background = 1; break;
                     case 'F': background = 0; break;
                     default:
-                        return PlayError("bad music option", (int)(str - string));
-                        break;
+                        PlayError("bad music option", (int)(str - string));
+                        return;
                 }
                 break;
             }
