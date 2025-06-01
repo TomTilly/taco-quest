@@ -1,4 +1,19 @@
 --------------------------------------------------------------------------------
+5/31/2025: Discord
+
+Today:
+- We diagramed latency issue
+- Justin started test framework to fix latency issue, then realized we were updating snake location before chomping, which was cause of apparent latency (though latency may still be an issue we want to solve at some point)
+- Updated game update logic to perform chomp for all players, and then perform move for all players
+- Looked at Tom F's sound branch.
+
+Next Time:
+- Get sound working for clients
+- Game design experimentation.
+    - Idea: chomping makes player's head vulernable to getting chomped. Player loses when their head is chomped
+    - Idea: Cumulative number of tacos as a win condition
+
+--------------------------------------------------------------------------------
 5/26/2025: Discord
 
 Today:
