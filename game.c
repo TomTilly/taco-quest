@@ -19,7 +19,8 @@ typedef struct {
 
 typedef struct {
     SnakeSegmentShape shape;
-    Direction from;
+    S32 x;
+    S32 y;
 } SnakeConstrictSegmentInfo;
 
 void _snake_chomp_segment(Game* game, SnakeCollision* snake_collision) {
@@ -297,7 +298,6 @@ void _expand_outer_corner_if_open(Game* game,
 }
 
 void _snake_constrict(Snake* snake, Game* game, bool left) {
-    (void)(game);
     SnakeConstrictSegmentInfo* constrict_segment_info = malloc(sizeof(*constrict_segment_info) * snake->length);
 
     // First pass finds the shapes to operate on. This is so we don't operate on corners that we
@@ -305,21 +305,34 @@ void _snake_constrict(Snake* snake, Game* game, bool left) {
     S32 last_segment_index = snake->length - 1;
     for (S32 e = 1; e < last_segment_index; e++) {
         constrict_segment_info[e].shape = snake_segment_shape(snake, e);
-        constrict_segment_info[e].from = snake_segment_direction_from_head(snake, e);
+        constrict_segment_info[e].x = snake->segments[e].x;
+        constrict_segment_info[e].y = snake->segments[e].y;
     }
 
     SnakeCollision snake_collision = {0};
     for (S32 e = 1; e < last_segment_index; e++) {
 
-        // If our constricting has caused the shapes to change, do not operate on them.
-        if (constrict_segment_info[e].shape != snake_segment_shape(snake, e)) {
+        // If our constricting earlier in the loop has caused the shapes to change, do not operate on them.
+        bool operate_on_shape = false;
+        SnakeSegmentShape current_segment_shape = snake_segment_shape(snake, e);
+        for (S32 i = 1; i < last_segment_index; i++) {
+            if (constrict_segment_info[i].x == snake->segments[e].x &&
+                constrict_segment_info[i].y == snake->segments[e].y &&
+                constrict_segment_info[i].shape == current_segment_shape) {
+                operate_on_shape = true;
+                break;
+            }
+        }
+        if (!operate_on_shape) {
             continue;
         }
 
-        switch(constrict_segment_info[e].shape) {
+        Direction direction_from_head = snake_segment_direction_from_head(snake, e);
+
+        switch(current_segment_shape) {
         case SNAKE_SEGMENT_SHAPE_NORTH_WEST_CORNER:
             if (left) {
-                if (constrict_segment_info[e].from == DIRECTION_NORTH) {
+                if (direction_from_head == DIRECTION_NORTH) {
                     // p: the original path
                     // 1: new segment
                     // ......    .......
@@ -337,7 +350,7 @@ void _snake_constrict(Snake* snake, Game* game, bool left) {
                         snake->segments[e].x = (S16)(new_x);
                         snake->segments[e].y = (S16)(new_y);
                     }
-                } else if (constrict_segment_info[e].from == DIRECTION_WEST) {
+                } else if (direction_from_head == DIRECTION_WEST) {
                     // p: the original path
                     // c: the corner being expanded
                     // 1: new path
@@ -364,7 +377,7 @@ void _snake_constrict(Snake* snake, Game* game, bool left) {
                     _expand_outer_corner_if_open(game, snake, e, first_path, second_path, DIRECTION_EAST, DIRECTION_SOUTH);
                 }
             } else {
-                if (constrict_segment_info[e].from == DIRECTION_NORTH) {
+                if (direction_from_head == DIRECTION_NORTH) {
                     // ......    .......
                     // ...p..    ...p...
                     // ...p.. -> ...p1..
@@ -383,7 +396,7 @@ void _snake_constrict(Snake* snake, Game* game, bool left) {
                     second_path[1] = _adjacent_snake_segment(second_path[0], DIRECTION_WEST);
 
                     _expand_outer_corner_if_open(game, snake, e, first_path, second_path, DIRECTION_EAST, DIRECTION_SOUTH);
-                } else if (constrict_segment_info[e].from == DIRECTION_WEST) {
+                } else if (direction_from_head == DIRECTION_WEST) {
                     S32 new_x = snake->segments[e].x;
                     S32 new_y = snake->segments[e].y;
                     adjacent_cell(DIRECTION_NORTH, &new_x, &new_y);
@@ -397,7 +410,7 @@ void _snake_constrict(Snake* snake, Game* game, bool left) {
             break;
         case SNAKE_SEGMENT_SHAPE_NORTH_EAST_CORNER:
             if (left) {
-                if (constrict_segment_info[e].from == DIRECTION_NORTH) {
+                if (direction_from_head == DIRECTION_NORTH) {
                     // ......    .......
                     // ..p...    ..p....
                     // ..p... -> .1p....
@@ -416,7 +429,7 @@ void _snake_constrict(Snake* snake, Game* game, bool left) {
                     second_path[1] = _adjacent_snake_segment(second_path[0], DIRECTION_EAST);
 
                     _expand_outer_corner_if_open(game, snake, e, first_path, second_path, DIRECTION_WEST, DIRECTION_SOUTH);
-                } else if (constrict_segment_info[e].from == DIRECTION_EAST) {
+                } else if (direction_from_head == DIRECTION_EAST) {
                     S32 new_x = snake->segments[e].x;
                     S32 new_y = snake->segments[e].y;
                     adjacent_cell(DIRECTION_NORTH, &new_x, &new_y);
@@ -427,7 +440,7 @@ void _snake_constrict(Snake* snake, Game* game, bool left) {
                     }
                 }
             } else {
-                if (constrict_segment_info[e].from == DIRECTION_NORTH) {
+                if (direction_from_head == DIRECTION_NORTH) {
                     S32 new_x = snake->segments[e].x;
                     S32 new_y = snake->segments[e].y;
                     adjacent_cell(DIRECTION_NORTH, &new_x, &new_y);
@@ -436,7 +449,7 @@ void _snake_constrict(Snake* snake, Game* game, bool left) {
                         snake->segments[e].x = (S16)(new_x);
                         snake->segments[e].y = (S16)(new_y);
                     }
-                } else if (constrict_segment_info[e].from == DIRECTION_EAST) {
+                } else if (direction_from_head == DIRECTION_EAST) {
                     // ......    .......
                     // ..p...    ..p....
                     // ..p... -> .2p....
@@ -460,7 +473,7 @@ void _snake_constrict(Snake* snake, Game* game, bool left) {
             break;
         case SNAKE_SEGMENT_SHAPE_SOUTH_WEST_CORNER:
             if (left) {
-                if (constrict_segment_info[e].from == DIRECTION_WEST) {
+                if (direction_from_head == DIRECTION_WEST) {
                     S32 new_x = snake->segments[e].x;
                     S32 new_y = snake->segments[e].y;
                     adjacent_cell(DIRECTION_SOUTH, &new_x, &new_y);
@@ -469,7 +482,7 @@ void _snake_constrict(Snake* snake, Game* game, bool left) {
                         snake->segments[e].x = (S16)(new_x);
                         snake->segments[e].y = (S16)(new_y);
                     }
-                } else if (constrict_segment_info[e].from == DIRECTION_SOUTH) {
+                } else if (direction_from_head == DIRECTION_SOUTH) {
                     // ......    .......
                     // ......    ...223.
                     // .ppc.. -> ..pp31.
@@ -490,7 +503,7 @@ void _snake_constrict(Snake* snake, Game* game, bool left) {
                     _expand_outer_corner_if_open(game, snake, e, first_path, second_path, DIRECTION_EAST, DIRECTION_NORTH);
                 }
             } else {
-                if (constrict_segment_info[e].from == DIRECTION_SOUTH) {
+                if (direction_from_head == DIRECTION_SOUTH) {
                     S32 new_x = snake->segments[e].x;
                     S32 new_y = snake->segments[e].y;
                     adjacent_cell(DIRECTION_SOUTH, &new_x, &new_y);
@@ -499,7 +512,7 @@ void _snake_constrict(Snake* snake, Game* game, bool left) {
                         snake->segments[e].x = (S16)(new_x);
                         snake->segments[e].y = (S16)(new_y);
                     }
-                } else if (constrict_segment_info[e].from == DIRECTION_WEST) {
+                } else if (direction_from_head == DIRECTION_WEST) {
                     // ......    .......
                     // ......    ...113.
                     // .ppc.. -> ..pp32.
@@ -523,7 +536,7 @@ void _snake_constrict(Snake* snake, Game* game, bool left) {
             break;
         case SNAKE_SEGMENT_SHAPE_SOUTH_EAST_CORNER:
             if (left) {
-                if (constrict_segment_info[e].from == DIRECTION_SOUTH) {
+                if (direction_from_head == DIRECTION_SOUTH) {
                     S32 new_x = snake->segments[e].x;
                     S32 new_y = snake->segments[e].y;
                     adjacent_cell(DIRECTION_SOUTH, &new_x, &new_y);
@@ -532,7 +545,7 @@ void _snake_constrict(Snake* snake, Game* game, bool left) {
                         snake->segments[e].x = (S16)(new_x);
                         snake->segments[e].y = (S16)(new_y);
                     }
-                } else if (constrict_segment_info[e].from == DIRECTION_EAST) {
+                } else if (direction_from_head == DIRECTION_EAST) {
                     // ......    ......
                     // ......    .311..
                     // ..cpp. -> .23pp.
@@ -553,7 +566,7 @@ void _snake_constrict(Snake* snake, Game* game, bool left) {
                     _expand_outer_corner_if_open(game, snake, e, first_path, second_path, DIRECTION_WEST, DIRECTION_NORTH);
                 }
             } else {
-                if (constrict_segment_info[e].from == DIRECTION_EAST) {
+                if (direction_from_head == DIRECTION_EAST) {
                     S32 new_x = snake->segments[e].x;
                     S32 new_y = snake->segments[e].y;
                     adjacent_cell(DIRECTION_SOUTH, &new_x, &new_y);
@@ -562,7 +575,7 @@ void _snake_constrict(Snake* snake, Game* game, bool left) {
                         snake->segments[e].x = (S16)(new_x);
                         snake->segments[e].y = (S16)(new_y);
                     }
-                } else if (constrict_segment_info[e].from == DIRECTION_SOUTH) {
+                } else if (direction_from_head == DIRECTION_SOUTH) {
                     // ......    ......
                     // ......    .322..
                     // ..cpp. -> .13pp.
