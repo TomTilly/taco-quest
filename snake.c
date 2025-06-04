@@ -11,6 +11,7 @@ bool snake_init(Snake* snake, int32_t capacity) {
     }
     snake->capacity = capacity;
     snake->chomp_cooldown = 0;
+    snake->constrict_state.index = -1;
     return true;
 }
 
@@ -381,7 +382,7 @@ SnakeSegmentShape snake_segment_shape(Snake* snake, S32 segment_index) {
     return SNAKE_SEGMENT_SHAPE_UNKNOWN;
 }
 
-Direction snake_segment_direction_from_head(Snake* snake, S32 segment_index) {
+Direction snake_segment_direction_to_head(Snake* snake, S32 segment_index) {
     if (segment_index >= snake->length ||
         segment_index == 0) {
         return DIRECTION_NONE;

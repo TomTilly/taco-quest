@@ -11,6 +11,8 @@
 #include <stdio.h> // TODO: remove
 
 #define MAX_SEGMENT_PATH 5
+#define INNER_CORNER_CONSTRICTED_SEGMENTS 2
+#define OUTPUT_CORNER_CONSTRICTED_SEGMENTS 6
 
 typedef struct {
     S16 snake_index;
@@ -234,7 +236,7 @@ void _segment_path_add(SnakeSegment new_segment, SnakeSegment* segment_path, S32
     (*segment_path_count)++;
 }
 
-void _expand_outer_corner_if_open(Game* game,
+bool _expand_outer_corner_if_open(Game* game,
                                   Snake* snake,
                                   S32 current_segment_index,
                                   SnakeSegment first_path[2],
@@ -294,45 +296,37 @@ void _expand_outer_corner_if_open(Game* game,
         for (S32 i = (segment_path_count - 1); i > 0; i--) {
             _snake_drag(snake, current_segment_index + 1, segment_path[i].x, segment_path[i].y);
         }
+        return true;
     }
+
+    return false;
 }
 
-void _snake_constrict(Snake* snake, Game* game, bool left) {
-    SnakeConstrictSegmentInfo* constrict_segment_info = malloc(sizeof(*constrict_segment_info) * snake->length);
+void _snake_constrict(Snake* snake, Game* game) {
+    // SnakeConstrictSegmentInfo* constrict_segment_info = malloc(sizeof(*constrict_segment_info) * snake->length);
 
     // First pass finds the shapes to operate on. This is so we don't operate on corners that we
     // create during this pass and only operate on the existing ones.
     S32 last_segment_index = snake->length - 1;
-    for (S32 e = 1; e < last_segment_index; e++) {
-        constrict_segment_info[e].shape = snake_segment_shape(snake, e);
-        constrict_segment_info[e].x = snake->segments[e].x;
-        constrict_segment_info[e].y = snake->segments[e].y;
-    }
 
+    // How many elements were impacted by a constrict pass on this tick. If any, advance passed them
+    // otherwise we will see the chain constrict effect.
+    S32 constricted_elements = 0;
     SnakeCollision snake_collision = {0};
-    for (S32 e = 1; e < last_segment_index; e++) {
-
+    for (S32 e = snake->constrict_state.index; e < last_segment_index; e++) {
+        if (constricted_elements > 0) {
+            snake->constrict_state.index = e + constricted_elements;
+            break;
+        }
         // If our constricting earlier in the loop has caused the shapes to change, do not operate on them.
-        bool operate_on_shape = false;
+        // bool operate_on_shape = false;
         SnakeSegmentShape current_segment_shape = snake_segment_shape(snake, e);
-        for (S32 i = 1; i < last_segment_index; i++) {
-            if (constrict_segment_info[i].x == snake->segments[e].x &&
-                constrict_segment_info[i].y == snake->segments[e].y &&
-                constrict_segment_info[i].shape == current_segment_shape) {
-                operate_on_shape = true;
-                break;
-            }
-        }
-        if (!operate_on_shape) {
-            continue;
-        }
-
-        Direction direction_from_head = snake_segment_direction_from_head(snake, e);
+        Direction direction_to_head = snake_segment_direction_to_head(snake, e);
 
         switch(current_segment_shape) {
         case SNAKE_SEGMENT_SHAPE_NORTH_WEST_CORNER:
-            if (left) {
-                if (direction_from_head == DIRECTION_NORTH) {
+            if (snake->constrict_state.left) {
+                if (direction_to_head == DIRECTION_NORTH) {
                     // p: the original path
                     // 1: new segment
                     // ......    .......
@@ -347,10 +341,11 @@ void _snake_constrict(Snake* snake, Game* game, bool left) {
                     adjacent_cell(DIRECTION_NORTH, &new_x, &new_y);
                     adjacent_cell(DIRECTION_WEST, &new_x, &new_y);
                     if (!_game_is_solid_at(game, new_x, new_y, &snake_collision)) {
+                        constricted_elements = INNER_CORNER_CONSTRICTED_SEGMENTS;
                         snake->segments[e].x = (S16)(new_x);
                         snake->segments[e].y = (S16)(new_y);
                     }
-                } else if (direction_from_head == DIRECTION_WEST) {
+                } else if (direction_to_head == DIRECTION_WEST) {
                     // p: the original path
                     // c: the corner being expanded
                     // 1: new path
@@ -374,10 +369,12 @@ void _snake_constrict(Snake* snake, Game* game, bool left) {
                     second_path[0] = _adjacent_snake_segment(snake->segments[e], DIRECTION_EAST);
                     second_path[1] = _adjacent_snake_segment(second_path[0], DIRECTION_NORTH);
 
-                    _expand_outer_corner_if_open(game, snake, e, first_path, second_path, DIRECTION_EAST, DIRECTION_SOUTH);
+                    if (_expand_outer_corner_if_open(game, snake, e, first_path, second_path, DIRECTION_EAST, DIRECTION_SOUTH)) {
+                        constricted_elements = OUTPUT_CORNER_CONSTRICTED_SEGMENTS;
+                    }
                 }
             } else {
-                if (direction_from_head == DIRECTION_NORTH) {
+                if (direction_to_head == DIRECTION_NORTH) {
                     // ......    .......
                     // ...p..    ...p...
                     // ...p.. -> ...p1..
@@ -395,13 +392,16 @@ void _snake_constrict(Snake* snake, Game* game, bool left) {
                     second_path[0] = _adjacent_snake_segment(snake->segments[e], DIRECTION_SOUTH);
                     second_path[1] = _adjacent_snake_segment(second_path[0], DIRECTION_WEST);
 
-                    _expand_outer_corner_if_open(game, snake, e, first_path, second_path, DIRECTION_EAST, DIRECTION_SOUTH);
-                } else if (direction_from_head == DIRECTION_WEST) {
+                    if (_expand_outer_corner_if_open(game, snake, e, first_path, second_path, DIRECTION_EAST, DIRECTION_SOUTH)) {
+                        constricted_elements = OUTPUT_CORNER_CONSTRICTED_SEGMENTS;
+                    }
+                } else if (direction_to_head == DIRECTION_WEST) {
                     S32 new_x = snake->segments[e].x;
                     S32 new_y = snake->segments[e].y;
                     adjacent_cell(DIRECTION_NORTH, &new_x, &new_y);
                     adjacent_cell(DIRECTION_WEST, &new_x, &new_y);
                     if (!_game_is_solid_at(game, new_x, new_y, &snake_collision)) {
+                        constricted_elements = INNER_CORNER_CONSTRICTED_SEGMENTS;
                         snake->segments[e].x = (S16)(new_x);
                         snake->segments[e].y = (S16)(new_y);
                     }
@@ -409,8 +409,8 @@ void _snake_constrict(Snake* snake, Game* game, bool left) {
             }
             break;
         case SNAKE_SEGMENT_SHAPE_NORTH_EAST_CORNER:
-            if (left) {
-                if (direction_from_head == DIRECTION_NORTH) {
+            if (snake->constrict_state.left) {
+                if (direction_to_head == DIRECTION_NORTH) {
                     // ......    .......
                     // ..p...    ..p....
                     // ..p... -> .1p....
@@ -428,28 +428,32 @@ void _snake_constrict(Snake* snake, Game* game, bool left) {
                     second_path[0] = _adjacent_snake_segment(snake->segments[e], DIRECTION_SOUTH);
                     second_path[1] = _adjacent_snake_segment(second_path[0], DIRECTION_EAST);
 
-                    _expand_outer_corner_if_open(game, snake, e, first_path, second_path, DIRECTION_WEST, DIRECTION_SOUTH);
-                } else if (direction_from_head == DIRECTION_EAST) {
+                    if (_expand_outer_corner_if_open(game, snake, e, first_path, second_path, DIRECTION_WEST, DIRECTION_SOUTH)) {
+                        constricted_elements = OUTPUT_CORNER_CONSTRICTED_SEGMENTS;
+                    }
+                } else if (direction_to_head == DIRECTION_EAST) {
                     S32 new_x = snake->segments[e].x;
                     S32 new_y = snake->segments[e].y;
                     adjacent_cell(DIRECTION_NORTH, &new_x, &new_y);
                     adjacent_cell(DIRECTION_EAST, &new_x, &new_y);
                     if (!_game_is_solid_at(game, new_x, new_y, &snake_collision)) {
+                        constricted_elements = INNER_CORNER_CONSTRICTED_SEGMENTS;
                         snake->segments[e].x = (S16)(new_x);
                         snake->segments[e].y = (S16)(new_y);
                     }
                 }
             } else {
-                if (direction_from_head == DIRECTION_NORTH) {
+                if (direction_to_head == DIRECTION_NORTH) {
                     S32 new_x = snake->segments[e].x;
                     S32 new_y = snake->segments[e].y;
                     adjacent_cell(DIRECTION_NORTH, &new_x, &new_y);
                     adjacent_cell(DIRECTION_EAST, &new_x, &new_y);
                     if (!_game_is_solid_at(game, new_x, new_y, &snake_collision)) {
+                        constricted_elements = INNER_CORNER_CONSTRICTED_SEGMENTS;
                         snake->segments[e].x = (S16)(new_x);
                         snake->segments[e].y = (S16)(new_y);
                     }
-                } else if (direction_from_head == DIRECTION_EAST) {
+                } else if (direction_to_head == DIRECTION_EAST) {
                     // ......    .......
                     // ..p...    ..p....
                     // ..p... -> .2p....
@@ -467,22 +471,25 @@ void _snake_constrict(Snake* snake, Game* game, bool left) {
                     second_path[0] = _adjacent_snake_segment(snake->segments[e], DIRECTION_WEST);
                     second_path[1] = _adjacent_snake_segment(second_path[0], DIRECTION_NORTH);
 
-                    _expand_outer_corner_if_open(game, snake, e, first_path, second_path, DIRECTION_WEST, DIRECTION_SOUTH);
+                    if (_expand_outer_corner_if_open(game, snake, e, first_path, second_path, DIRECTION_WEST, DIRECTION_SOUTH)) {
+                        constricted_elements = OUTPUT_CORNER_CONSTRICTED_SEGMENTS;
+                    }
                 }
             }
             break;
         case SNAKE_SEGMENT_SHAPE_SOUTH_WEST_CORNER:
-            if (left) {
-                if (direction_from_head == DIRECTION_WEST) {
+            if (snake->constrict_state.left) {
+                if (direction_to_head == DIRECTION_WEST) {
                     S32 new_x = snake->segments[e].x;
                     S32 new_y = snake->segments[e].y;
                     adjacent_cell(DIRECTION_SOUTH, &new_x, &new_y);
                     adjacent_cell(DIRECTION_WEST, &new_x, &new_y);
                     if (!_game_is_solid_at(game, new_x, new_y, &snake_collision)) {
+                        constricted_elements = INNER_CORNER_CONSTRICTED_SEGMENTS;
                         snake->segments[e].x = (S16)(new_x);
                         snake->segments[e].y = (S16)(new_y);
                     }
-                } else if (direction_from_head == DIRECTION_SOUTH) {
+                } else if (direction_to_head == DIRECTION_SOUTH) {
                     // ......    .......
                     // ......    ...223.
                     // .ppc.. -> ..pp31.
@@ -500,19 +507,22 @@ void _snake_constrict(Snake* snake, Game* game, bool left) {
                     second_path[0] = _adjacent_snake_segment(snake->segments[e], DIRECTION_NORTH);
                     second_path[1] = _adjacent_snake_segment(second_path[0], DIRECTION_WEST);
 
-                    _expand_outer_corner_if_open(game, snake, e, first_path, second_path, DIRECTION_EAST, DIRECTION_NORTH);
+                    if (_expand_outer_corner_if_open(game, snake, e, first_path, second_path, DIRECTION_EAST, DIRECTION_NORTH)) {
+                        constricted_elements = OUTPUT_CORNER_CONSTRICTED_SEGMENTS;
+                    }
                 }
             } else {
-                if (direction_from_head == DIRECTION_SOUTH) {
+                if (direction_to_head == DIRECTION_SOUTH) {
                     S32 new_x = snake->segments[e].x;
                     S32 new_y = snake->segments[e].y;
                     adjacent_cell(DIRECTION_SOUTH, &new_x, &new_y);
                     adjacent_cell(DIRECTION_WEST, &new_x, &new_y);
                     if (!_game_is_solid_at(game, new_x, new_y, &snake_collision)) {
+                        constricted_elements = INNER_CORNER_CONSTRICTED_SEGMENTS;
                         snake->segments[e].x = (S16)(new_x);
                         snake->segments[e].y = (S16)(new_y);
                     }
-                } else if (direction_from_head == DIRECTION_WEST) {
+                } else if (direction_to_head == DIRECTION_WEST) {
                     // ......    .......
                     // ......    ...113.
                     // .ppc.. -> ..pp32.
@@ -530,22 +540,25 @@ void _snake_constrict(Snake* snake, Game* game, bool left) {
                     second_path[0] = _adjacent_snake_segment(snake->segments[e], DIRECTION_EAST);
                     second_path[1] = _adjacent_snake_segment(second_path[0], DIRECTION_SOUTH);
 
-                    _expand_outer_corner_if_open(game, snake, e, first_path, second_path, DIRECTION_EAST, DIRECTION_NORTH);
+                    if (_expand_outer_corner_if_open(game, snake, e, first_path, second_path, DIRECTION_EAST, DIRECTION_NORTH)) {
+                        constricted_elements = OUTPUT_CORNER_CONSTRICTED_SEGMENTS;
+                    }
                 }
             }
             break;
         case SNAKE_SEGMENT_SHAPE_SOUTH_EAST_CORNER:
-            if (left) {
-                if (direction_from_head == DIRECTION_SOUTH) {
+            if (snake->constrict_state.left) {
+                if (direction_to_head == DIRECTION_SOUTH) {
                     S32 new_x = snake->segments[e].x;
                     S32 new_y = snake->segments[e].y;
                     adjacent_cell(DIRECTION_SOUTH, &new_x, &new_y);
                     adjacent_cell(DIRECTION_EAST, &new_x, &new_y);
                     if (!_game_is_solid_at(game, new_x, new_y, &snake_collision)) {
+                        constricted_elements = INNER_CORNER_CONSTRICTED_SEGMENTS;
                         snake->segments[e].x = (S16)(new_x);
                         snake->segments[e].y = (S16)(new_y);
                     }
-                } else if (direction_from_head == DIRECTION_EAST) {
+                } else if (direction_to_head == DIRECTION_EAST) {
                     // ......    ......
                     // ......    .311..
                     // ..cpp. -> .23pp.
@@ -563,19 +576,22 @@ void _snake_constrict(Snake* snake, Game* game, bool left) {
                     second_path[0] = _adjacent_snake_segment(snake->segments[e], DIRECTION_WEST);
                     second_path[1] = _adjacent_snake_segment(second_path[0], DIRECTION_SOUTH);
 
-                    _expand_outer_corner_if_open(game, snake, e, first_path, second_path, DIRECTION_WEST, DIRECTION_NORTH);
+                    if (_expand_outer_corner_if_open(game, snake, e, first_path, second_path, DIRECTION_WEST, DIRECTION_NORTH)) {
+                        constricted_elements = OUTPUT_CORNER_CONSTRICTED_SEGMENTS;
+                    }
                 }
             } else {
-                if (direction_from_head == DIRECTION_EAST) {
+                if (direction_to_head == DIRECTION_EAST) {
                     S32 new_x = snake->segments[e].x;
                     S32 new_y = snake->segments[e].y;
                     adjacent_cell(DIRECTION_SOUTH, &new_x, &new_y);
                     adjacent_cell(DIRECTION_EAST, &new_x, &new_y);
                     if (!_game_is_solid_at(game, new_x, new_y, &snake_collision)) {
+                        constricted_elements = INNER_CORNER_CONSTRICTED_SEGMENTS;
                         snake->segments[e].x = (S16)(new_x);
                         snake->segments[e].y = (S16)(new_y);
                     }
-                } else if (direction_from_head == DIRECTION_SOUTH) {
+                } else if (direction_to_head == DIRECTION_SOUTH) {
                     // ......    ......
                     // ......    .322..
                     // ..cpp. -> .13pp.
@@ -593,16 +609,155 @@ void _snake_constrict(Snake* snake, Game* game, bool left) {
                     second_path[0] = _adjacent_snake_segment(snake->segments[e], DIRECTION_NORTH);
                     second_path[1] = _adjacent_snake_segment(second_path[0], DIRECTION_EAST);
 
-                    _expand_outer_corner_if_open(game, snake, e, first_path, second_path, DIRECTION_WEST, DIRECTION_NORTH);
+                    if (_expand_outer_corner_if_open(game, snake, e, first_path, second_path, DIRECTION_WEST, DIRECTION_NORTH)) {
+                        constricted_elements = OUTPUT_CORNER_CONSTRICTED_SEGMENTS;
+                    }
                 }
             }
             break;
+        case SNAKE_SEGMENT_SHAPE_VERTICAL: {
+            // Figure out the directions we'd want to move.
+            Direction first_move_dir = DIRECTION_NONE;
+            Direction second_move_dir = DIRECTION_NONE;
+
+            if (direction_to_head == DIRECTION_SOUTH) {
+                first_move_dir = DIRECTION_SOUTH;
+                if (snake->constrict_state.left) {
+                    second_move_dir = DIRECTION_EAST;
+                } else {
+                    second_move_dir = DIRECTION_WEST;
+                }
+            } else if (direction_to_head == DIRECTION_NORTH) {
+                first_move_dir = DIRECTION_NORTH;
+                if (snake->constrict_state.left) {
+                    second_move_dir = DIRECTION_WEST;
+                } else {
+                    second_move_dir = DIRECTION_EAST;
+                }
+            }
+
+            // Find the longest chain of vertical segments starting from here.
+            S32 start_index = e;
+            S32 end_index = e;
+            while (true) {
+                S32 new_x = snake->segments[end_index].x;
+                S32 new_y = snake->segments[end_index].y;
+                adjacent_cell(second_move_dir, &new_x, &new_y);
+                if (snake_segment_shape(snake, end_index) != SNAKE_SEGMENT_SHAPE_VERTICAL) {
+                    end_index--;
+                    break;
+                }
+                if (_game_is_solid_at(game, new_x, new_y, &snake_collision)) {
+                    break;
+                }
+                if (end_index < last_segment_index) {
+                    end_index++;
+                } else {
+                    break;
+                }
+            }
+
+            // If the vertical segment count is less than 2 (inclusive) then we don't do anything.
+            if ((end_index - start_index) <= 1) {
+                break;
+            }
+
+            // Move each of the segments after the first one in the direction of the constriction.
+            for (S32 i = start_index + 1; i < end_index; i++) {
+                S32 new_x = snake->segments[i].x;
+                S32 new_y = snake->segments[i].y;
+                adjacent_cell(first_move_dir, &new_x, &new_y);
+                adjacent_cell(second_move_dir, &new_x, &new_y);
+                snake->segments[i].x = (S16)(new_x);
+                snake->segments[i].y = (S16)(new_y);
+            }
+
+            // For the final segment, drag the tail along with it.
+            S32 new_x = snake->segments[end_index].x;
+            S32 new_y = snake->segments[end_index].y;
+            adjacent_cell(first_move_dir, &new_x, &new_y);
+            _snake_drag(snake, end_index, new_x, new_y);
+            adjacent_cell(second_move_dir, &new_x, &new_y);
+            _snake_drag(snake, end_index, new_x, new_y);
+            constricted_elements = (end_index - start_index) + 1;
+            break;
+        }
+        case SNAKE_SEGMENT_SHAPE_HORIZONTAL: {
+            // Figure out the directions we'd want to move.
+            Direction first_move_dir = DIRECTION_NONE;
+            Direction second_move_dir = DIRECTION_NONE;
+
+            if (direction_to_head == DIRECTION_EAST) {
+                first_move_dir = DIRECTION_EAST;
+                if (snake->constrict_state.left) {
+                    second_move_dir = DIRECTION_NORTH;
+                } else {
+                    second_move_dir = DIRECTION_SOUTH;
+                }
+            } else if (direction_to_head == DIRECTION_WEST) {
+                first_move_dir = DIRECTION_WEST;
+                if (snake->constrict_state.left) {
+                    second_move_dir = DIRECTION_SOUTH;
+                } else {
+                    second_move_dir = DIRECTION_NORTH;
+                }
+            }
+
+            // TODO: The rest of the code in this branch is identical to the code above, consolidate !
+            // Find the longest chain of vertical segments starting from here.
+            S32 start_index = e;
+            S32 end_index = e;
+            while (true) {
+                S32 new_x = snake->segments[end_index].x;
+                S32 new_y = snake->segments[end_index].y;
+                adjacent_cell(second_move_dir, &new_x, &new_y);
+                if (snake_segment_shape(snake, end_index) != SNAKE_SEGMENT_SHAPE_HORIZONTAL) {
+                    end_index--;
+                    break;
+                }
+                if (_game_is_solid_at(game, new_x, new_y, &snake_collision)) {
+                    break;
+                }
+                if (end_index < last_segment_index) {
+                    end_index++;
+                } else {
+                    break;
+                }
+            }
+
+            // If the vertical segment count is less than 2 (inclusive) then we don't do anything.
+            if ((end_index - start_index) <= 1) {
+                break;
+            }
+
+            // Move each of the segments after the first one in the direction of the constriction.
+            for (S32 i = start_index + 1; i < end_index; i++) {
+                S32 new_x = snake->segments[i].x;
+                S32 new_y = snake->segments[i].y;
+                adjacent_cell(first_move_dir, &new_x, &new_y);
+                adjacent_cell(second_move_dir, &new_x, &new_y);
+                snake->segments[i].x = (S16)(new_x);
+                snake->segments[i].y = (S16)(new_y);
+            }
+
+            // For the final segment, drag the tail along with it.
+            S32 new_x = snake->segments[end_index].x;
+            S32 new_y = snake->segments[end_index].y;
+            adjacent_cell(first_move_dir, &new_x, &new_y);
+            _snake_drag(snake, end_index, new_x, new_y);
+            adjacent_cell(second_move_dir, &new_x, &new_y);
+            _snake_drag(snake, end_index, new_x, new_y);
+            constricted_elements = (end_index - start_index) + 1;
+            break;
+        }
         default:
             break;
         }
     }
 
-    free(constrict_segment_info);
+    if (constricted_elements == 0) {
+        snake->constrict_state.index = -1;
+    }
 }
 
 void game_update(Game* game, SnakeAction* snake_actions) {
@@ -624,11 +779,18 @@ void game_update(Game* game, SnakeAction* snake_actions) {
 
     for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
         SnakeAction snake_action = snake_actions[s];
-        if (snake_action & SNAKE_ACTION_CONSTRICT_LEFT) {
-            _snake_constrict(game->snakes + s, game, true);
+        if (game->snakes[s].constrict_state.index >= 0) {
+            _snake_constrict(game->snakes + s, game);
+        } else if (snake_action & SNAKE_ACTION_CONSTRICT_LEFT) {
+            game->snakes[s].constrict_state.index = 0;
+            game->snakes[s].constrict_state.left = true;
+            _snake_constrict(game->snakes + s, game);
         } else if (snake_action & SNAKE_ACTION_CONSTRICT_RIGHT) {
-            _snake_constrict(game->snakes + s, game, false);
+            game->snakes[s].constrict_state.index = 0;
+            game->snakes[s].constrict_state.left = false;
+            _snake_constrict(game->snakes + s, game);
         }
+
     }
 
     for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {

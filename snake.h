@@ -43,11 +43,17 @@ typedef struct {
 } SnakeSegment;
 
 typedef struct {
+    S32 index;
+    bool left;
+} SnakeConstrictState;
+
+typedef struct {
     SnakeSegment* segments;
     S32 length;
     S32 capacity; // I hate STL
     Direction direction;
     S8 chomp_cooldown;
+    SnakeConstrictState constrict_state;
 } Snake;
 
 typedef struct {
@@ -77,6 +83,6 @@ void action_buffer_add(ActionBuffer * buf, SnakeAction action, Direction snake_c
 SnakeAction action_buffer_remove(ActionBuffer * buf);
 
 SnakeSegmentShape snake_segment_shape(Snake* snake, S32 segment_index);
-Direction snake_segment_direction_from_head(Snake* snake, S32 segment_index);
+Direction snake_segment_direction_to_head(Snake* snake, S32 segment_index);
 
 #endif /* snake_h */
