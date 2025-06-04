@@ -11,8 +11,8 @@
 #include <stdio.h> // TODO: remove
 
 #define MAX_SEGMENT_PATH 5
-#define INNER_CORNER_CONSTRICTED_SEGMENTS 2
-#define OUTPUT_CORNER_CONSTRICTED_SEGMENTS 6
+#define INNER_CORNER_CONSTRICTED_SEGMENTS 1
+#define OUTPUT_CORNER_CONSTRICTED_SEGMENTS 5
 
 typedef struct {
     S16 snake_index;
