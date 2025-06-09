@@ -13,6 +13,7 @@
 #define MAX_SEGMENT_PATH 5
 #define INNER_CORNER_CONSTRICTED_SEGMENTS 1
 #define OUTPUT_CORNER_CONSTRICTED_SEGMENTS 5
+#define STRAIGHT_CONSTRICTED_SEGMENTS 3
 
 typedef struct {
     S16 snake_index;
@@ -616,138 +617,98 @@ void _snake_constrict(Snake* snake, Game* game) {
             }
             break;
         case SNAKE_SEGMENT_SHAPE_VERTICAL: {
-            // Figure out the directions we'd want to move.
+            // ......    ......
+            // ..h...    ..h...
+            // ..1... -> .21...
+            // ..2...    .34...
+            // ..3...    ..5...
+            // ..4...    ......
+            // ..5...    ......
+
+            Direction to_head = snake_segment_direction_to_head(snake, e);
+
             Direction first_move_dir = DIRECTION_NONE;
             Direction second_move_dir = DIRECTION_NONE;
-
-            if (direction_to_head == DIRECTION_SOUTH) {
-                first_move_dir = DIRECTION_SOUTH;
-                if (snake->constrict_state.left) {
-                    second_move_dir = DIRECTION_EAST;
-                } else {
-                    second_move_dir = DIRECTION_WEST;
+            if (snake->constrict_state.left) {
+                if (to_head == DIRECTION_NORTH) {
+                    first_move_dir = DIRECTION_WEST;
+                    second_move_dir = DIRECTION_NORTH;
+                } else if (to_head == DIRECTION_SOUTH) {
+                    first_move_dir = DIRECTION_EAST;
+                    second_move_dir = DIRECTION_SOUTH;
                 }
-            } else if (direction_to_head == DIRECTION_NORTH) {
-                first_move_dir = DIRECTION_NORTH;
-                if (snake->constrict_state.left) {
-                    second_move_dir = DIRECTION_WEST;
-                } else {
-                    second_move_dir = DIRECTION_EAST;
-                }
-            }
-
-            // Find the longest chain of vertical segments starting from here.
-            S32 start_index = e;
-            S32 end_index = e;
-            while (true) {
-                S32 new_x = snake->segments[end_index].x;
-                S32 new_y = snake->segments[end_index].y;
-                adjacent_cell(second_move_dir, &new_x, &new_y);
-                if (snake_segment_shape(snake, end_index) != SNAKE_SEGMENT_SHAPE_VERTICAL) {
-                    end_index--;
-                    break;
-                }
-                if (_game_is_solid_at(game, new_x, new_y, &snake_collision)) {
-                    break;
-                }
-                if (end_index < last_segment_index) {
-                    end_index++;
-                } else {
-                    break;
+            } else {
+                if (to_head == DIRECTION_NORTH) {
+                    first_move_dir = DIRECTION_EAST;
+                    second_move_dir = DIRECTION_NORTH;
+                } else if (to_head == DIRECTION_SOUTH) {
+                    first_move_dir = DIRECTION_WEST;
+                    second_move_dir = DIRECTION_SOUTH;
                 }
             }
 
-            // If the vertical segment count is less than 2 (inclusive) then we don't do anything.
-            if ((end_index - start_index) <= 1) {
-                break;
-            }
+            S32 first_new_x = snake->segments[e + 1].x;
+            S32 first_new_y = snake->segments[e + 1].y;
 
-            // Move each of the segments after the first one in the direction of the constriction.
-            for (S32 i = start_index + 1; i < end_index; i++) {
-                S32 new_x = snake->segments[i].x;
-                S32 new_y = snake->segments[i].y;
-                adjacent_cell(first_move_dir, &new_x, &new_y);
-                adjacent_cell(second_move_dir, &new_x, &new_y);
-                snake->segments[i].x = (S16)(new_x);
-                snake->segments[i].y = (S16)(new_y);
-            }
+            adjacent_cell(first_move_dir, &first_new_x, &first_new_y);
 
-            // For the final segment, drag the tail along with it.
-            S32 new_x = snake->segments[end_index].x;
-            S32 new_y = snake->segments[end_index].y;
-            adjacent_cell(first_move_dir, &new_x, &new_y);
-            _snake_drag(snake, end_index, new_x, new_y);
-            adjacent_cell(second_move_dir, &new_x, &new_y);
-            _snake_drag(snake, end_index, new_x, new_y);
-            constricted_elements = (end_index - start_index) + 1;
+            S32 second_new_x = first_new_x;
+            S32 second_new_y = first_new_y;
+
+            adjacent_cell(second_move_dir, &second_new_x, &second_new_y);
+
+            if (!_game_is_solid_at(game, first_new_x, first_new_y, &snake_collision) &&
+                !_game_is_solid_at(game, second_new_x, second_new_y, &snake_collision)) {
+                _snake_drag(snake, e + 1, first_new_x, first_new_y);
+                _snake_drag(snake, e + 1, second_new_x, second_new_y);
+                constricted_elements = STRAIGHT_CONSTRICTED_SEGMENTS;
+            }
             break;
         }
         case SNAKE_SEGMENT_SHAPE_HORIZONTAL: {
-            // Figure out the directions we'd want to move.
+            // ........    ........
+            // .h12345. -> .h145...
+            // ........    ..23....
+            // ........    ........
+
+            Direction to_head = snake_segment_direction_to_head(snake, e);
+
             Direction first_move_dir = DIRECTION_NONE;
             Direction second_move_dir = DIRECTION_NONE;
-
-            if (direction_to_head == DIRECTION_EAST) {
-                first_move_dir = DIRECTION_EAST;
-                if (snake->constrict_state.left) {
-                    second_move_dir = DIRECTION_NORTH;
-                } else {
-                    second_move_dir = DIRECTION_SOUTH;
+            if (snake->constrict_state.left) {
+                if (to_head == DIRECTION_EAST) {
+                    first_move_dir = DIRECTION_NORTH;
+                    second_move_dir = DIRECTION_EAST;
+                } else if (to_head == DIRECTION_WEST) {
+                    first_move_dir = DIRECTION_SOUTH;
+                    second_move_dir = DIRECTION_WEST;
                 }
-            } else if (direction_to_head == DIRECTION_WEST) {
-                first_move_dir = DIRECTION_WEST;
-                if (snake->constrict_state.left) {
-                    second_move_dir = DIRECTION_SOUTH;
-                } else {
-                    second_move_dir = DIRECTION_NORTH;
-                }
-            }
-
-            // TODO: The rest of the code in this branch is identical to the code above, consolidate !
-            // Find the longest chain of vertical segments starting from here.
-            S32 start_index = e;
-            S32 end_index = e;
-            while (true) {
-                S32 new_x = snake->segments[end_index].x;
-                S32 new_y = snake->segments[end_index].y;
-                adjacent_cell(second_move_dir, &new_x, &new_y);
-                if (snake_segment_shape(snake, end_index) != SNAKE_SEGMENT_SHAPE_HORIZONTAL) {
-                    end_index--;
-                    break;
-                }
-                if (_game_is_solid_at(game, new_x, new_y, &snake_collision)) {
-                    break;
-                }
-                if (end_index < last_segment_index) {
-                    end_index++;
-                } else {
-                    break;
+            } else {
+                if (to_head == DIRECTION_EAST) {
+                    first_move_dir = DIRECTION_SOUTH;
+                    second_move_dir = DIRECTION_EAST;
+                } else if (to_head == DIRECTION_WEST) {
+                    first_move_dir = DIRECTION_NORTH;
+                    second_move_dir = DIRECTION_WEST;
                 }
             }
 
-            // If the vertical segment count is less than 2 (inclusive) then we don't do anything.
-            if ((end_index - start_index) <= 1) {
-                break;
-            }
+            S32 first_new_x = snake->segments[e + 1].x;
+            S32 first_new_y = snake->segments[e + 1].y;
 
-            // Move each of the segments after the first one in the direction of the constriction.
-            for (S32 i = start_index + 1; i < end_index; i++) {
-                S32 new_x = snake->segments[i].x;
-                S32 new_y = snake->segments[i].y;
-                adjacent_cell(first_move_dir, &new_x, &new_y);
-                adjacent_cell(second_move_dir, &new_x, &new_y);
-                snake->segments[i].x = (S16)(new_x);
-                snake->segments[i].y = (S16)(new_y);
-            }
+            adjacent_cell(first_move_dir, &first_new_x, &first_new_y);
 
-            // For the final segment, drag the tail along with it.
-            S32 new_x = snake->segments[end_index].x;
-            S32 new_y = snake->segments[end_index].y;
-            adjacent_cell(first_move_dir, &new_x, &new_y);
-            _snake_drag(snake, end_index, new_x, new_y);
-            adjacent_cell(second_move_dir, &new_x, &new_y);
-            _snake_drag(snake, end_index, new_x, new_y);
-            constricted_elements = (end_index - start_index) + 1;
+            S32 second_new_x = first_new_x;
+            S32 second_new_y = first_new_y;
+
+            adjacent_cell(second_move_dir, &second_new_x, &second_new_y);
+
+            if (!_game_is_solid_at(game, first_new_x, first_new_y, &snake_collision) &&
+                !_game_is_solid_at(game, second_new_x, second_new_y, &snake_collision)) {
+                _snake_drag(snake, e + 1, first_new_x, first_new_y);
+                _snake_drag(snake, e + 1, second_new_x, second_new_y);
+                constricted_elements = STRAIGHT_CONSTRICTED_SEGMENTS;
+            }
             break;
         }
         default:
