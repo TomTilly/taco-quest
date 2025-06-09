@@ -743,7 +743,7 @@ void game_update(Game* game, SnakeAction* snake_actions) {
         if (game->snakes[s].constrict_state.index >= 0) {
             if (((snake_action | SNAKE_ACTION_CONSTRICT_LEFT_END) &&
                 game->snakes[s].constrict_state.left) ||
-                ((snake_action & SNAKE_ACTION_CONSTRICT_RIGHT_END) &&
+                ((snake_action | SNAKE_ACTION_CONSTRICT_RIGHT_END) &&
                 !game->snakes[s].constrict_state.left)) {
                 game->snakes[s].constrict_state.index = -1;
             } else {
