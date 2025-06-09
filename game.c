@@ -762,7 +762,7 @@ void game_update(Game* game, SnakeAction* snake_actions) {
 
     for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
         // Only allow movement if we aren't constricting.
-        if (game->snakes[s].constrict_state.index == 0) {
+        if (game->snakes[s].constrict_state.index == -1) {
             _snake_move(game->snakes + s, game);
         }
         if (game->snakes[s].length != 0) {
