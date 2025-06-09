@@ -305,6 +305,10 @@ int main(S32 argc, char** argv) {
     PacketTransmissionState recv_game_state_state = {0};
     PacketTransmissionState recv_snake_action_states[MAX_SERVER_CLIENT_COUNT] = {0};
 
+    SnakeAction last_snake_action = SNAKE_ACTION_NONE;
+
+    SnakeAction snake_actions[MAX_SNAKE_COUNT] = {0};
+
     bool quit = false;
     while (!quit) {
         // Calculate how much time has elapsed (in microseconds).
@@ -404,7 +408,7 @@ int main(S32 argc, char** argv) {
             // the server disconnects.
 
             // Send our action to the server if there is one.
-            if (snake_action != SNAKE_ACTION_NONE) {
+            if (snake_action != last_snake_action) {
                 Packet packet = {
                     .header = {
                         .type = PACKET_TYPE_SNAKE_ACTION,
@@ -495,10 +499,11 @@ int main(S32 argc, char** argv) {
             }
 
             // Every Tick:
-            SnakeAction snake_actions[MAX_SNAKE_COUNT];
             snake_actions[0] = action_buffer_remove(&server_actions);
             for (S32 i = 0; i < MAX_SERVER_CLIENT_COUNT; i++) {
-                snake_actions[i + 1] = action_buffer_remove(&clients_actions[i]);
+                if (clients_actions[i].count > 0) {
+                    snake_actions[i + 1] = action_buffer_remove(&clients_actions[i]);
+                }
             }
             game_update(&game, snake_actions);
 
@@ -553,7 +558,6 @@ int main(S32 argc, char** argv) {
                 break;
             }
 
-            SnakeAction snake_actions[MAX_SNAKE_COUNT];
             snake_actions[0] = action_buffer_remove(&server_actions);
             for (S32 i = 0; i < MAX_SERVER_CLIENT_COUNT; i++) {
                 snake_actions[i + 1] = SNAKE_ACTION_NONE;
@@ -562,6 +566,8 @@ int main(S32 argc, char** argv) {
             break;
         }
         }
+
+        last_snake_action = snake_action;
 
         //
         // Render game
