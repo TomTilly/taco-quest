@@ -741,7 +741,14 @@ void game_update(Game* game, SnakeAction* snake_actions) {
     for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
         SnakeAction snake_action = snake_actions[s];
         if (game->snakes[s].constrict_state.index >= 0) {
-            _snake_constrict(game->snakes + s, game);
+            if (((snake_action & SNAKE_ACTION_CONSTRICT_LEFT) == 0 &&
+                game->snakes[s].constrict_state.left) ||
+                ((snake_action & SNAKE_ACTION_CONSTRICT_RIGHT) == 0 &&
+                !game->snakes[s].constrict_state.left)) {
+                game->snakes[s].constrict_state.index = -1;
+            } else {
+                _snake_constrict(game->snakes + s, game);
+            }
         } else if (snake_action & SNAKE_ACTION_CONSTRICT_LEFT) {
             game->snakes[s].constrict_state.index = 0;
             game->snakes[s].constrict_state.left = true;
@@ -751,10 +758,13 @@ void game_update(Game* game, SnakeAction* snake_actions) {
             game->snakes[s].constrict_state.left = false;
             _snake_constrict(game->snakes + s, game);
         }
-
     }
 
     for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
+        // Only allow movement if we aren't constricting.
+        if (game->snakes[s].constrict_state.index >= 0) {
+            continue;
+        }
         _snake_move(game->snakes + s, game);
         if (game->snakes[s].length != 0) {
             snakes_alive++;

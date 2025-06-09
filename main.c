@@ -362,6 +362,31 @@ int main(S32 argc, char** argv) {
             }
         }
 
+        // We do this separate from the event loop so that we can get continuous constrict inputs
+        // when the key is held down. Doing it in the event loop only gets us key down events.
+        const Uint8* keyboard_state = SDL_GetKeyboardState(NULL);
+        if (keyboard_state[SDL_SCANCODE_W]) {
+            snake_action |= SNAKE_ACTION_FACE_NORTH;
+        }
+        if (keyboard_state[SDL_SCANCODE_A]) {
+            snake_action |= SNAKE_ACTION_FACE_WEST;
+        }
+        if (keyboard_state[SDL_SCANCODE_S]) {
+            snake_action |= SNAKE_ACTION_FACE_SOUTH;
+        }
+        if (keyboard_state[SDL_SCANCODE_D]) {
+            snake_action |= SNAKE_ACTION_FACE_EAST;
+        }
+        if (keyboard_state[SDL_SCANCODE_Q]) {
+            snake_action |= SNAKE_ACTION_CONSTRICT_LEFT;
+        }
+        if (keyboard_state[SDL_SCANCODE_E]) {
+            snake_action |= SNAKE_ACTION_CONSTRICT_RIGHT;
+        }
+        if (keyboard_state[SDL_SCANCODE_SPACE]) {
+            snake_action |= SNAKE_ACTION_CHOMP;
+        }
+
         // The server/single player mode should only update the game state if a tick has passed.
         bool game_should_tick = false;
         if (time_since_update_us >= GAME_SIMULATE_TIME_INTERVAL_US) {
