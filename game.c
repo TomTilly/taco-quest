@@ -741,9 +741,9 @@ void game_update(Game* game, SnakeAction* snake_actions) {
     for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
         SnakeAction snake_action = snake_actions[s];
         if (game->snakes[s].constrict_state.index >= 0) {
-            if (((snake_action & SNAKE_ACTION_CONSTRICT_LEFT) == 0 &&
+            if (((snake_action | SNAKE_ACTION_CONSTRICT_LEFT_END) &&
                 game->snakes[s].constrict_state.left) ||
-                ((snake_action & SNAKE_ACTION_CONSTRICT_RIGHT) == 0 &&
+                ((snake_action & SNAKE_ACTION_CONSTRICT_RIGHT_END) &&
                 !game->snakes[s].constrict_state.left)) {
                 game->snakes[s].constrict_state.index = -1;
             } else {
