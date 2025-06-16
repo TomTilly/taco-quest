@@ -1,4 +1,22 @@
 --------------------------------------------------------------------------------
+6/15/2025: Discord
+
+Today:
+- Tom explained an alternate snake constriction method: segments move toward the
+"center" (average coordinate of all segments).
+    - problems: certain segment configurations don't easily move
+    - what's the center is snake shape is complex.
+
+--------------------------------------------------------------------------------
+6/08/2025: In person, Chauncy Street
+
+Today:
+- Went to Shake Shack, did not order shakes.
+- Diagramed constriction logic.
+- Justin tweaked constriction system and fixed minor bugs.
+- Play tested.
+
+--------------------------------------------------------------------------------
 5/31/2025: Discord
 
 Today:
