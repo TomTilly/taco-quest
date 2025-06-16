@@ -19,6 +19,8 @@ Classic snake game with a multiplayer twist...and tacos!
 - Easter egg for players who use port 6969
 - Sometimes it feels like inputs are dropped when doing things like diagonal movements ?
   - Maybe queue up inputs within the same tick that could be executed in subsequent ticks
+- Each player is a wyrm (mythical serpent), level is a medieval town, player destroys houses, etc... to gain segments instead of tacos
+- Constriction: if there are one space gaps that can't be filled by continuing to constrict, add squeezing animation to fill those spaces to make the squeeze feel satisfying
 
 ## 1/26 Brainstorming Session
 

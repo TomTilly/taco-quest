@@ -6,6 +6,12 @@ Today:
 "center" (average coordinate of all segments).
     - problems: certain segment configurations don't easily move
     - what's the center is snake shape is complex.
+- Justin diagramed constriction, pushing, collision, and squishing logic
+
+Next Time:
+- Symmetry in constricting logic
+- Migrate test app
+- Refactor constriction logic, prepping for pushing logic
 
 --------------------------------------------------------------------------------
 6/08/2025: In person, Chauncy Street
