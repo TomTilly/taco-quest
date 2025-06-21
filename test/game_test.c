@@ -15,15 +15,33 @@ char char_from_level_string(const char* string, S32 width, S32 x, S32 y) {
     return string[(y * width) + x];
 }
 
-bool game_from_string(const char* string, S32 width, S32 height, Game* game) {
+char new_char_from_level_string(const char** string, S32 x, S32 y) {
+    return *(string[y] + x);
+}
+
+bool game_from_string(const char** strings, Game* game) {
+    // Process string array to get width and height.
+    S32 width = (S32)(strlen(strings[0]));
+    S32 height = 0;
+
+    for (S32 i = 0; strings[i] != NULL; i++) {
+        if (strlen(strings[i]) != width) {
+            printf("Level string mismatch. Good luck finding it. Use a debugger.\n");
+            return false;
+        }
+        height++;
+    }
+
     // Build the level.
     if (!game_init(game, width, height, 0)) {
         return false;
     }
+
     S32 snake_capacities[MAX_SNAKE_COUNT] = {0};
-    for (S32 y = 0; y < height; y++) {
-        for (S32 x = 0; x < width; x++) {
-            char ch = char_from_level_string(string, width, x, y);
+
+    for (S16 y = 0; y < height; y++) {
+        for (S16 x = 0; x < width; x++) {
+            char ch = new_char_from_level_string(strings, x, y);
             level_set_cell(&game->level, x, y, CELL_TYPE_EMPTY);
 
             if (ch == 'W') {
@@ -49,7 +67,7 @@ bool game_from_string(const char* string, S32 width, S32 height, Game* game) {
 
     for (S16 y = 0; y < height; y++) {
         for (S16 x = 0; x < width; x++) {
-            char ch = char_from_level_string(string, width, x, y);
+            char ch = new_char_from_level_string(strings, x, y);
             S32 snake_index = 0;
             S32 segment_index = 0;
 
@@ -183,28 +201,64 @@ bool games_are_equal(Game* a, Game* b) {
     return true;
 }
 
+void snake_constrict_test(const char** input_level,
+                          const char** output_level,
+                          SnakeAction snake_action,
+                          Direction* snake_directions) {
+    Game input_game = {0};
+    game_from_string(input_level, &input_game);
+    if (snake_directions) {
+        for (S32 i = 0; i < MAX_SNAKE_COUNT; i++) {
+            if (input_game.snakes[i].length > 0) {
+                input_game.snakes[i].direction = snake_directions[i];
+            }
+        }
+    }
+
+    SnakeAction snake_actions[MAX_SNAKE_COUNT] = {0};
+    snake_actions[0] = snake_action;
+
+    game_update(&input_game, snake_actions);
+
+    Game output_game = {0};
+    game_from_string(output_level, &output_game);
+    if (snake_directions) {
+        for (S32 i = 0; i < MAX_SNAKE_COUNT; i++) {
+            if (output_game.snakes[i].length > 0) {
+                output_game.snakes[i].direction = snake_directions[i];
+            }
+        }
+    }
+
+    EXPECT(games_are_equal(&input_game, &output_game));
+}
+
 int main(int argc, char** argv) {
     (void)(argc);
     (void)(argv);
 
     // Snake on snake collision
     {
-        const char* input_level =
-            "......."
-            "..aABC."
-            "..b...."
-            "..c...."
-            ".......";
+        const char* input_level[] = {
+            ".......",
+            "..aABC.",
+            "..b....",
+            "..c....",
+            ".......",
+            NULL
+        };
 
-        const char* output_level =
-            "..a...."
-            "..bABC."
-            "..c...."
-            "......."
-            ".......";
+        const char* output_level[] = {
+            "..a....",
+            "..bABC.",
+            "..c....",
+            ".......",
+            ".......",
+            NULL
+        };
 
         Game input_game = {0};
-        game_from_string(input_level, 7, 5, &input_game);
+        game_from_string(input_level, &input_game);
 
         SnakeAction snake_actions[MAX_SNAKE_COUNT] = {0};
         snake_actions[0] = SNAKE_ACTION_FACE_NORTH;
@@ -213,7 +267,7 @@ int main(int argc, char** argv) {
         game_update(&input_game, snake_actions);
 
         Game output_game = {0};
-        game_from_string(output_level, 7, 5, &output_game);
+        game_from_string(output_level, &output_game);
         output_game.snakes[1].direction = DIRECTION_WEST;
 
         EXPECT(games_are_equal(&input_game, &output_game));
@@ -221,22 +275,26 @@ int main(int argc, char** argv) {
 
     // Snake eat taco
     {
-        const char* input_level =
-            "..T...."
-            "..a...."
-            "..b...."
-            "..c...."
-            ".......";
+        const char* input_level[] = {
+            "..T....",
+            "..a....",
+            "..b....",
+            "..c....",
+            ".......",
+            NULL
+        };
 
-        const char* output_level =
-            "..a...."
-            "..b...."
-            "..c...."
-            "..d...."
-            ".......";
+        const char* output_level[] = {
+            "..a....",
+            "..b....",
+            "..c....",
+            "..d....",
+            ".......",
+            NULL
+        };
 
         Game input_game = {0};
-        game_from_string(input_level, 7, 5, &input_game);
+        game_from_string(input_level, &input_game);
 
         SnakeAction snake_actions[MAX_SNAKE_COUNT] = {0};
         snake_actions[0] = SNAKE_ACTION_FACE_NORTH;
@@ -244,29 +302,33 @@ int main(int argc, char** argv) {
         game_update(&input_game, snake_actions);
 
         Game output_game = {0};
-        game_from_string(output_level, 7, 5, &output_game);
+        game_from_string(output_level, &output_game);
 
         EXPECT(games_are_equal(&input_game, &output_game));
     }
 
     // Snake collide with wall
     {
-        const char* input_level =
-            "......."
-            "..cbaW."
-            "......."
-            "......."
-            ".......";
+        const char* input_level[] = {
+            ".......",
+            "..cbaW.",
+            ".......",
+            ".......",
+            ".......",
+            NULL
+        };
 
-        const char* output_level =
-            "......."
-            "..cbaW."
-            "......."
-            "......."
-            ".......";
+        const char* output_level[] = {
+            ".......",
+            "..cbaW.",
+            ".......",
+            ".......",
+            ".......",
+            NULL
+        };
 
         Game input_game = {0};
-        game_from_string(input_level, 7, 5, &input_game);
+        game_from_string(input_level, &input_game);
 
         SnakeAction snake_actions[MAX_SNAKE_COUNT] = {0};
         snake_actions[0] = SNAKE_ACTION_FACE_EAST;
@@ -274,7 +336,7 @@ int main(int argc, char** argv) {
         game_update(&input_game, snake_actions);
 
         Game output_game = {0};
-        game_from_string(output_level, 7, 5, &output_game);
+        game_from_string(output_level, &output_game);
         output_game.snakes[0].direction = DIRECTION_EAST;
 
         EXPECT(games_are_equal(&input_game, &output_game));
@@ -282,22 +344,26 @@ int main(int argc, char** argv) {
 
     // Snake chomps
     {
-        const char* input_level =
-            "..W...."
-            "..a...."
-            "..bABC."
-            "..c...."
-            ".......";
+        const char* input_level[] = {
+            "..W....",
+            "..a....",
+            "..bABC.",
+            "..c....",
+            ".......",
+            NULL
+        };
 
-        const char* output_level =
-            "..W...."
-            "..a...."
-            "..bABC."
-            "..c...."
-            ".......";
+        const char* output_level[] = {
+            "..W....",
+            "..a....",
+            "..bABC.",
+            "..c....",
+            ".......",
+            NULL
+        };
 
         Game input_game = {0};
-        game_from_string(input_level, 7, 5, &input_game);
+        game_from_string(input_level, &input_game);
         input_game.snakes[1].direction = DIRECTION_WEST;
 
         SnakeAction snake_actions[MAX_SNAKE_COUNT] = {0};
@@ -306,7 +372,7 @@ int main(int argc, char** argv) {
         game_update(&input_game, snake_actions);
 
         Game output_game = {0};
-        game_from_string(output_level, 7, 5, &output_game);
+        game_from_string(output_level, &output_game);
         output_game.snakes[1].direction = DIRECTION_WEST;
         output_game.snakes[0].segments[1].health = 1;
 
@@ -315,23 +381,28 @@ int main(int argc, char** argv) {
 
     // Snake chomps low health to turn into tacos
     {
-        const char* input_level =
-            "......."
-            "..a...."
-            "..bABC."
-            "..c...."
-            ".......";
+        const char* input_level[] = {
+            "..a....",
+            "..b....",
+            "..cABC.",
+            "..d....",
+            "..efg..",
+            NULL
+        };
 
-        const char* output_level =
-            "..a...."
-            "..b...."
-            "..cABC."
-            "......."
-            ".......";
+        const char* output_level[] = {
+            "..a....",
+            "..b....",
+            "..ABCD.",
+            "..T....",
+            "..TTT..",
+            NULL
+        };
 
         Game input_game = {0};
-        game_from_string(input_level, 7, 5, &input_game);
+        game_from_string(input_level, &input_game);
         input_game.snakes[1].direction = DIRECTION_WEST;
+        input_game.snakes[0].segments[2].health = 1;
 
         SnakeAction snake_actions[MAX_SNAKE_COUNT] = {0};
         snake_actions[1] = SNAKE_ACTION_CHOMP;
@@ -339,9 +410,8 @@ int main(int argc, char** argv) {
         game_update(&input_game, snake_actions);
 
         Game output_game = {0};
-        game_from_string(output_level, 7, 5, &output_game);
+        game_from_string(output_level, &output_game);
         output_game.snakes[1].direction = DIRECTION_WEST;
-        output_game.snakes[0].segments[1].health = 1;
 
         EXPECT(games_are_equal(&input_game, &output_game));
     }
@@ -350,470 +420,348 @@ int main(int argc, char** argv) {
 
     // Right - Vertical Straight North
     {
-        const char* input_level =
-            "..a.."
-            "..b.."
-            "..c.."
-            "..d.."
-            "..e..";
+        const char* input_level[] = {
+            "..a..",
+            "..b..",
+            "..c..",
+            "..d..",
+            "..e..",
+            NULL
+        };
 
-        const char* output_level =
-            "..a.."
-            "..bc."
-            "..ed."
-            "....."
-            ".....";
+        const char* output_level[] = {
+            "..a..",
+            "..bc.",
+            "..ed.",
+            ".....",
+            ".....",
+            NULL
+        };
 
-        Game input_game = {0};
-        game_from_string(input_level, 5, 5, &input_game);
-
-        SnakeAction snake_actions[MAX_SNAKE_COUNT] = {0};
-        snake_actions[0] = SNAKE_ACTION_CONSTRICT_RIGHT;
-
-        game_update(&input_game, snake_actions);
-
-        Game output_game = {0};
-        game_from_string(output_level, 5, 5, &output_game);
-
-        EXPECT(games_are_equal(&input_game, &output_game));
+        snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, NULL);
     }
 
     // Left - Vertical Straight North
     {
-        const char* input_level =
-            "..a.."
-            "..b.."
-            "..c.."
-            "..d.."
-            "..e..";
+        const char* input_level[] = {
+            "..a..",
+            "..b..",
+            "..c..",
+            "..d..",
+            "..e..",
+            NULL
+        };
 
-        const char* output_level =
-            "..a.."
-            ".cb.."
-            ".de.."
-            "....."
-            ".....";
+        const char* output_level[] = {
+            "..a..",
+            ".cb..",
+            ".de..",
+            ".....",
+            ".....",
+            NULL
+        };
 
-        Game input_game = {0};
-        game_from_string(input_level, 5, 5, &input_game);
-
-        SnakeAction snake_actions[MAX_SNAKE_COUNT] = {0};
-        snake_actions[0] = SNAKE_ACTION_CONSTRICT_LEFT;
-
-        game_update(&input_game, snake_actions);
-
-        Game output_game = {0};
-        game_from_string(output_level, 5, 5, &output_game);
-
-        EXPECT(games_are_equal(&input_game, &output_game));
+        snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, NULL);
     }
 
     // Right - Vertical Straight South
     {
-        const char* input_level =
-            "..e.."
-            "..d.."
-            "..c.."
-            "..b.."
-            "..a..";
+        const char* input_level[] = {
+            "..e..",
+            "..d..",
+            "..c..",
+            "..b..",
+            "..a..",
+            NULL
+        };
 
-        const char* output_level =
-            "....."
-            "....."
-            ".de.."
-            ".cb.."
-            "..a..";
+        const char* output_level[] = {
+            ".....",
+            ".....",
+            ".de..",
+            ".cb..",
+            "..a..",
+            NULL
+        };
 
-        Game input_game = {0};
-        game_from_string(input_level, 5, 5, &input_game);
-        input_game.snakes[0].direction = DIRECTION_SOUTH;
-
-        SnakeAction snake_actions[MAX_SNAKE_COUNT] = {0};
-        snake_actions[0] = SNAKE_ACTION_CONSTRICT_RIGHT;
-
-        game_update(&input_game, snake_actions);
-
-        Game output_game = {0};
-        game_from_string(output_level, 5, 5, &output_game);
-        output_game.snakes[0].direction = DIRECTION_SOUTH;
-
-        EXPECT(games_are_equal(&input_game, &output_game));
+        Direction direction = DIRECTION_SOUTH;
+        snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, &direction);
     }
 
     // Left - Vertical Straight South
     {
-        const char* input_level =
-            "..e.."
-            "..d.."
-            "..c.."
-            "..b.."
-            "..a..";
+        const char* input_level[] = {
+            "..e..",
+            "..d..",
+            "..c..",
+            "..b..",
+            "..a..",
+            NULL
+        };
 
-        const char* output_level =
-            "....."
-            "....."
-            "..ed."
-            "..bc."
-            "..a..";
+        const char* output_level[] = {
+            ".....",
+            ".....",
+            "..ed.",
+            "..bc.",
+            "..a..",
+            NULL
+        };
 
-        Game input_game = {0};
-        game_from_string(input_level, 5, 5, &input_game);
-        input_game.snakes[0].direction = DIRECTION_SOUTH;
-
-        SnakeAction snake_actions[MAX_SNAKE_COUNT] = {0};
-        snake_actions[0] = SNAKE_ACTION_CONSTRICT_LEFT;
-
-        game_update(&input_game, snake_actions);
-
-        Game output_game = {0};
-        game_from_string(output_level, 5, 5, &output_game);
-        output_game.snakes[0].direction = DIRECTION_SOUTH;
-
-        EXPECT(games_are_equal(&input_game, &output_game));
+        Direction direction = DIRECTION_SOUTH;
+        snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, &direction);
     }
 
     // Right - Horizontal Straight West
     {
-        const char* input_level =
-            "....."
-            "....."
-            "abcde"
-            "....."
-            ".....";
+        const char* input_level[] = {
+            ".....",
+            ".....",
+            "abcde",
+            ".....",
+            ".....",
+            NULL
+        };
 
-        const char* output_level =
-            "....."
-            ".cd.."
-            "abe.."
-            "....."
-            ".....";
+        const char* output_level[] = {
+            ".....",
+            ".cd..",
+            "abe..",
+            ".....",
+            ".....",
+            NULL
+        };
 
-        Game input_game = {0};
-        game_from_string(input_level, 5, 5, &input_game);
-        input_game.snakes[0].direction = DIRECTION_WEST;
-
-        SnakeAction snake_actions[MAX_SNAKE_COUNT] = {0};
-        snake_actions[0] = SNAKE_ACTION_CONSTRICT_RIGHT;
-
-        game_update(&input_game, snake_actions);
-
-        Game output_game = {0};
-        game_from_string(output_level, 5, 5, &output_game);
-        output_game.snakes[0].direction = DIRECTION_WEST;
-
-        EXPECT(games_are_equal(&input_game, &output_game));
+        Direction direction = DIRECTION_WEST;
+        snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, &direction);
     }
 
     // Left - Horizontal Straight West
     {
-        const char* input_level =
-            "....."
-            "....."
-            "abcde"
-            "....."
-            ".....";
+        const char* input_level[] = {
+            ".....",
+            ".....",
+            "abcde",
+            ".....",
+            ".....",
+            NULL
+        };
 
-        const char* output_level =
-            "....."
-            "....."
-            "abe.."
-            ".cd.."
-            ".....";
+        const char* output_level[] = {
+            ".....",
+            ".....",
+            "abe..",
+            ".cd..",
+            ".....",
+            NULL
+        };
 
-        Game input_game = {0};
-        game_from_string(input_level, 5, 5, &input_game);
-        input_game.snakes[0].direction = DIRECTION_WEST;
-
-        SnakeAction snake_actions[MAX_SNAKE_COUNT] = {0};
-        snake_actions[0] = SNAKE_ACTION_CONSTRICT_LEFT;
-
-        game_update(&input_game, snake_actions);
-
-        Game output_game = {0};
-        game_from_string(output_level, 5, 5, &output_game);
-        output_game.snakes[0].direction = DIRECTION_WEST;
-
-        EXPECT(games_are_equal(&input_game, &output_game));
+        Direction direction = DIRECTION_WEST;
+        snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, &direction);
     }
 
     // Right - Horizontal Straight East
     {
-        const char* input_level =
-            "....."
-            "....."
-            "edcba"
-            "....."
-            ".....";
+        const char* input_level[] = {
+            ".....",
+            ".....",
+            "edcba",
+            ".....",
+            ".....",
+            NULL
+        };
 
-        const char* output_level =
-            "....."
-            "....."
-            "..eba"
-            "..dc."
-            ".....";
+        const char* output_level[] = {
+            ".....",
+            ".....",
+            "..eba",
+            "..dc.",
+            ".....",
+            NULL
+        };
 
-        Game input_game = {0};
-        game_from_string(input_level, 5, 5, &input_game);
-        input_game.snakes[0].direction = DIRECTION_EAST;
-
-        SnakeAction snake_actions[MAX_SNAKE_COUNT] = {0};
-        snake_actions[0] = SNAKE_ACTION_CONSTRICT_RIGHT;
-
-        game_update(&input_game, snake_actions);
-
-        Game output_game = {0};
-        game_from_string(output_level, 5, 5, &output_game);
-        output_game.snakes[0].direction = DIRECTION_EAST;
-
-        EXPECT(games_are_equal(&input_game, &output_game));
+        Direction direction = DIRECTION_EAST;
+        snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, &direction);
     }
 
     // Left - Horizontal Straight East
     {
-        const char* input_level =
-            "....."
-            "....."
-            "edcba"
-            "....."
-            ".....";
+        const char* input_level[] = {
+            ".....",
+            ".....",
+            "edcba",
+            ".....",
+            ".....",
+            NULL
+        };
 
-        const char* output_level =
-            "....."
-            "..dc."
-            "..eba"
-            "....."
-            ".....";
+        const char* output_level[] = {
+            ".....",
+            "..dc.",
+            "..eba",
+            ".....",
+            ".....",
+            NULL
+        };
 
-        Game input_game = {0};
-        game_from_string(input_level, 5, 5, &input_game);
-        input_game.snakes[0].direction = DIRECTION_EAST;
-
-        SnakeAction snake_actions[MAX_SNAKE_COUNT] = {0};
-        snake_actions[0] = SNAKE_ACTION_CONSTRICT_LEFT;
-
-        game_update(&input_game, snake_actions);
-
-        Game output_game = {0};
-        game_from_string(output_level, 5, 5, &output_game);
-        output_game.snakes[0].direction = DIRECTION_EAST;
-
-        EXPECT(games_are_equal(&input_game, &output_game));
+        Direction direction = DIRECTION_EAST;
+        snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, &direction);
     }
 
     // Right - Inner Corner North East
     {
-        const char* input_level =
-            "..a.."
-            "..bc."
-            ".....";
+        const char* input_level[] = {
+            "..a..",
+            "..bc.",
+            ".....",
+            NULL
+        };
 
-        const char* output_level =
-            "..ab."
-            "...c."
-            ".....";
+        const char* output_level[] = {
+            "..ab.",
+            "...c.",
+            ".....",
+            NULL
+        };
 
-        Game input_game = {0};
-        game_from_string(input_level, 5, 3, &input_game);
-
-        SnakeAction snake_actions[MAX_SNAKE_COUNT] = {0};
-        snake_actions[0] = SNAKE_ACTION_CONSTRICT_RIGHT;
-
-        game_update(&input_game, snake_actions);
-
-        Game output_game = {0};
-        game_from_string(output_level, 5, 3, &output_game);
-
-        EXPECT(games_are_equal(&input_game, &output_game));
+        snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, NULL);
     }
 
     // Left - Inner Corner North West
     {
-        const char* input_level =
-            "..a.."
-            ".cb.."
-            ".....";
+        const char* input_level[] = {
+            "..a..",
+            ".cb..",
+            ".....",
+            NULL
+        };
 
-        const char* output_level =
-            ".ba.."
-            ".c..."
-            ".....";
+        const char* output_level[] = {
+            ".ba..",
+            ".c...",
+            ".....",
+            NULL
+        };
 
-        Game input_game = {0};
-        game_from_string(input_level, 5, 3, &input_game);
-        input_game.snakes[0].direction = DIRECTION_EAST;
-
-        SnakeAction snake_actions[MAX_SNAKE_COUNT] = {0};
-        snake_actions[0] = SNAKE_ACTION_CONSTRICT_LEFT;
-
-        game_update(&input_game, snake_actions);
-
-        Game output_game = {0};
-        game_from_string(output_level, 5, 3, &output_game);
-        output_game.snakes[0].direction = DIRECTION_EAST;
-
-        EXPECT(games_are_equal(&input_game, &output_game));
+        Direction direction = DIRECTION_EAST;
+        snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, &direction);
     }
 
     // Right - Inner Corner South East
     {
-        const char* input_level =
-            "....."
-            "..ba."
-            "..c..";
+        const char* input_level[] = {
+            ".....",
+            "..ba.",
+            "..c..",
+            NULL
+        };
 
-        const char* output_level =
-            "....."
-            "...a."
-            "..cb.";
+        const char* output_level[] = {
+            ".....",
+            "...a.",
+            "..cb.",
+            NULL
+        };
 
-        Game input_game = {0};
-        game_from_string(input_level, 5, 3, &input_game);
-
-        SnakeAction snake_actions[MAX_SNAKE_COUNT] = {0};
-        snake_actions[0] = SNAKE_ACTION_CONSTRICT_RIGHT;
-
-        game_update(&input_game, snake_actions);
-
-        Game output_game = {0};
-        game_from_string(output_level, 5, 3, &output_game);
-
-        EXPECT(games_are_equal(&input_game, &output_game));
+        snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, NULL);
     }
 
     // Left - Inner Corner South West
     {
-        const char* input_level =
-            "....."
-            ".ab.."
-            "..c..";
+        const char* input_level[] = {
+            ".....",
+            ".ab..",
+            "..c..",
+            NULL
+        };
 
-        const char* output_level =
-            "....."
-            ".a..."
-            ".bc..";
+        const char* output_level[] = {
+            ".....",
+            ".a...",
+            ".bc..",
+            NULL
+        };
 
-        Game input_game = {0};
-        game_from_string(input_level, 5, 3, &input_game);
-        input_game.snakes[0].direction = DIRECTION_WEST;
-
-        SnakeAction snake_actions[MAX_SNAKE_COUNT] = {0};
-        snake_actions[0] = SNAKE_ACTION_CONSTRICT_LEFT;
-
-        game_update(&input_game, snake_actions);
-
-        Game output_game = {0};
-        game_from_string(output_level, 5, 3, &output_game);
-        output_game.snakes[0].direction = DIRECTION_WEST;
-
-        EXPECT(games_are_equal(&input_game, &output_game));
+        Direction direction = DIRECTION_WEST;
+        snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, &direction);
     }
 
     // Left - Outer Corner North East
     {
-        const char* input_level =
-            ".a......."
-            ".bcdefgh."
-            ".........";
+        const char* input_level[] = {
+            ".a.......",
+            ".bcdefgh.",
+            ".........",
+            NULL
+        };
 
-        const char* output_level =
-            "ba......."
-            "c.gh....."
-            "def......";
+        const char* output_level[] = {
+            "ba.......",
+            "c.gh.....",
+            "def......",
+            NULL
+        };
 
-        Game input_game = {0};
-        game_from_string(input_level, 9, 3, &input_game);
-
-        SnakeAction snake_actions[MAX_SNAKE_COUNT] = {0};
-        snake_actions[0] = SNAKE_ACTION_CONSTRICT_LEFT;
-
-        game_update(&input_game, snake_actions);
-
-        Game output_game = {0};
-        game_from_string(output_level, 9, 3, &output_game);
-
-        EXPECT(games_are_equal(&input_game, &output_game));
+        snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, NULL);
     }
 
     // Right - Outer Corner North West
     {
-        const char* input_level =
-            ".......a."
-            ".hgfedcb."
-            ".........";
+        const char* input_level[] = {
+            ".......a.",
+            ".hgfedcb.",
+            ".........",
+            NULL
+        };
 
-        const char* output_level =
-            ".......ab"
-            ".....hg.c"
-            "......fed";
+        const char* output_level[] = {
+            ".......ab",
+            ".....hg.c",
+            "......fed",
+            NULL
+        };
 
-        Game input_game = {0};
-        game_from_string(input_level, 9, 3, &input_game);
-
-        SnakeAction snake_actions[MAX_SNAKE_COUNT] = {0};
-        snake_actions[0] = SNAKE_ACTION_CONSTRICT_RIGHT;
-
-        game_update(&input_game, snake_actions);
-
-        Game output_game = {0};
-        game_from_string(output_level, 9, 3, &output_game);
-
-        EXPECT(games_are_equal(&input_game, &output_game));
+        snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, NULL);
     }
 
     // Right - Outer Corner South East
     {
-        const char* input_level =
-            "........."
-            "..bcdefgh"
-            "..a......";
+        const char* input_level[] = {
+            ".........",
+            "..bcdefgh",
+            "..a......",
+            NULL
+        };
 
-        const char* output_level =
-            ".def....."
-            ".c.gh...."
-            ".ba......";
+        const char* output_level[] = {
+            ".def.....",
+            ".c.gh....",
+            ".ba......",
+            NULL
+        };
 
-        Game input_game = {0};
-        game_from_string(input_level, 9, 3, &input_game);
-        input_game.snakes[0].direction = DIRECTION_SOUTH;
-
-        SnakeAction snake_actions[MAX_SNAKE_COUNT] = {0};
-        snake_actions[0] = SNAKE_ACTION_CONSTRICT_RIGHT;
-
-        game_update(&input_game, snake_actions);
-
-        Game output_game = {0};
-        game_from_string(output_level, 9, 3, &output_game);
-        output_game.snakes[0].direction = DIRECTION_SOUTH;
-
-        EXPECT(games_are_equal(&input_game, &output_game));
+        Direction direction = DIRECTION_SOUTH;
+        snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, &direction);
     }
 
     // Left - Outer Corner South West
     {
-        const char* input_level =
-            "........."
-            "hgfedcb.."
-            "......a..";
+        const char* input_level[] = {
+            ".........",
+            "hgfedcb..",
+            "......a..",
+            NULL
+        };
 
-        const char* output_level =
-            ".....fed."
-            "....hg.c."
-            "......ab.";
+        const char* output_level[] = {
+            ".....fed.",
+            "....hg.c.",
+            "......ab.",
+            NULL
+        };
 
-        Game input_game = {0};
-        game_from_string(input_level, 9, 3, &input_game);
-        input_game.snakes[0].direction = DIRECTION_SOUTH;
-
-        SnakeAction snake_actions[MAX_SNAKE_COUNT] = {0};
-        snake_actions[0] = SNAKE_ACTION_CONSTRICT_LEFT;
-
-        game_update(&input_game, snake_actions);
-
-        Game output_game = {0};
-        game_from_string(output_level, 9, 3, &output_game);
-        output_game.snakes[0].direction = DIRECTION_SOUTH;
-
-        EXPECT(games_are_equal(&input_game, &output_game));
+        Direction direction = DIRECTION_SOUTH;
+        snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, &direction);
     }
 
     if (g_failed) {
