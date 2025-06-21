@@ -136,7 +136,7 @@ void _snake_move(Snake* snake, Game* game) {
     }
 }
 
-bool game_init(Game* game, int32_t level_width, int32_t level_height) {
+bool game_init(Game* game, S32 level_width, S32 level_height, S32 max_taco_count) {
     if (!level_init(&game->level, level_width, level_height)) {
         return false;
     }
@@ -148,8 +148,8 @@ bool game_init(Game* game, int32_t level_width, int32_t level_height) {
         }
     }
 
+    game->max_taco_count = max_taco_count;
     game->state = GAME_STATE_WAITING;
-
     return true;
 }
 
@@ -771,7 +771,7 @@ void game_update(Game* game, SnakeAction* snake_actions) {
     }
 
     S32 taco_count = game_count_tacos(game);
-    for (size_t i = taco_count; i < MAX_TACO_COUNT; i++) {
+    for (size_t i = taco_count; i < game->max_taco_count; i++) {
         game_spawn_taco(game);
     }
 

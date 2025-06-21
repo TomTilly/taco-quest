@@ -12,7 +12,6 @@
 #include "level.h"
 #include "direction.h"
 
-#define MAX_TACO_COUNT 6
 #define MAX_SNAKE_COUNT 3
 
 typedef enum {
@@ -25,10 +24,11 @@ typedef struct {
     Level level;
     Snake snakes[MAX_SNAKE_COUNT];
     GameState state;
+    S32 max_taco_count;
 } Game;
 
 void snake_update(Snake* snake, Game* game, bool chomp);
-bool game_init(Game* game, int32_t level_width, int32_t level_height);
+bool game_init(Game* game, S32 level_width, S32 level_height, S32 max_taco_count);
 void game_apply_snake_action(Game* game, SnakeAction snake_action, S32 snake_index);
 void game_update(Game* game, SnakeAction* snake_actions);
 void game_destroy(Game* game);

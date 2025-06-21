@@ -150,7 +150,7 @@ int main(S32 argc, char** argv) {
     // Init game and level
     //
     Game game = {0};
-    game_init(&game, LEVEL_WIDTH, LEVEL_HEIGHT);
+    game_init(&game, LEVEL_WIDTH, LEVEL_HEIGHT, 6);
 
     Level* level = &game.level;
 
