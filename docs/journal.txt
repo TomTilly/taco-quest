@@ -1,4 +1,17 @@
 --------------------------------------------------------------------------------
+6/22/2025: Discord
+
+Today
+- Worked through first iteration of refactoring movement logic
+
+Next time:
+- Figure out why unittests are failing with the new strategy.
+- Constrict direction of left/right is broken on north (head) east (tail) corners. Currently does the opposite.
+- When we stop at a wall and constrict, we wave back and forth, however, we should be settling
+against the wall in the direction we're constricting, maybe figuring out the unittests will shed
+light.
+
+--------------------------------------------------------------------------------
 5/31/2025: Discord
 
 Today:

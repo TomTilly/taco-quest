@@ -382,6 +382,25 @@ SnakeSegmentShape snake_segment_shape(Snake* snake, S32 segment_index) {
     return SNAKE_SEGMENT_SHAPE_UNKNOWN;
 }
 
+Direction _direction_between_segments(SnakeSegment* first, SnakeSegment* second) {
+    if (first->x == second->x && first->y == (second->y - 1)) {
+        return DIRECTION_SOUTH;
+    }
+    if (first->x == second->x && first->y == (second->y + 1)) {
+        return DIRECTION_NORTH;
+    }
+
+    if (first->x == (second->x + 1) && first->y == second->y) {
+        return DIRECTION_WEST;
+    }
+
+    if (first->x == (second->x - 1) && first->y == second->y) {
+        return DIRECTION_EAST;
+    }
+
+    return DIRECTION_NONE;
+}
+
 Direction snake_segment_direction_to_head(Snake* snake, S32 segment_index) {
     if (segment_index >= snake->length ||
         segment_index == 0) {
@@ -391,24 +410,64 @@ Direction snake_segment_direction_to_head(Snake* snake, S32 segment_index) {
     SnakeSegment* curr_segment = snake->segments + segment_index;
     SnakeSegment* prev_segment = curr_segment - 1;
 
-    if (curr_segment->x == prev_segment->x &&
-        curr_segment->y == (prev_segment->y - 1)) {
-        return DIRECTION_SOUTH;
-    }
-    if (curr_segment->x == prev_segment->x &&
-        curr_segment->y == (prev_segment->y + 1)) {
-        return DIRECTION_NORTH;
+    return _direction_between_segments(curr_segment, prev_segment);
+}
+
+Direction snake_segment_direction_to_tail(Snake* snake, S32 segment_index) {
+    // Check out of bounds but also check for tail, since there is no direction from the tail to
+    // itself.
+    if (segment_index >= (snake->length - 1) ||
+        segment_index == 0) {
+        return DIRECTION_NONE;
     }
 
-    if (curr_segment->x == (prev_segment->x + 1) &&
-        curr_segment->y == prev_segment->y) {
-        return DIRECTION_WEST;
+    SnakeSegment* curr_segment = snake->segments + segment_index;
+    SnakeSegment* next_segment = curr_segment + 1;
+
+    return _direction_between_segments(curr_segment, next_segment);
+}
+
+FullDirection _full_direction_between_segments(SnakeSegment* first, SnakeSegment* second) {
+    if (first->x == second->x && first->y == (second->y - 1)) {
+        return FULL_DIRECTION_SOUTH;
+    }
+    if (first->x == second->x && first->y == (second->y + 1)) {
+        return FULL_DIRECTION_NORTH;
     }
 
-    if (curr_segment->x == (prev_segment->x - 1) &&
-        curr_segment->y == prev_segment->y) {
-        return DIRECTION_EAST;
+    if (first->x == (second->x + 1) && first->y == second->y) {
+        return FULL_DIRECTION_WEST;
     }
 
-    return DIRECTION_NONE;
+    if (first->x == (second->x - 1) && first->y == second->y) {
+        return FULL_DIRECTION_EAST;
+    }
+
+    return FULL_DIRECTION_UNKNOWN;
+}
+
+FullDirection snake_segment_full_direction_to_head(Snake* snake, S32 segment_index) {
+    if (segment_index >= snake->length ||
+        segment_index == 0) {
+        return FULL_DIRECTION_UNKNOWN;
+    }
+
+    SnakeSegment* curr_segment = snake->segments + segment_index;
+    SnakeSegment* prev_segment = curr_segment - 1;
+
+    return _full_direction_between_segments(curr_segment, prev_segment);
+}
+
+FullDirection snake_segment_full_direction_to_tail(Snake* snake, S32 segment_index) {
+    // Check out of bounds but also check for tail, since there is no direction from the tail to
+    // itself.
+    if (segment_index >= (snake->length - 1) ||
+        segment_index == 0) {
+        return FULL_DIRECTION_UNKNOWN;
+    }
+
+    SnakeSegment* curr_segment = snake->segments + segment_index;
+    SnakeSegment* next_segment = curr_segment + 1;
+
+    return _full_direction_between_segments(curr_segment, next_segment);
 }
