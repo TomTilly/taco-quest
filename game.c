@@ -10,11 +10,6 @@
 #include <assert.h>
 #include <stdio.h> // TODO: remove
 
-#define MAX_SEGMENT_PATH 5
-#define INNER_CORNER_CONSTRICTED_SEGMENTS 1
-#define OUTPUT_CORNER_CONSTRICTED_SEGMENTS 5
-#define STRAIGHT_CONSTRICTED_SEGMENTS 3
-
 typedef struct {
     S16 snake_index;
     S16 segment_index;
@@ -187,102 +182,23 @@ void _snake_drag(Snake* snake, S32 segment_index, S32 new_x, S32 new_y) {
     snake->segments[segment_index].y = (S16)(new_y);
 }
 
-SnakeSegment _adjacent_snake_segment(SnakeSegment original_segment, Direction direction) {
-    S32 x = original_segment.x;
-    S32 y = original_segment.y;
-    adjacent_cell(direction, &x, &y);
-    SnakeSegment result = {
-        .x = (S16)(x),
-        .y = (S16)(y),
-    };
-    return result;
-}
-
-SnakeSegment _diagonal_snake_segment(SnakeSegment original_segment, Direction horizontal_direction, Direction vertical_direction) {
-    S32 x = original_segment.x;
-    S32 y = original_segment.y;
-    adjacent_cell(horizontal_direction, &x, &y);
-    adjacent_cell(vertical_direction, &x, &y);
-    SnakeSegment result = {
-        .x = (S16)(x),
-        .y = (S16)(y),
-    };
-    return result;
-}
-
-void _segment_path_add(SnakeSegment new_segment, SnakeSegment* segment_path, S32* segment_path_count) {
-    assert(*segment_path_count < MAX_SEGMENT_PATH);
-    segment_path[*segment_path_count] = new_segment;
-    (*segment_path_count)++;
-}
-
-typedef enum {
-    SNAKE_SEGMENT_PUSH_TYPE_UNKNOWN,
-    SNAKE_SEGMENT_PUSH_TYPE_STRAIGHT,
-    SNAKE_SEGMENT_PUSH_TYPE_INNER_CORNER,
-    SNAKE_SEGMENT_PUSH_TYPE_OUTER_CORNER,
-} SnakeSegmentPushType;
-
-// At the segment, from head to tail, for example, to the north is the head, and its a corner that
-// goes west.
-SnakeSegmentPushType _corner_push_type(FullDirection push_direction,
-                                       FullDirection corner_direction) {
-    // TODO: Inner and outer corners seem broken again.
-    FullDirection opposite_corner_direction = opposite_full_direction(corner_direction);
-    if (push_direction == corner_direction) {
-        return SNAKE_SEGMENT_PUSH_TYPE_INNER_CORNER;
-    } else if (push_direction == opposite_corner_direction) {
-        return SNAKE_SEGMENT_PUSH_TYPE_OUTER_CORNER;
-    }
-    return SNAKE_SEGMENT_PUSH_TYPE_UNKNOWN;
-}
-
 typedef struct {
     S32 x;
     S32 y;
-    bool drag;
 } Cell;
 
-// based on the outer corner push
-#define MAX_SNAKE_SEGMENT_PUSH_CELL_COUNT 5
-
 typedef struct {
-    bool can_be_pushed;
-    SnakeSegmentPushType push_type;
-    SnakeSegmentShape segment_shape;
-    Direction direction_to_head;
-    Direction direction_to_tail;
-    // Cells that we can push into.
-    Cell cells[MAX_SNAKE_SEGMENT_PUSH_CELL_COUNT];
-    S32 cell_count;
-} SnakeSegmentCanBePushedResult;
+    Cell first;
+    Cell second;
+} SnakeSegmentMove;
 
-bool _add_cell(SnakeSegmentCanBePushedResult* result, Cell cell) {
-    if (result->cell_count >= MAX_SNAKE_SEGMENT_PUSH_CELL_COUNT) {
-        return false;
-    }
-    result->cells[result->cell_count] = cell;
-    result->cell_count++;
-    return true;
+bool _snake_segment_can_move(SnakeSegmentMove* move) {
+    return move->first.x != 0 || move->first.y != 0;
 }
 
-void _remove_cell(SnakeSegmentCanBePushedResult* result, S32 index) {
-    if (index < 0 || index >= result->cell_count) {
-        return;
-    }
+SnakeSegmentMove _snake_segment_can_be_moved(Game* game, Snake* snake, S32 segment_index, bool left);
 
-    // Shift each of the cells closer to 0 by overwriting the cell we want to remove.
-    S32 iterate_to = result->cell_count - 1;
-    for (S32 i = index; i < iterate_to; i++) {
-        result->cells[i].x = result->cells[i+1].x;
-        result->cells[i].y = result->cells[i+1].y;
-    }
-    result->cell_count--;
-}
-
-SnakeSegmentCanBePushedResult _snake_segment_can_be_pushed(Game* game, Snake* snake, S32 segment_index, bool left);
-
-bool _game_object_can_be_pushed(Game* game, S32 x, S32 y, FullDirection full_direction) {
+bool _game_object_can_be_pushed(Game* game, S32 x, S32 y, Direction direction) {
     QueriedObject queried_object = game_query(game, x, y);
     switch (queried_object.type) {
     case QUERIED_OBJECT_TYPE_NONE:
@@ -299,13 +215,12 @@ bool _game_object_can_be_pushed(Game* game, S32 x, S32 y, FullDirection full_dir
         }
         return false;
     case QUERIED_OBJECT_TYPE_SNAKE: {
-        SnakeSegmentCanBePushedResult result =
-            _snake_segment_can_be_pushed(game,
+        SnakeSegmentMove result =
+            _snake_segment_can_be_moved(game,
                                          game->snakes + queried_object.snake.index,
                                          queried_object.snake.segment_index,
-                                         full_direction);
+                                         direction);
         (void)(result);
-        // TODO: When we can actually move snakes, return result.can_be_pushed.
         return false;
     }
     default:
@@ -316,309 +231,89 @@ bool _game_object_can_be_pushed(Game* game, S32 x, S32 y, FullDirection full_dir
 }
 
 // TODO: change push to constrict
-SnakeSegmentCanBePushedResult _snake_segment_can_be_pushed(Game* game,
-                                                           Snake* snake,
-                                                           S32 segment_index,
-                                                           FullDirection direction) {
-    SnakeSegmentCanBePushedResult result = {0};
+SnakeSegmentMove _snake_segment_can_be_moved(Game* game,
+                                              Snake* snake,
+                                              S32 segment_index,
+                                              Direction push_direction) {
+    SnakeSegmentMove result = {0};
 
     // Figure out the push type
-    SnakeSegmentPushType push_type = SNAKE_SEGMENT_PUSH_TYPE_UNKNOWN;
+    Direction direction_to_head = snake_segment_direction_to_head(snake, segment_index);
 
-    // TODO: Consolidate with below
-    // TODO: Make a single function that returns all of these, since there is some duplicate work here.
-    SnakeSegmentShape segment_shape = snake_segment_shape(snake, segment_index);
-    FullDirection direction_to_head = snake_segment_full_direction_to_head(snake, segment_index);
-    FullDirection direction_to_tail = snake_segment_full_direction_to_tail(snake, segment_index);
-
-    switch(segment_shape){
-    case SNAKE_SEGMENT_SHAPE_VERTICAL:
-    case SNAKE_SEGMENT_SHAPE_HORIZONTAL:
-        if (!directions_are_perpendicular(direction_to_tail, direction)) {
-            break;
-        }
-        push_type = SNAKE_SEGMENT_PUSH_TYPE_STRAIGHT;
-        break;
-    case SNAKE_SEGMENT_SHAPE_NORTH_WEST_CORNER:
-        push_type = _corner_push_type(direction, FULL_DIRECTION_NORTH_WEST);
-        break;
-    case SNAKE_SEGMENT_SHAPE_NORTH_EAST_CORNER:
-        push_type = _corner_push_type(direction, FULL_DIRECTION_NORTH_EAST);
-        break;
-    case SNAKE_SEGMENT_SHAPE_SOUTH_WEST_CORNER:
-        push_type = _corner_push_type(direction, FULL_DIRECTION_SOUTH_WEST);
-        break;
-    case SNAKE_SEGMENT_SHAPE_SOUTH_EAST_CORNER:
-        push_type = _corner_push_type(direction, FULL_DIRECTION_SOUTH_EAST);
-        break;
-    case SNAKE_SEGMENT_SHAPE_HEAD:
-    case SNAKE_SEGMENT_SHAPE_UNKNOWN:
-    default:
+    if (!directions_are_perpendicular(direction_to_head, push_direction)) {
         return result;
     }
 
-    // Calculate cells the segments would push into.
-    switch(push_type) {
-    case SNAKE_SEGMENT_PUSH_TYPE_STRAIGHT: {
-        // In this example, we're pushing cell 2 left with respect to the head.
-        // .....
-        // ..h..
-        // .X1..
-        // .X2..
-        // ..3..
-        // ..4..
-        Cell first_cell = {
-            .x = snake->segments[segment_index].x,
-            .y = snake->segments[segment_index].y,
-            .drag = true
-        };
-        adjacent_full_direction_cell(direction, &first_cell.x, &first_cell.y);
+    Direction direction_to_tail = snake_segment_direction_to_tail(snake, segment_index);
 
-        Cell second_cell = first_cell;
-        adjacent_full_direction_cell(direction_to_head, &second_cell.x, &second_cell.y);
+    Cell first_move = {
+        .x = snake->segments[segment_index].x,
+        .y = snake->segments[segment_index].y,
+    };
 
-        result.can_be_pushed =
-            _game_object_can_be_pushed(game, first_cell.x, first_cell.y, direction) &&
-            _game_object_can_be_pushed(game, second_cell.x, second_cell.y, direction);
-
-        if (result.can_be_pushed) {
-            _add_cell(&result, first_cell);
-            _add_cell(&result, second_cell);
+    adjacent_cell(push_direction, &first_move.x, &first_move.y);
+    if (_game_object_can_be_pushed(game, first_move.x, first_move.y, push_direction)) {
+        Cell second_move = first_move;
+        adjacent_cell(direction_to_head, &second_move.x, &second_move.y);
+        if (_game_object_can_be_pushed(game, second_move.x, second_move.y, push_direction)) {
+            result.first = first_move;
+            result.second = second_move;
         }
-        break;
-    }
-    case SNAKE_SEGMENT_PUSH_TYPE_INNER_CORNER: {
-        // In this example, we're pushing cell 2 left with respect to the head.
-        // ......
-        // ..h...
-        // .X1...
-        // 432...
-        Cell cell = {
-            .x = snake->segments[segment_index].x,
-            .y = snake->segments[segment_index].y,
-            .drag = false
-        };
-
-        adjacent_full_direction_cell(direction_to_head, &cell.x, &cell.y);
-        adjacent_full_direction_cell(direction_to_tail, &cell.x, &cell.y);
-        FullDirection in_between = full_direction_in_between(direction_to_head, direction_to_tail);
-        result.can_be_pushed = _game_object_can_be_pushed(game, cell.x, cell.y, in_between);
-        if (result.can_be_pushed) {
-            _add_cell(&result, cell);
+    } else if (push_direction == direction_to_tail) {
+        adjacent_cell(direction_to_head, &first_move.x, &first_move.y);
+        if (_game_object_can_be_pushed(game, first_move.x, first_move.y, push_direction)) {
+            result.first = first_move;
         }
-        break;
-    }
-    case SNAKE_SEGMENT_PUSH_TYPE_OUTER_CORNER: {
-        // In this example, we're pushing cell 2 left with respect to the head.
-        // ......
-        // ...h..
-        // ...1X.
-        // .432X.
-        // ..XXX.
-        // ......
-
-        Cell cells[MAX_SNAKE_SEGMENT_PUSH_CELL_COUNT] = {0};
-        for (S32 i = 0; i < MAX_SNAKE_SEGMENT_PUSH_CELL_COUNT; i++) {
-            cells[i].x = snake->segments[segment_index].x;
-            cells[i].y = snake->segments[segment_index].y;
-            cells[i].drag = true;
-        }
-
-        adjacent_full_direction_cell(direction_to_head, &cells[0].x, &cells[0].y);
-        adjacent_full_direction_cell(opposite_full_direction(direction_to_tail), &cells[0].x, &cells[0].y);
-
-        adjacent_full_direction_cell(opposite_full_direction(direction_to_tail), &cells[1].x, &cells[1].y);
-
-        adjacent_full_direction_cell(opposite_full_direction(direction_to_head), &cells[2].x, &cells[2].y);
-        adjacent_full_direction_cell(opposite_full_direction(direction_to_tail), &cells[2].x, &cells[2].y);
-
-        adjacent_full_direction_cell(opposite_full_direction(direction_to_head), &cells[3].x, &cells[3].y);
-
-        adjacent_full_direction_cell(direction_to_tail, &cells[4].x, &cells[4].y);
-        adjacent_full_direction_cell(opposite_full_direction(direction_to_head), &cells[4].x, &cells[4].y);
-
-        FullDirection directions[MAX_SNAKE_SEGMENT_PUSH_CELL_COUNT] = {0};
-        directions[0] = full_direction_in_between(direction_to_head, opposite_full_direction(direction_to_tail));
-        directions[1] = opposite_full_direction(direction_to_tail);
-        directions[2] = full_direction_in_between(opposite_full_direction(direction_to_head), opposite_full_direction(direction_to_tail));
-        directions[3] = opposite_full_direction(direction_to_head);
-        directions[4] = full_direction_in_between(opposite_full_direction(direction_to_head), direction_to_tail);
-
-        bool can_be_pushed[MAX_SNAKE_SEGMENT_PUSH_CELL_COUNT];
-        bool cell_added[MAX_SNAKE_SEGMENT_PUSH_CELL_COUNT] = {0};
-        for (S32 i = 0; i < MAX_SNAKE_SEGMENT_PUSH_CELL_COUNT; i++) {
-            can_be_pushed[i] = _game_object_can_be_pushed(game, cells[i].x, cells[i].y, directions[i]);
-        }
-
-        // ......
-        // ...h..
-        // ...1W.
-        // .432W.
-        // ..WWW.
-        // ......
-
-        if (can_be_pushed[3] && can_be_pushed[4]) {
-            result.can_be_pushed = true;
-            if (result.cell_count == 0) {
-                cells[4].drag = false;
-            }
-            cell_added[4] = _add_cell(&result, cells[4]);
-            cell_added[3] = _add_cell(&result, cells[3]);
-        }
-
-        if (can_be_pushed[1] && can_be_pushed[2] && can_be_pushed[3]) {
-            result.can_be_pushed = true;
-            // deal with overlap
-            if (!cell_added[3]) {
-                cell_added[3] = _add_cell(&result, cells[3]);
-            }
-            cell_added[2] = _add_cell(&result, cells[2]);
-            cell_added[1] = _add_cell(&result, cells[1]);
-        }
-
-        if (can_be_pushed[0] && can_be_pushed[1]) {
-            result.can_be_pushed = true;
-            if (!cell_added[1]) {
-                cell_added[1] = _add_cell(&result, cells[1]);
-            }
-            cell_added[0] = _add_cell(&result, cells[0]);
-        }
-
-        // If the walls are setup such that the original cell would be disconnected, add it in,
-        // at the very end, here is an example.
-        // ...... ...... ....... .........
-        // ...h.. ...h.. ...h... ...h.....
-        // ...1W. ...1W. ...1W.. ...1W....
-        // 5432W. 543.W. .54.W.. ..52W....
-        // ....W. ..2.W. ..32W.. ..43W....
-        // ...... ...... ....... .........
-
-        // The important base configurations are:
-        // ..... ...... .......
-        // ...h. ...h.. ...h...
-        // ...1. ...1.. ...1W..
-        // 5432. 5432W. 5432...
-        // ....W ...... .......
-        // ..... ...... .......
-        if (!can_be_pushed[0] || !can_be_pushed[1] || !can_be_pushed[2]) {
-            Cell cell = {
-                .x = snake->segments[segment_index].x,
-                .y = snake->segments[segment_index].y,
-                .drag = true
-            };
-            _add_cell(&result, cell);
-        }
-        break;
-    }
-    default:
-    case SNAKE_SEGMENT_PUSH_TYPE_UNKNOWN:
-        break;
     }
 
     return result;
 }
 
-bool _snake_segment_push(Game* game, Snake* snake, S32 segment_index, FullDirection direction) {
-    SnakeSegmentCanBePushedResult can_be_pushed_result =
-        _snake_segment_can_be_pushed(game, snake, segment_index, direction);
-    if (!can_be_pushed_result.can_be_pushed) {
+bool _snake_segment_push(Game* game, Snake* snake, S32 segment_index, Direction direction) {
+    SnakeSegmentMove snake_segment_move =
+        _snake_segment_can_be_moved(game, snake, segment_index, direction);
+
+    if (snake_segment_move.second.x != 0 || snake_segment_move.second.y) {
+        _snake_drag(snake, segment_index, snake_segment_move.first.x, snake_segment_move.first.y);
+        _snake_drag(snake, segment_index, snake_segment_move.second.x, snake_segment_move.second.y);
+    } else if (snake_segment_move.first.x != 0 || snake_segment_move.first.x) {
+        snake->segments[segment_index].x = (S16)(snake_segment_move.first.x);
+        snake->segments[segment_index].y = (S16)(snake_segment_move.first.y);
+    } else {
         return false;
     }
-    for (S32 i = 0; i < can_be_pushed_result.cell_count; i++) {
-        if (can_be_pushed_result.cells[i].drag) {
-            _snake_drag(snake,
-                        segment_index,
-                        can_be_pushed_result.cells[i].x,
-                        can_be_pushed_result.cells[i].y);
-        } else {
-            snake->segments[segment_index].x = (S16)(can_be_pushed_result.cells[i].x);
-            snake->segments[segment_index].y = (S16)(can_be_pushed_result.cells[i].y);
-        }
-    }
+
     return true;
 }
 
-FullDirection _corner_push_direction_from_head(FullDirection direction_to_head,
-                                               bool left,
-                                               FullDirection vertical_direction,
-                                               FullDirection horizontal_direction) {
-    FullDirection result = {0};
-    if (left) {
-        if (direction_to_head == vertical_direction) {
-            result = full_direction_in_between(vertical_direction, horizontal_direction);
-        } else if (direction_to_head == horizontal_direction) {
-            result = opposite_full_direction(full_direction_in_between(vertical_direction,
-                                                                       horizontal_direction));
-        }
-    } else {
-        if (direction_to_head == vertical_direction) {
-            result = opposite_full_direction(full_direction_in_between(vertical_direction,
-                                                                       horizontal_direction));
-        } else if (direction_to_head == horizontal_direction) {
-            result = full_direction_in_between(vertical_direction, horizontal_direction);
-        }
-    }
-    return result;
-}
-
 void _snake_constrict(Snake* snake, Game* game) {
+    // TODO: update this comment.
     // First pass finds the shapes to operate on. This is so we don't operate on corners that we
     // create during this pass and only operate on the existing ones.
-    S32 last_segment_index = snake->length - 1;
 
     // How many elements were impacted by a constrict pass on this tick. If any, advance passed them
     // otherwise we will see the chain constrict effect.
     S32 constricted_elements = 0;
-    for (S32 e = snake->constrict_state.index; e < last_segment_index; e++) {
-        SnakeSegmentShape segment_shape = snake_segment_shape(snake, e);
-        FullDirection direction_to_head = snake_segment_full_direction_to_head(snake, e);
-        FullDirection push_direction = FULL_DIRECTION_UNKNOWN;
+    for (S32 e = snake->constrict_state.index; e < snake->length; e++) {
+        if (e == 1) {
+            SnakeSegmentShape shape = snake_segment_shape(snake, e);
+            if (shape == SNAKE_SEGMENT_SHAPE_VERTICAL ||
+                shape == SNAKE_SEGMENT_SHAPE_HORIZONTAL) {
+                continue;
+            }
+        }
 
-        switch(segment_shape){
-        case SNAKE_SEGMENT_SHAPE_VERTICAL:
-        case SNAKE_SEGMENT_SHAPE_HORIZONTAL:
-            if (e == 1) {
-                // Game design decision, do not constrict a straight segment when it is attached to
-                // the head.
-                break;
-            }
-            if (snake->constrict_state.left) {
-                push_direction = rotate_counter_clockwise_full_direction_for(direction_to_head, 2);
-            } else {
-                push_direction = rotate_clockwise_full_direction_for(direction_to_head, 2);
-            }
-            break;
-        case SNAKE_SEGMENT_SHAPE_NORTH_WEST_CORNER:
-            push_direction = _corner_push_direction_from_head(direction_to_head,
-                                                              snake->constrict_state.left,
-                                                              FULL_DIRECTION_NORTH,
-                                                              FULL_DIRECTION_WEST);
-            break;
-        case SNAKE_SEGMENT_SHAPE_NORTH_EAST_CORNER:
-            push_direction = _corner_push_direction_from_head(direction_to_head,
-                                                              snake->constrict_state.left,
-                                                              FULL_DIRECTION_NORTH,
-                                                              FULL_DIRECTION_EAST);
-            break;
-        case SNAKE_SEGMENT_SHAPE_SOUTH_WEST_CORNER:
-            push_direction = _corner_push_direction_from_head(direction_to_head,
-                                                              snake->constrict_state.left,
-                                                              FULL_DIRECTION_SOUTH,
-                                                              FULL_DIRECTION_WEST);
-            break;
-        case SNAKE_SEGMENT_SHAPE_SOUTH_EAST_CORNER:
-            push_direction = _corner_push_direction_from_head(direction_to_head,
-                                                              snake->constrict_state.left,
-                                                              FULL_DIRECTION_SOUTH,
-                                                              FULL_DIRECTION_EAST);
-            break;
-        default:
-            break;
+        Direction direction_to_head = snake_segment_direction_to_head(snake, e);
+        Direction push_direction = DIRECTION_NONE;
+        if (snake->constrict_state.left) {
+            push_direction = rotate_counter_clockwise(direction_to_head);
+        } else {
+            push_direction = rotate_clockwise(direction_to_head);
         }
 
         if (_snake_segment_push(game, snake, e, push_direction)) {
             // TODO: Change index based on the type of constriction.
-            constricted_elements = OUTPUT_CORNER_CONSTRICTED_SEGMENTS;
+            constricted_elements = 2;
             snake->constrict_state.index = e + constricted_elements;
             break;
         }
@@ -683,11 +378,11 @@ void game_update(Game* game, SnakeAction* snake_actions) {
                 _snake_constrict(game->snakes + s, game);
             }
         } else if (snake_action & SNAKE_ACTION_CONSTRICT_LEFT) {
-            game->snakes[s].constrict_state.index = 0;
+            game->snakes[s].constrict_state.index = 1;
             game->snakes[s].constrict_state.left = true;
             _snake_constrict(game->snakes + s, game);
         } else if (snake_action & SNAKE_ACTION_CONSTRICT_RIGHT) {
-            game->snakes[s].constrict_state.index = 0;
+            game->snakes[s].constrict_state.index = 1;
             game->snakes[s].constrict_state.left = false;
             _snake_constrict(game->snakes + s, game);
         }

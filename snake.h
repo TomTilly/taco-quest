@@ -88,7 +88,4 @@ SnakeSegmentShape snake_segment_shape(Snake* snake, S32 segment_index);
 Direction snake_segment_direction_to_head(Snake* snake, S32 segment_index);
 Direction snake_segment_direction_to_tail(Snake* snake, S32 segment_index);
 
-FullDirection snake_segment_full_direction_to_head(Snake* snake, S32 segment_index);
-FullDirection snake_segment_full_direction_to_tail(Snake* snake, S32 segment_index);
-
 #endif /* snake_h */

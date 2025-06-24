@@ -22,19 +22,6 @@ typedef enum {
 } Direction;
 
 typedef enum {
-    FULL_DIRECTION_NORTH,
-    FULL_DIRECTION_NORTH_EAST,
-    FULL_DIRECTION_EAST,
-    FULL_DIRECTION_SOUTH_EAST,
-    FULL_DIRECTION_SOUTH,
-    FULL_DIRECTION_SOUTH_WEST,
-    FULL_DIRECTION_WEST,
-    FULL_DIRECTION_NORTH_WEST,
-    FULL_DIRECTION_COUNT,
-    FULL_DIRECTION_UNKNOWN,
-} FullDirection;
-
-typedef enum {
     DIRECTION_RELATIONSHIP_SAME,
     DIRECTION_RELATIONSHIP_CLOCKWISE,
     DIRECTION_RELATIONSHIP_COUNTER_CLOCKWISE,
@@ -43,22 +30,12 @@ typedef enum {
 } DirectionRelationship;
 
 void adjacent_cell(Direction direction, S32* x, S32* y);
-void adjacent_full_direction_cell(FullDirection direction, S32* x, S32* y);
 
 // TODO: Document what direction_relationship() means, and possibly update the name.
 DirectionRelationship direction_relationship(Direction a, Direction b);
 Direction opposite_direction(Direction direction);
 Direction rotate_clockwise(Direction direction);
 Direction rotate_counter_clockwise(Direction direction);
-
-DirectionRelationship full_direction_relationship(FullDirection a, FullDirection b);
-FullDirection opposite_full_direction(FullDirection direction);
-FullDirection rotate_clockwise_full_direction(FullDirection direction);
-FullDirection rotate_clockwise_full_direction_for(FullDirection direction, S32 count);
-FullDirection rotate_counter_clockwise_full_direction(FullDirection direction);
-FullDirection rotate_counter_clockwise_full_direction_for(FullDirection direction, S32 count);
-
-FullDirection full_direction_in_between(FullDirection a, FullDirection b);
-bool directions_are_perpendicular(FullDirection a, FullDirection b);
+bool directions_are_perpendicular(Direction a, Direction b);
 
 #endif /* direction_h */
