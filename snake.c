@@ -173,8 +173,10 @@ void snake_draw(SDL_Renderer* renderer,
 }
 
 void snake_destroy(Snake* snake) {
-    free(snake->segments);
-    memset(snake, 0, sizeof(*snake));
+    if (snake->segments != NULL) {
+        free(snake->segments);
+        memset(snake, 0, sizeof(*snake));
+    }
 }
 
 size_t snake_serialize(const Snake* snake, void* buffer, size_t buffer_size) {
