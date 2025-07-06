@@ -72,7 +72,7 @@ void reset_game(Game* game) {
                 DIRECTION_SOUTH);
 
     snake_spawn(game->snakes + 2,
-                (S16)(level->width - 3),
+                (S16)(level->width - 2),
                 (S16)(level->height - 3),
                 DIRECTION_WEST);
 
@@ -96,9 +96,9 @@ void reset_game(Game* game) {
         "X......................X",
         "X......................X",
         "X......................X",
-        "X.................X....X",
-        "X....XXXXX........X....X",
-        "X.................X....X",
+        "X................X.....X",
+        "X....XXXXX.......X.....X",
+        "X................X.....X",
         "X......................X",
         "XXXXXXXXXXXXXXXXXXXXXXXX",
     };

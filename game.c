@@ -250,6 +250,7 @@ bool _game_object_push(Game* game, S32 x, S32 y, Direction direction) {
         default:
             break;
         }
+        break;
     case QUERIED_OBJECT_TYPE_SNAKE: {
         bool first_push = _snake_segment_push(game,
                                               queried_object.snake.index,
@@ -294,7 +295,6 @@ bool _snake_segment_push(Game* game, S32 snake_index, S32 segment_index, Directi
         }
     } else {
         Direction direction_to_tail = snake_segment_direction_to_tail(snake, segment_index);
-
         if (direction == direction_to_tail) {
             adjacent_cell(direction_to_head, &first_move.x, &first_move.y);
             if (_game_object_push(game, first_move.x, first_move.y, direction) ||
@@ -406,15 +406,14 @@ void game_update(Game* game, SnakeAction* snake_actions) {
     for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
         SnakeAction snake_action = snake_actions[s];
         if (game->snakes[s].constrict_state.index >= 0) {
-            // if (((snake_action & SNAKE_ACTION_CONSTRICT_LEFT_END) &&
-            //     game->snakes[s].constrict_state.left) ||
-            //     ((snake_action & SNAKE_ACTION_CONSTRICT_RIGHT_END) &&
-            //     !game->snakes[s].constrict_state.left)) {
-            //     game->snakes[s].constrict_state.index = -1;
-            // } else {
-            //     _snake_constrict(game, s);
-            // }
-            game->snakes[s].constrict_state.index = -1;
+            if (((snake_action & SNAKE_ACTION_CONSTRICT_LEFT_END) &&
+                  game->snakes[s].constrict_state.left) ||
+                ((snake_action & SNAKE_ACTION_CONSTRICT_RIGHT_END) &&
+                  !game->snakes[s].constrict_state.left)) {
+                game->snakes[s].constrict_state.index = -1;
+            } else {
+                _snake_constrict(game, s);
+            }
         } else if (snake_action & SNAKE_ACTION_CONSTRICT_LEFT) {
             game->snakes[s].constrict_state.index = 1;
             game->snakes[s].constrict_state.left = true;

@@ -404,9 +404,12 @@ Direction _direction_between_segments(SnakeSegment* first, SnakeSegment* second)
 }
 
 Direction snake_segment_direction_to_head(Snake* snake, S32 segment_index) {
-    if (segment_index >= snake->length ||
-        segment_index == 0) {
+    if (segment_index >= snake->length) {
         return DIRECTION_NONE;
+    }
+
+    if (segment_index == 0) {
+        return snake->direction;
     }
 
     SnakeSegment* curr_segment = snake->segments + segment_index;

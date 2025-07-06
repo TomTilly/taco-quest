@@ -56,7 +56,7 @@ CellType level_get_cell(Level* level, S32 x, S32 y) {
         return CELL_TYPE_INVALID;
     }
 
-    if (y < 0 || y >= level->width) {
+    if (y < 0 || y >= level->height) {
         return CELL_TYPE_INVALID;
     }
 
