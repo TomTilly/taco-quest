@@ -1,4 +1,23 @@
 --------------------------------------------------------------------------------
+7/6/2025: Discord
+
+Today:
+- Justin's shenanigrams
+- Justin fixed recursion-related constriction bug
+- Justin improved constriction logic around pushing other snakes
+
+Next Time:
+- Continue refining snake pushing logic
+- Beginning to work on crushing detection
+- Play test constriction logic
+
+--------------------------------------------------------------------------------
+6/22/2025: Discord
+
+Today:
+- Justin and Tom worked on constriction logic
+
+--------------------------------------------------------------------------------
 6/15/2025: Discord
 
 Today:
