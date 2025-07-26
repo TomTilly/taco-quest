@@ -27,7 +27,20 @@ typedef enum {
     SESSION_TYPE_CLIENT
 } SessionType;
 
+typedef struct {
+    bool enabled;
+    bool step_mode;
+    bool should_step;
+} DevState;
+
 static int __tick;
+
+bool dev_mode_should_step(const DevState * dev_state)
+{
+    if (!dev_state->enabled) return true;
+    if (!dev_state->step_mode) return true;
+    return dev_state->should_step;
+}
 
 uint64_t microseconds_between_timestamps(struct timespec* previous, struct timespec* current) {
     return (current->tv_sec - previous->tv_sec) * 1000000LL +
@@ -305,7 +318,10 @@ int main(S32 argc, char** argv) {
     PacketTransmissionState recv_game_state_state = {0};
     PacketTransmissionState recv_snake_action_states[MAX_SERVER_CLIENT_COUNT] = {0};
 
+    DevState dev_state = { 0 };
+
     bool quit = false;
+
     while (!quit) {
         // Calculate how much time has elapsed (in microseconds).
         struct timespec current_frame_timestamp = {0};
@@ -314,6 +330,7 @@ int main(S32 argc, char** argv) {
         last_frame_timestamp = current_frame_timestamp;
 
         SnakeAction snake_action = SNAKE_ACTION_NONE;
+
 
         // Handle events, such as input or window changes.
         SDL_Event event;
@@ -340,6 +357,9 @@ int main(S32 argc, char** argv) {
                     case SDLK_SPACE:
                         snake_action |= SNAKE_ACTION_CHOMP;
                         break;
+                    case SDLK_BACKQUOTE:
+                        dev_state.enabled = !dev_state.enabled;
+                        break;
                     }
                 } else if (game.state == GAME_STATE_WAITING) {
                     if (event.key.keysym.sym == SDLK_RETURN && session_type == SESSION_TYPE_SERVER) {
@@ -352,7 +372,22 @@ int main(S32 argc, char** argv) {
                         game.state = GAME_STATE_PLAYING;
                     }
                 }
-                break;
+
+                if (dev_state.enabled) {
+                    switch (event.key.keysym.sym) {
+                    case SDLK_TAB: // Switch to/from step mode
+                        dev_state.step_mode = !dev_state.step_mode;
+                        break;
+                    case SDLK_RETURN: // Signal to advance tick if in step mode
+                        if (dev_state.step_mode) {
+                            dev_state.should_step = true;
+                        }
+                        break;
+                    default:
+                        break;
+                    }
+                }
+                break; // SDL_KEYDOWN
             }
         }
 
@@ -361,8 +396,9 @@ int main(S32 argc, char** argv) {
         if (time_since_update_us >= GAME_SIMULATE_TIME_INTERVAL_US) {
             time_since_update_us -= GAME_SIMULATE_TIME_INTERVAL_US;
 
-            if (game.state == GAME_STATE_PLAYING) {
+            if (game.state == GAME_STATE_PLAYING && dev_mode_should_step(&dev_state)) {
                 game_should_tick = true;
+                dev_state.should_step = false;
                 __tick++;
             }
         }
@@ -600,7 +636,18 @@ int main(S32 argc, char** argv) {
         SDL_SetTextureColorMod(snake_texture, 255, 255, 255);
 
         PF_SetScale(font, scale * 2.0f);
+
+        if (dev_state.enabled) {
+            PF_SetForeground(font, 255, 255, 0, 255);
+            if ( dev_state.step_mode ) {
+                PF_RenderString(font, 2, 2, "Dev Step Mode!");
+            } else {
+                PF_RenderString(font, 2, 2, "Dev Mode!");
+            }
+        }
+
         PF_SetForeground(font, 255, 255, 255, 255);
+
         switch(session_type) {
         case SESSION_TYPE_CLIENT:
             if (game.state == GAME_STATE_WAITING) {
