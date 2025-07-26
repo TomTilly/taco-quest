@@ -644,6 +644,22 @@ int main(S32 argc, char** argv) {
             } else {
                 PF_RenderString(font, 2, 2, "Dev Mode!");
             }
+
+            PF_SetForeground(font, 0, 0, 0, 255);
+            PF_SetScale(font, scale);
+            PF_FontState font_state = PF_GetState(font);
+            for (S32 i = 0; i < MAX_SNAKE_COUNT; i++) {
+                Snake *snake = game.snakes + i;
+                for (S32 j = 1; j < snake->length; j++) {
+                    SnakeSegment *segment = snake->segments + j;
+                    PF_RenderChar(font,
+                                  (segment->x * cell_size) + (cell_size - (font_state.char_width * font_state.scale)) / 2,
+                                  (segment->y * cell_size) + (cell_size - (font_state.char_height * font_state.scale)) / 2,
+                                  '1' + j);
+                }
+            }
+
+            PF_SetScale(font, scale * 2.0f);
         }
 
         PF_SetForeground(font, 255, 255, 255, 255);
