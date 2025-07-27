@@ -27,10 +27,18 @@ typedef enum {
     SESSION_TYPE_CLIENT
 } SessionType;
 
+typedef enum {
+	SNAKE_SELECTION_STATE_NONE,	
+	SNAKE_SELECTION_STATE_SELECTED,	
+	SNAKE_SELECTION_STATE_PLACING,	
+} DevSnakeSelectionState;
+
 typedef struct {
     bool enabled;
     bool step_mode;
     bool should_step;
+    DevSnakeSelectionState snake_selection_state;
+    S32 snake_selection_index;
 } DevState;
 
 static int __tick;
@@ -125,6 +133,19 @@ void reset_game(Game* game) {
             }
         }
     }
+}
+
+S32 query_for_snake_at(Game* game, S32 cell_x, S32 cell_y) {
+    for (S32 i = 0; i < MAX_SNAKE_COUNT; i++) {
+        Snake *snake = game->snakes + i;
+        for (S32 j = 1; j < snake->length; j++) {
+            SnakeSegment *segment = snake->segments + j;
+            if (segment->x == cell_x && segment->y == cell_y) {
+                return i;
+            }
+        }
+    }
+    return -1;
 }
 
 int main(S32 argc, char** argv) {
@@ -302,6 +323,8 @@ int main(S32 argc, char** argv) {
         fprintf(stderr, "Failed to create texture from surface %s\n", SDL_GetError());
         return EXIT_FAILURE;
     }
+        
+    S32 cell_size = min_display_dimension / max_level_dimension;
 
     int64_t time_since_update_us = 0;
 
@@ -359,6 +382,9 @@ int main(S32 argc, char** argv) {
                         break;
                     case SDLK_BACKQUOTE:
                         dev_state.enabled = !dev_state.enabled;
+                        if (!dev_state.enabled) {
+                            dev_state = (DevState){0};
+                        }
                         break;
                     }
                 } else if (game.state == GAME_STATE_WAITING) {
@@ -388,6 +414,85 @@ int main(S32 argc, char** argv) {
                     }
                 }
                 break; // SDL_KEYDOWN
+            }
+        }
+
+		if (dev_state.enabled) {
+            int mouse_x = 0;
+            int mouse_y = 0;
+            U32 mouse_buttons_state = SDL_GetMouseState(&mouse_x, &mouse_y);
+           
+            if (mouse_buttons_state & SDL_BUTTON(SDL_BUTTON_LEFT)) {
+                S32 cell_x = mouse_x / cell_size;
+                S32 cell_y = mouse_y / cell_size;
+
+                switch (dev_state.snake_selection_state) {
+	            case SNAKE_SELECTION_STATE_NONE: {
+                    S32 selected_snake_index = query_for_snake_at(&game, cell_x, cell_y);
+                    if (selected_snake_index >= 0) {
+                        dev_state.snake_selection_index = selected_snake_index;
+                        dev_state.snake_selection_state = SNAKE_SELECTION_STATE_SELECTED;
+                    }
+                    break;
+                }
+	            case SNAKE_SELECTION_STATE_SELECTED: {
+                    S32 selected_snake_index = query_for_snake_at(&game, cell_x, cell_y);
+                    if (selected_snake_index < 0) {
+                        Snake* snake = game.snakes + dev_state.snake_selection_index;
+                        snake->length = 1;
+                        snake->segments[0].x = cell_x;
+                        snake->segments[0].y = cell_y;
+                        dev_state.snake_selection_state = SNAKE_SELECTION_STATE_PLACING;
+                    } else if (selected_snake_index != dev_state.snake_selection_index) {
+                        dev_state.snake_selection_index = selected_snake_index;
+                    }
+                    break;
+                }
+	            case SNAKE_SELECTION_STATE_PLACING: {
+                    Snake* snake = game.snakes + dev_state.snake_selection_index;
+                    S32 previous_index = snake->length - 1;
+                    Direction adjacent_dir = direction_between_cells(cell_x,
+                                                                     cell_y,
+                                                                     snake->segments[previous_index].x,
+                                                                     snake->segments[previous_index].y);
+                    if (adjacent_dir != DIRECTION_NONE) {
+                        S32 previous_previous_index = snake->length - 2;
+                        if (previous_previous_index >= 0 &&
+                            snake->segments[previous_previous_index].x == cell_x &&
+                            snake->segments[previous_previous_index].y == cell_y) {
+                           snake->length--;
+                           break;
+                        }
+
+                        CellType cell_type = level_get_cell(&game.level, cell_x, cell_y); 
+                        if (cell_type != CELL_TYPE_EMPTY) {
+                           break;
+                        }
+                        if (query_for_snake_at(&game, cell_x, cell_y) >= 0) {
+                           break;
+                        }
+
+                        // face the snake away from where we're dragging.
+                        if (snake->length == 1) {
+                           snake->direction = opposite_direction(adjacent_dir);
+                        }
+
+                        S32 new_index = snake->length;
+
+                        snake->length++;
+                        snake->segments[new_index].x = cell_x;
+                        snake->segments[new_index].y = cell_y;
+                        snake->segments[new_index].health = SNAKE_SEGMENT_MAX_HEALTH;
+                    }
+                    break;
+                }
+                default:
+                    break;
+                }
+            } else {
+                if (dev_state.snake_selection_state == SNAKE_SELECTION_STATE_PLACING) {
+                    dev_state.snake_selection_state = SNAKE_SELECTION_STATE_NONE;
+                }
             }
         }
 
@@ -577,7 +682,6 @@ int main(S32 argc, char** argv) {
         SDL_RenderClear(renderer);
 
         // Draw level
-        S32 cell_size = min_display_dimension / max_level_dimension;
         float scale = (float)(cell_size / 16); // 16 is the sprite sheet tile size.
 
         for(S32 y = 0; y < level->height; y++) {
@@ -643,6 +747,10 @@ int main(S32 argc, char** argv) {
                 PF_RenderString(font, 2, 2, "Dev Step Mode!");
             } else {
                 PF_RenderString(font, 2, 2, "Dev Mode!");
+            }
+
+            if (dev_state.snake_selection_state != SNAKE_SELECTION_STATE_NONE) {
+                PF_RenderString(font, window_width / 3, 2, "Selected Snake %d", dev_state.snake_selection_index);
             }
 
             PF_SetForeground(font, 0, 0, 0, 255);

@@ -21,5 +21,7 @@ typedef enum {
 
 void adjacent_cell(Direction direction, S32* x, S32* y);
 Direction opposite_direction(Direction direction);
+// A to B
+Direction direction_between_cells(S32 a_x, S32 a_y, S32 b_x, S32 b_y);
 
 #endif /* direction_h */
