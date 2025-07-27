@@ -1,4 +1,21 @@
 --------------------------------------------------------------------------------
+7/26/2025: In Person and over Discord since Tom T is sick
+
+Today:
+- Tom F created initial dev mode which allows pausing and stepping ticks forward
+  manually.
+- Tom T drew numbers on snake segments when dev mode is enabled.
+- Justin allowed repositioning snakes in dev mode with the mouse.
+- Pizza, wings, "salad" and ice cream and cookies and brownies and juice
+  beverage from concentra were all delicious.
+
+Next Time:
+- Continue on constricting ?
+- Other ideas for dev mode ?
+- What happens when playing multiplayer and using dev mode ?
+- More shenanigrams ?
+
+--------------------------------------------------------------------------------
 7/6/2025: Discord
 
 Today:
