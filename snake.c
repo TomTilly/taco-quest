@@ -421,13 +421,21 @@ Direction snake_segment_direction_to_head(Snake* snake, S32 segment_index) {
 Direction snake_segment_direction_to_tail(Snake* snake, S32 segment_index) {
     // Check out of bounds but also check for tail, since there is no direction from the tail to
     // itself.
-    if (segment_index >= (snake->length - 1) ||
-        segment_index == 0) {
+    if (segment_index == 0 || snake->length == 0) {
         return DIRECTION_NONE;
     }
 
     SnakeSegment* curr_segment = snake->segments + segment_index;
-    SnakeSegment* next_segment = curr_segment + 1;
 
+    if(segment_index >= (snake->length - 1)) {
+        if (snake->length == 1) {
+            return opposite_direction(snake->direction);
+        }
+
+        SnakeSegment* prev_segment = snake->segments + segment_index - 1;
+        return opposite_direction(_direction_between_segments(prev_segment, curr_segment));
+    }
+
+    SnakeSegment* next_segment = curr_segment + 1;
     return _direction_between_segments(curr_segment, next_segment);
 }
