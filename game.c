@@ -266,13 +266,19 @@ typedef struct {
     S32 y;
 } CellMove;
 
-bool _game_object_push(Game* game, S32 x, S32 y, Direction direction);
+typedef enum {
+    PUSH_OBJECT_EMPTY,
+    PUSH_OBJECT_SUCCESS,
+    PUSH_OBJECT_FAIL
+} PushResult;
+
+PushResult _game_object_push(Game* game, S32 x, S32 y, Direction direction);
 
 bool _taco_push(Game* game, S32 x, S32 y, Direction direction) {
     S32 adjacent_x = x;
     S32 adjacent_y = y;
     adjacent_cell(direction, &adjacent_x, &adjacent_y);
-    if (!_game_object_push(game, adjacent_x, adjacent_y, direction)) {
+    if (_game_object_push(game, adjacent_x, adjacent_y, direction) == PUSH_OBJECT_FAIL) {
         return false;
     }
 
@@ -286,26 +292,32 @@ bool _game_empty_at(Game* game, S32 x, S32 y) {
     return queried_object.type == QUERIED_OBJECT_TYPE_NONE;
 }
 
-bool _game_object_push(Game* game, S32 x, S32 y, Direction direction) {
+PushResult _game_object_push(Game* game, S32 x, S32 y, Direction direction) {
     QueriedObject queried_object = game_query(game, x, y);
     switch (queried_object.type) {
     case QUERIED_OBJECT_TYPE_NONE:
-        return true;
+        return PUSH_OBJECT_EMPTY;
     case QUERIED_OBJECT_TYPE_CELL:
         switch(queried_object.cell) {
         case CELL_TYPE_EMPTY:
-            return true;
+            return PUSH_OBJECT_EMPTY;
         case CELL_TYPE_TACO:
-            return _taco_push(game, x, y, direction);
+            if (_taco_push(game, x, y, direction)) {
+                return PUSH_OBJECT_SUCCESS;
+            }
+            return PUSH_OBJECT_FAIL;
         default:
             break;
         }
         break;
     case QUERIED_OBJECT_TYPE_SNAKE:
-        return snake_segment_push(game,
-                                  queried_object.snake.index,
-                                  queried_object.snake.segment_index,
-                                  direction);
+        if (snake_segment_push(game,
+                               queried_object.snake.index,
+                               queried_object.snake.segment_index,
+                               direction)) {
+            return PUSH_OBJECT_SUCCESS;
+        }
+        return PUSH_OBJECT_FAIL;
     default:
         break;
     }
@@ -367,6 +379,9 @@ bool snake_segment_push(Game* game, S32 snake_index, S32 segment_index, Directio
     Snake* snake = game->snakes + snake_index;
     SnakeSegment* segment_to_move = snake->segments + segment_index;
 
+    S32 original_x = segment_to_move->x;
+    S32 original_y = segment_to_move->y;
+
     Direction direction_to_head = snake_segment_direction_to_head(snake, segment_index);
     Direction direction_to_tail = snake_segment_direction_to_tail(snake, segment_index);
 
@@ -386,11 +401,18 @@ bool snake_segment_push(Game* game, S32 snake_index, S32 segment_index, Directio
         adjacent_cell(direction, &first_cell_to_check_x, &first_cell_to_check_y);
 
         if (!_game_empty_at(game, first_cell_to_check_x, first_cell_to_check_y)) {
-            // if (!_game_object_push(game, first_cell_to_check_x, first_cell_to_check_y, direction) &&
-            //     !_game_object_push(game, first_cell_to_check_x, first_cell_to_check_y, direction_to_tail)) {
-            //     return false;
-            // }
-            return false;
+            PushResult first_push = _game_object_push(game, first_cell_to_check_x, first_cell_to_check_y, direction);
+            PushResult second_push = PUSH_OBJECT_EMPTY;
+            if (first_push == PUSH_OBJECT_FAIL) {
+                second_push = _game_object_push(game, first_cell_to_check_x, first_cell_to_check_y, direction_to_tail);
+                if (second_push == PUSH_OBJECT_FAIL) {
+                    return false;
+                }
+            }
+            if (first_push == PUSH_OBJECT_SUCCESS || second_push == PUSH_OBJECT_SUCCESS) {
+                PushResult push_result = _game_object_push(game, original_x, original_y, direction);
+                return push_result != PUSH_OBJECT_FAIL;
+            }
         }
 
         S32 final_cell_move_x = first_cell_to_check_x;
@@ -398,11 +420,18 @@ bool snake_segment_push(Game* game, S32 snake_index, S32 segment_index, Directio
         adjacent_cell(direction_to_tail, &final_cell_move_x, &final_cell_move_y);
 
         if (!_game_empty_at(game, final_cell_move_x, final_cell_move_y)) {
-            // if (!_game_object_push(game, final_cell_move_x, final_cell_move_y, direction) &&
-            //     !_game_object_push(game, final_cell_move_x, final_cell_move_y, direction_to_tail)) {
-            //     return false;
-            // }
-            return false;
+            PushResult first_push = _game_object_push(game, final_cell_move_x, final_cell_move_y, direction);
+            PushResult second_push = PUSH_OBJECT_EMPTY;
+            if (first_push == PUSH_OBJECT_FAIL) {
+                second_push = _game_object_push(game, final_cell_move_x, final_cell_move_y, direction_to_tail);
+                if (second_push == PUSH_OBJECT_FAIL) {
+                    return false;
+                }
+            }
+            if (first_push == PUSH_OBJECT_SUCCESS || second_push == PUSH_OBJECT_SUCCESS) {
+                PushResult push_result = _game_object_push(game, original_x, original_y, direction);
+                return push_result != PUSH_OBJECT_FAIL;
+            }
         }
 
         segment_to_move->x = (S16)(final_cell_move_x);
@@ -432,11 +461,18 @@ bool snake_segment_push(Game* game, S32 snake_index, S32 segment_index, Directio
         adjacent_cell(direction_to_head, &final_cell_move_x, &final_cell_move_y);
 
         if (!_game_empty_at(game, final_cell_move_x, final_cell_move_y)) {
-            // if (!_game_object_push(game, final_cell_move_x, final_cell_move_y, direction_to_tail) &&
-            //     !_game_object_push(game, final_cell_move_x, final_cell_move_y, direction_to_head)) {
-            //     return false;
-            // }
-            return false;
+            PushResult first_push = _game_object_push(game, final_cell_move_x, final_cell_move_y, direction_to_tail);
+            PushResult second_push = PUSH_OBJECT_EMPTY;
+            if (first_push == PUSH_OBJECT_FAIL) {
+                second_push = _game_object_push(game, final_cell_move_x, final_cell_move_y, direction_to_head);
+                if (second_push == PUSH_OBJECT_FAIL) {
+                    return false;
+                }
+            }
+            if (first_push == PUSH_OBJECT_SUCCESS || second_push == PUSH_OBJECT_SUCCESS) {
+                PushResult push_result = _game_object_push(game, original_x, original_y, direction);
+                return push_result != PUSH_OBJECT_FAIL;
+            }
         }
 
         if ((segment_index + 1) < snake->length) {
@@ -466,24 +502,38 @@ bool snake_segment_push(Game* game, S32 snake_index, S32 segment_index, Directio
         S32 first_cell_to_check_y = segment_to_move->y;
         adjacent_cell(direction, &first_cell_to_check_x, &first_cell_to_check_y);
 
-        if (!_game_empty_at(game, first_cell_to_check_x, first_cell_to_check_y)) {
-            // if (!_game_object_push(game, first_cell_to_check_x, first_cell_to_check_y, direction) &&
-            //     !_game_object_push(game, first_cell_to_check_x, first_cell_to_check_y, direction_to_tail)) {
-            //     return false;
-            // }
-            return false;
-        }
-
         S32 final_cell_move_x = first_cell_to_check_x;
         S32 final_cell_move_y = first_cell_to_check_y;
         adjacent_cell(direction_to_head, &final_cell_move_x, &final_cell_move_y);
 
+        if (!_game_empty_at(game, first_cell_to_check_x, first_cell_to_check_y)) {
+            PushResult first_push = _game_object_push(game, first_cell_to_check_x, first_cell_to_check_y, direction);
+            PushResult second_push = PUSH_OBJECT_EMPTY;
+            if (first_push == PUSH_OBJECT_FAIL) {
+                second_push = _game_object_push(game, first_cell_to_check_x, first_cell_to_check_y, direction_to_tail);
+                if (second_push == PUSH_OBJECT_FAIL) {
+                    return false;
+                }
+            }
+            if (first_push == PUSH_OBJECT_SUCCESS || second_push == PUSH_OBJECT_SUCCESS) {
+                PushResult push_result = _game_object_push(game, original_x, original_y, direction);
+                return push_result != PUSH_OBJECT_FAIL;
+            }
+        }
+
         if (!_game_empty_at(game, final_cell_move_x, final_cell_move_y)) {
-            // if (!_game_object_push(game, final_cell_move_x, final_cell_move_y, direction) &&
-            //     !_game_object_push(game, final_cell_move_x, final_cell_move_y, direction_to_tail)) {
-            //     return false;
-            // }
-            return false;
+            PushResult first_push = _game_object_push(game, final_cell_move_x, final_cell_move_y, direction);
+            PushResult second_push = PUSH_OBJECT_EMPTY;
+            if (first_push == PUSH_OBJECT_FAIL) {
+                second_push = _game_object_push(game, final_cell_move_x, final_cell_move_y, direction_to_tail);
+                if (second_push == PUSH_OBJECT_FAIL) {
+                    return false;
+                }
+            }
+            if (first_push == PUSH_OBJECT_SUCCESS || second_push == PUSH_OBJECT_SUCCESS) {
+                PushResult push_result = _game_object_push(game, original_x, original_y, direction);
+                return push_result != PUSH_OBJECT_FAIL;
+            }
         }
 
         segment_to_move->x = (S16)(final_cell_move_x);
@@ -518,18 +568,29 @@ bool snake_segment_push(Game* game, S32 snake_index, S32 segment_index, Directio
     adjacent_cell(direction_to_head, &final_cell_move_x, &final_cell_move_y);
 
     if (!_game_empty_at(game, first_cell_to_check_x, first_cell_to_check_y)) {
-        // if (!_game_object_push(game, first_cell_to_check_x, first_cell_to_check_y, direction_to_tail)) {
-        //     return false;
-        // }
-        return false;
+        PushResult push = _game_object_push(game, first_cell_to_check_x, first_cell_to_check_y, direction_to_tail);
+        if (push == PUSH_OBJECT_FAIL) {
+            return false;
+        }
+        if (push == PUSH_OBJECT_SUCCESS) {
+            PushResult push_result = _game_object_push(game, original_x, original_y, direction);
+            return push_result != PUSH_OBJECT_FAIL;
+        }
     }
 
     if (!_game_empty_at(game, second_cell_to_check_x, second_cell_to_check_y)) {
-        // if (!_game_object_push(game, second_cell_to_check_x, second_cell_to_check_y, direction_to_tail) &&
-        //     !_game_object_push(game, second_cell_to_check_x, second_cell_to_check_y, opposite_direction(direction_to_head))) {
-        //     return false;
-        // }
-        return false;
+        PushResult first_push = _game_object_push(game, second_cell_to_check_x, second_cell_to_check_y, direction_to_tail);
+        PushResult second_push = PUSH_OBJECT_EMPTY;
+        if (first_push == PUSH_OBJECT_FAIL) {
+            second_push = _game_object_push(game, second_cell_to_check_x, second_cell_to_check_y, opposite_direction(direction_to_head));
+            if (second_push == PUSH_OBJECT_FAIL) {
+                return false;
+            }
+        }
+        if (first_push == PUSH_OBJECT_SUCCESS || second_push == PUSH_OBJECT_SUCCESS) {
+            PushResult push_result = _game_object_push(game, original_x, original_y, direction);
+            return push_result != PUSH_OBJECT_FAIL;
+        }
     }
 
     segment_to_move->x = (S16)(second_cell_to_check_x);
