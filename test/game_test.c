@@ -239,6 +239,42 @@ bool snake_constrict_test(const char** input_level,
     return result;
 }
 
+bool snake_segment_constrict_test(const char** input_level,
+                                  const char** output_level,
+                                  S32 segment_index,
+                                  bool left) {
+    Game input_game = {0};
+    game_from_string(input_level, &input_game);
+
+    snake_segment_constrict(&input_game, 0, segment_index, left);
+
+    Game output_game = {0};
+    game_from_string(output_level, &output_game);
+
+    bool result = games_are_equal(&input_game, &output_game);
+    game_destroy(&input_game);
+    game_destroy(&output_game);
+    return result;
+}
+
+bool snake_segment_push_test(const char** input_level,
+                             const char** output_level,
+                             S32 segment_index,
+                             Direction direction) {
+    Game input_game = {0};
+    game_from_string(input_level, &input_game);
+
+    snake_segment_push(&input_game, 0, segment_index, direction);
+
+    Game output_game = {0};
+    game_from_string(output_level, &output_game);
+
+    bool result = games_are_equal(&input_game, &output_game);
+    game_destroy(&input_game);
+    game_destroy(&output_game);
+    return result;
+}
+
 int main(int argc, char** argv) {
     (void)(argc);
     (void)(argv);
@@ -428,6 +464,713 @@ int main(int argc, char** argv) {
 
     // Straight
     // Right Vertical North
+    // {
+    //     const char* input_level[] = {
+    //         "..a..",
+    //         "..b..",
+    //         "..c..",
+    //         "..d..",
+    //         "..e..",
+    //         NULL
+    //     };
+
+    //     const char* output_level[] = {
+    //         "..a..",
+    //         "..bc.",
+    //         "..ed.",
+    //         ".....",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, NULL));
+    // }
+
+    // // Left Vertical North
+    // {
+    //     const char* input_level[] = {
+    //         "..a..",
+    //         "..b..",
+    //         "..c..",
+    //         "..d..",
+    //         "..e..",
+    //         NULL
+    //     };
+
+    //     const char* output_level[] = {
+    //         "..a..",
+    //         ".cb..",
+    //         ".de..",
+    //         ".....",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, NULL));
+    // }
+
+    // // Right Vertical South
+    // {
+    //     const char* input_level[] = {
+    //         "..e..",
+    //         "..d..",
+    //         "..c..",
+    //         "..b..",
+    //         "..a..",
+    //         NULL
+    //     };
+
+    //     const char* output_level[] = {
+    //         ".....",
+    //         ".....",
+    //         ".de..",
+    //         ".cb..",
+    //         "..a..",
+    //         NULL
+    //     };
+
+    //     Direction direction = DIRECTION_SOUTH;
+    //     EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, &direction));
+    // }
+
+    // // Left Vertical South
+    // {
+    //     const char* input_level[] = {
+    //         "..e..",
+    //         "..d..",
+    //         "..c..",
+    //         "..b..",
+    //         "..a..",
+    //         NULL
+    //     };
+
+    //     const char* output_level[] = {
+    //         ".....",
+    //         ".....",
+    //         "..ed.",
+    //         "..bc.",
+    //         "..a..",
+    //         NULL
+    //     };
+
+    //     Direction direction = DIRECTION_SOUTH;
+    //     EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, &direction));
+    // }
+
+    // // Right Horizontal West
+    // {
+    //     const char* input_level[] = {
+    //         ".....",
+    //         ".....",
+    //         "abcde",
+    //         ".....",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     const char* output_level[] = {
+    //         ".....",
+    //         ".cd..",
+    //         "abe..",
+    //         ".....",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     Direction direction = DIRECTION_WEST;
+    //     EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, &direction));
+    // }
+
+    // // Left Horizontal West
+    // {
+    //     const char* input_level[] = {
+    //         ".....",
+    //         ".....",
+    //         "abcde",
+    //         ".....",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     const char* output_level[] = {
+    //         ".....",
+    //         ".....",
+    //         "abe..",
+    //         ".cd..",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     Direction direction = DIRECTION_WEST;
+    //     EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, &direction));
+    // }
+
+    // // Right Horizontal East
+    // {
+    //     const char* input_level[] = {
+    //         ".....",
+    //         ".....",
+    //         "edcba",
+    //         ".....",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     const char* output_level[] = {
+    //         ".....",
+    //         ".....",
+    //         "..eba",
+    //         "..dc.",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     Direction direction = DIRECTION_EAST;
+    //     EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, &direction));
+    // }
+
+    // // Left Horizontal East
+    // {
+    //     const char* input_level[] = {
+    //         ".....",
+    //         ".....",
+    //         "edcba",
+    //         ".....",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     const char* output_level[] = {
+    //         ".....",
+    //         "..dc.",
+    //         "..eba",
+    //         ".....",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     Direction direction = DIRECTION_EAST;
+    //     EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, &direction));
+    // }
+
+    // // Inner Corner
+    // // Right North East
+    // {
+    //     const char* input_level[] = {
+    //         "..a..",
+    //         "..bc.",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     const char* output_level[] = {
+    //         "..ab.",
+    //         "...c.",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, NULL));
+    // }
+
+    // // Left North West
+    // {
+    //     const char* input_level[] = {
+    //         "..a..",
+    //         ".cb..",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     const char* output_level[] = {
+    //         ".ba..",
+    //         ".c...",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, NULL));
+    // }
+
+    // // Right South East
+    // {
+    //     const char* input_level[] = {
+    //         ".....",
+    //         "..ba.",
+    //         "..c..",
+    //         NULL
+    //     };
+
+    //     const char* output_level[] = {
+    //         ".....",
+    //         "...a.",
+    //         "..cb.",
+    //         NULL
+    //     };
+
+    //     Direction direction = DIRECTION_EAST;
+    //     EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, &direction));
+    // }
+
+    // // Left South West
+    // {
+    //     const char* input_level[] = {
+    //         ".....",
+    //         ".ab..",
+    //         "..c..",
+    //         NULL
+    //     };
+
+    //     const char* output_level[] = {
+    //         ".....",
+    //         ".a...",
+    //         ".bc..",
+    //         NULL
+    //     };
+
+    //     Direction direction = DIRECTION_WEST;
+    //     EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, &direction));
+    // }
+
+    // // Collision
+
+    // // Straight, first wall
+
+    // // Right Vertical North
+    // {
+    //     const char* input_level[] = {
+    //         "..a..",
+    //         "..bW.",
+    //         "..c..",
+    //         "..d..",
+    //         "..e..",
+    //         NULL
+    //     };
+
+    //     const char* output_level[] = {
+    //         "..a..",
+    //         "..bW.",
+    //         "..cd.",
+    //         "...e.",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, NULL));
+    // }
+
+    // // Left Vertical North
+    // {
+    //     const char* input_level[] = {
+    //         "..a..",
+    //         ".Wb..",
+    //         "..c..",
+    //         "..d..",
+    //         "..e..",
+    //         NULL
+    //     };
+
+    //     const char* output_level[] = {
+    //         "..a..",
+    //         ".Wb..",
+    //         ".dc..",
+    //         ".e...",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, NULL));
+    // }
+
+    // // Right Vertical South
+    // {
+    //     const char* input_level[] = {
+    //         "..e..",
+    //         "..d..",
+    //         "..c..",
+    //         ".Wb..",
+    //         "..a..",
+    //         NULL
+    //     };
+
+    //     const char* output_level[] = {
+    //         ".....",
+    //         ".e...",
+    //         ".dc..",
+    //         ".Wb..",
+    //         "..a..",
+    //         NULL
+    //     };
+
+    //     Direction direction = DIRECTION_SOUTH;
+    //     EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, &direction));
+    // }
+
+    // // Left Vertical South
+    // {
+    //     const char* input_level[] = {
+    //         "..e..",
+    //         "..d..",
+    //         "..c..",
+    //         "..bW.",
+    //         "..a..",
+    //         NULL
+    //     };
+
+    //     const char* output_level[] = {
+    //         ".....",
+    //         "...e.",
+    //         "..cd.",
+    //         "..bW.",
+    //         "..a..",
+    //         NULL
+    //     };
+
+    //     Direction direction = DIRECTION_SOUTH;
+    //     EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, &direction));
+    // }
+
+    // // Right Horizontal West
+    // {
+    //     const char* input_level[] = {
+    //         ".....",
+    //         ".W...",
+    //         "abcde",
+    //         ".....",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     const char* output_level[] = {
+    //         ".....",
+    //         ".Wde.",
+    //         "abc..",
+    //         ".....",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     Direction direction = DIRECTION_WEST;
+    //     EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, &direction));
+    // }
+
+    // // Left Horizontal West
+    // {
+    //     const char* input_level[] = {
+    //         ".....",
+    //         ".....",
+    //         "abcde",
+    //         ".W...",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     const char* output_level[] = {
+    //         ".....",
+    //         ".....",
+    //         "abc..",
+    //         ".Wde.",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     Direction direction = DIRECTION_WEST;
+    //     EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, &direction));
+    // }
+
+    // // Right Horizontal East
+    // {
+    //     const char* input_level[] = {
+    //         ".....",
+    //         ".....",
+    //         "edcba",
+    //         "...W.",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     const char* output_level[] = {
+    //         ".....",
+    //         ".....",
+    //         "..cba",
+    //         ".edW.",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     Direction direction = DIRECTION_EAST;
+    //     EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, &direction));
+    // }
+
+    // // Left Horizontal East
+    // {
+    //     const char* input_level[] = {
+    //         ".....",
+    //         "...W.",
+    //         "edcba",
+    //         ".....",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     const char* output_level[] = {
+    //         ".....",
+    //         ".edW.",
+    //         "..cba",
+    //         ".....",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     Direction direction = DIRECTION_EAST;
+    //     EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, &direction));
+    // }
+
+    // // Straight, second wall
+
+    // // Right Vertical North
+    // {
+    //     const char* input_level[] = {
+    //         "..a..",
+    //         "..b..",
+    //         "..cW.",
+    //         "..d..",
+    //         "..e..",
+    //         NULL
+    //     };
+
+    //     const char* output_level[] = {
+    //         "..a..",
+    //         "..b..",
+    //         "..cW.",
+    //         "..de.",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, NULL));
+    // }
+
+    // // Left Vertical North
+    // {
+    //     const char* input_level[] = {
+    //         "..a..",
+    //         "..b..",
+    //         ".Wc..",
+    //         "..d..",
+    //         "..e..",
+    //         NULL
+    //     };
+
+    //     const char* output_level[] = {
+    //         "..a..",
+    //         "..b..",
+    //         ".Wc..",
+    //         ".ed..",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, NULL));
+    // }
+
+    // // Right Vertical South
+    // {
+    //     const char* input_level[] = {
+    //         "..e..",
+    //         "..d..",
+    //         ".Wc..",
+    //         "..b..",
+    //         "..a..",
+    //         NULL
+    //     };
+
+    //     const char* output_level[] = {
+    //         ".....",
+    //         ".ed..",
+    //         ".Wc..",
+    //         "..b..",
+    //         "..a..",
+    //         NULL
+    //     };
+
+    //     Direction direction = DIRECTION_SOUTH;
+    //     EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, &direction));
+    // }
+
+    // // Left Vertical South
+    // {
+    //     const char* input_level[] = {
+    //         "..e..",
+    //         "..d..",
+    //         "..cW.",
+    //         "..b..",
+    //         "..a..",
+    //         NULL
+    //     };
+
+    //     const char* output_level[] = {
+    //         ".....",
+    //         "..de.",
+    //         "..cW.",
+    //         "..b..",
+    //         "..a..",
+    //         NULL
+    //     };
+
+    //     Direction direction = DIRECTION_SOUTH;
+    //     EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, &direction));
+    // }
+
+    // // Right Horizontal West
+    // {
+    //     const char* input_level[] = {
+    //         ".....",
+    //         ".....",
+    //         ".dcba",
+    //         ".eW..",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     const char* output_level[] = {
+    //         ".....",
+    //         ".....",
+    //         ".dcba",
+    //         ".eW..",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     Direction direction = DIRECTION_EAST;
+    //     EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, &direction));
+    // }
+
+    // // Left Horizontal West
+    // {
+    //     const char* input_level[] = {
+    //         ".....",
+    //         "..W..",
+    //         "edcba",
+    //         ".....",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     const char* output_level[] = {
+    //         ".....",
+    //         ".eW..",
+    //         ".dcba",
+    //         ".....",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     Direction direction = DIRECTION_EAST;
+    //     EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, &direction));
+    // }
+
+    // // Right Horizontal East
+    // {
+    //     const char* input_level[] = {
+    //         ".....",
+    //         ".....",
+    //         "edcba",
+    //         "..W..",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     const char* output_level[] = {
+    //         ".....",
+    //         ".....",
+    //         ".dcba",
+    //         ".eW..",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     Direction direction = DIRECTION_EAST;
+    //     EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, &direction));
+    // }
+
+    // // Left Horizontal East
+    // {
+    //     const char* input_level[] = {
+    //         ".....",
+    //         "..W..",
+    //         "edcba",
+    //         ".....",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     const char* output_level[] = {
+    //         ".....",
+    //         ".eW..",
+    //         ".dcba",
+    //         ".....",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     Direction direction = DIRECTION_EAST;
+    //     EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, &direction));
+    // }
+
+    // // Inner Corner, Wall
+
+    // // Right North East
+    // {
+    //     const char* input_level[] = {
+    //         "..aW.",
+    //         "..bc.",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     EXPECT(snake_constrict_test(input_level, input_level, SNAKE_ACTION_CONSTRICT_RIGHT, NULL));
+    // }
+
+    // // Left North West
+    // {
+    //     const char* input_level[] = {
+    //         ".Wa..",
+    //         ".cb..",
+    //         ".....",
+    //         NULL
+    //     };
+
+    //     EXPECT(snake_constrict_test(input_level, input_level, SNAKE_ACTION_CONSTRICT_LEFT, NULL));
+    // }
+
+    // // Right South East
+    // {
+    //     const char* input_level[] = {
+    //         "....",
+    //         "..ba",
+    //         "..cW",
+    //         NULL
+    //     };
+
+    //     Direction direction = DIRECTION_EAST;
+    //     EXPECT(snake_constrict_test(input_level, input_level, SNAKE_ACTION_CONSTRICT_RIGHT, &direction));
+    // }
+
+    // // Left South West
+    // {
+    //     const char* input_level[] = {
+    //         "....",
+    //         "ab..",
+    //         "Wc..",
+    //         NULL
+    //     };
+
+    //     Direction direction = DIRECTION_WEST;
+    //     EXPECT(snake_constrict_test(input_level, input_level, SNAKE_ACTION_CONSTRICT_LEFT, &direction));
+    // }
+
+    // New Constricting tests
     {
         const char* input_level[] = {
             "..a..",
@@ -439,209 +1182,285 @@ int main(int argc, char** argv) {
         };
 
         const char* output_level[] = {
-            "..a..",
-            "..bc.",
-            "..ed.",
-            ".....",
-            ".....",
-            NULL
-        };
-
-        EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, NULL));
-    }
-
-    // Left Vertical North
-    {
-        const char* input_level[] = {
-            "..a..",
-            "..b..",
-            "..c..",
-            "..d..",
-            "..e..",
-            NULL
-        };
-
-        const char* output_level[] = {
-            "..a..",
-            ".cb..",
-            ".de..",
-            ".....",
-            ".....",
-            NULL
-        };
-
-        EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, NULL));
-    }
-
-    // Right Vertical South
-    {
-        const char* input_level[] = {
-            "..e..",
-            "..d..",
-            "..c..",
-            "..b..",
-            "..a..",
-            NULL
-        };
-
-        const char* output_level[] = {
-            ".....",
-            ".....",
-            ".de..",
-            ".cb..",
-            "..a..",
-            NULL
-        };
-
-        Direction direction = DIRECTION_SOUTH;
-        EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, &direction));
-    }
-
-    // Left Vertical South
-    {
-        const char* input_level[] = {
-            "..e..",
-            "..d..",
-            "..c..",
-            "..b..",
-            "..a..",
-            NULL
-        };
-
-        const char* output_level[] = {
-            ".....",
-            ".....",
-            "..ed.",
-            "..bc.",
-            "..a..",
-            NULL
-        };
-
-        Direction direction = DIRECTION_SOUTH;
-        EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, &direction));
-    }
-
-    // Right Horizontal West
-    {
-        const char* input_level[] = {
-            ".....",
-            ".....",
-            "abcde",
-            ".....",
-            ".....",
-            NULL
-        };
-
-        const char* output_level[] = {
-            ".....",
+            ".ba..",
             ".cd..",
-            "abe..",
+            "..e..",
             ".....",
             ".....",
             NULL
         };
 
-        Direction direction = DIRECTION_WEST;
-        EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, &direction));
+        EXPECT(snake_segment_constrict_test(input_level, output_level, 0, true));
     }
 
-    // Left Horizontal West
-    {
-        const char* input_level[] = {
-            ".....",
-            ".....",
-            "abcde",
-            ".....",
-            ".....",
-            NULL
-        };
-
-        const char* output_level[] = {
-            ".....",
-            ".....",
-            "abe..",
-            ".cd..",
-            ".....",
-            NULL
-        };
-
-        Direction direction = DIRECTION_WEST;
-        EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, &direction));
-    }
-
-    // Right Horizontal East
-    {
-        const char* input_level[] = {
-            ".....",
-            ".....",
-            "edcba",
-            ".....",
-            ".....",
-            NULL
-        };
-
-        const char* output_level[] = {
-            ".....",
-            ".....",
-            "..eba",
-            "..dc.",
-            ".....",
-            NULL
-        };
-
-        Direction direction = DIRECTION_EAST;
-        EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, &direction));
-    }
-
-    // Left Horizontal East
-    {
-        const char* input_level[] = {
-            ".....",
-            ".....",
-            "edcba",
-            ".....",
-            ".....",
-            NULL
-        };
-
-        const char* output_level[] = {
-            ".....",
-            "..dc.",
-            "..eba",
-            ".....",
-            ".....",
-            NULL
-        };
-
-        Direction direction = DIRECTION_EAST;
-        EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, &direction));
-    }
-
-    // Inner Corner
-    // Right North East
     {
         const char* input_level[] = {
             "..a..",
-            "..bc.",
+            "..b..",
+            "..c..",
+            "..d..",
+            "..e..",
+            NULL
+        };
+
+        const char* output_level[] = {
+            "..ab.",
+            "..dc.",
+            "..e..",
+            ".....",
+            ".....",
+            NULL
+        };
+
+        EXPECT(snake_segment_constrict_test(input_level, output_level, 0, false));
+    }
+
+    {
+        const char* input_level[] = {
+            ".ba..",
+            ".cd..",
+            "..e..",
+            ".....",
+            ".....",
+            NULL
+        };
+
+        const char* output_level[] = {
+            ".ba..",
+            ".cd..",
+            "..e..",
+            ".....",
+            ".....",
+            NULL
+        };
+
+        EXPECT(snake_segment_constrict_test(input_level, output_level, 0, true));
+    }
+
+    {
+        const char* input_level[] = {
+            "..ab.",
+            "..dc.",
+            "..e..",
+            ".....",
             ".....",
             NULL
         };
 
         const char* output_level[] = {
             "..ab.",
-            "...c.",
+            "..dc.",
+            "..e..",
+            ".....",
             ".....",
             NULL
         };
 
-        EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, NULL));
+        EXPECT(snake_segment_constrict_test(input_level, output_level, 0, false));
     }
 
-    // Left North West
+    {
+        const char* input_level[] = {
+            ".ba..",
+            ".cd..",
+            "..e..",
+            ".....",
+            ".....",
+            NULL
+        };
+
+        const char* output_level[] = {
+            "..a..",
+            "..b..",
+            "..c..",
+            "..d..",
+            "..e..",
+            NULL
+        };
+
+        EXPECT(snake_segment_constrict_test(input_level, output_level, 0, false));
+    }
+
+    {
+        const char* input_level[] = {
+            "..ab.",
+            "..dc.",
+            "..e..",
+            ".....",
+            ".....",
+            NULL
+        };
+
+        const char* output_level[] = {
+            "..a..",
+            "..b..",
+            "..c..",
+            "..d..",
+            "..e..",
+            NULL
+        };
+
+        EXPECT(snake_segment_constrict_test(input_level, output_level, 0, true));
+    }
+
+    // New Pushing Tests
+    {
+        const char* input_level[] = {
+            "..a..",
+            "..b..",
+            "..c..",
+            "..d..",
+            NULL
+        };
+
+        const char* output_level[] = {
+            ".....",
+            "..ba.",
+            "..c..",
+            "..d..",
+            NULL
+        };
+
+        EXPECT(snake_segment_push_test(input_level, output_level, 0, DIRECTION_EAST));
+    }
+
+    {
+        const char* input_level[] = {
+            "..a..",
+            "..b..",
+            "..c..",
+            "..d..",
+            NULL
+        };
+
+        const char* output_level[] = {
+            ".....",
+            ".ab..",
+            "..c..",
+            "..d..",
+            NULL
+        };
+
+        EXPECT(snake_segment_push_test(input_level, output_level, 0, DIRECTION_WEST));
+    }
+
     {
         const char* input_level[] = {
             "..a..",
             ".cb..",
+            ".d...",
+            ".....",
+            NULL
+        };
+
+        const char* output_level[] = {
+            ".....",
+            ".ab..",
+            ".dc..",
+            ".....",
+            NULL
+        };
+
+        EXPECT(snake_segment_push_test(input_level, output_level, 0, DIRECTION_WEST));
+    }
+
+    {
+        const char* input_level[] = {
+            "..a..",
+            "..bc.",
+            "...d.",
+            ".....",
+            NULL
+        };
+
+        const char* output_level[] = {
+            ".....",
+            "..ba.",
+            "..cd.",
+            ".....",
+            NULL
+        };
+
+        EXPECT(snake_segment_push_test(input_level, output_level, 0, DIRECTION_EAST));
+    }
+
+    {
+        const char* input_level[] = {
+            "..a..",
+            "..b..",
+            "..c..",
+            "..d..",
+            "..e..",
+            NULL
+        };
+
+        EXPECT(snake_segment_push_test(input_level, input_level, 0, DIRECTION_SOUTH));
+        EXPECT(snake_segment_push_test(input_level, input_level, 0, DIRECTION_NORTH));
+    }
+
+    {
+        const char* input_level[] = {
+            "..a..",
+            "..b..",
+            "..c..",
+            "..d..",
+            "..e..",
+            NULL
+        };
+
+        const char* output_level[] = {
+            "..ab.",
+            "...c.",
+            "..ed.",
+            ".....",
+            ".....",
+            NULL
+        };
+
+        EXPECT(snake_segment_push_test(input_level, output_level, 1, DIRECTION_EAST));
+    }
+
+    {
+        const char* input_level[] = {
+            "..a..",
+            "..b..",
+            "..c..",
+            "..d..",
+            "..e..",
+            NULL
+        };
+
+        const char* output_level[] = {
+            ".ba..",
+            ".c...",
+            ".de..",
+            ".....",
+            ".....",
+            NULL
+        };
+
+        EXPECT(snake_segment_push_test(input_level, output_level, 1, DIRECTION_WEST));
+    }
+
+    {
+        const char* input_level[] = {
+            "..a..",
+            "..b..",
+            "..c..",
+            "..d..",
+            "..e..",
+            NULL
+        };
+
+        EXPECT(snake_segment_push_test(input_level, input_level, 1, DIRECTION_SOUTH));
+        EXPECT(snake_segment_push_test(input_level, input_level, 1, DIRECTION_NORTH));
+    }
+
+    {
+        const char* input_level[] = {
+            "..a..",
+            ".cb..",
+            ".d...",
             ".....",
             NULL
         };
@@ -649,489 +1468,80 @@ int main(int argc, char** argv) {
         const char* output_level[] = {
             ".ba..",
             ".c...",
+            ".d...",
             ".....",
             NULL
         };
 
-        EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, NULL));
+        EXPECT(snake_segment_push_test(input_level, output_level, 1, DIRECTION_WEST));
+        EXPECT(snake_segment_push_test(input_level, output_level, 1, DIRECTION_NORTH));
+        EXPECT(snake_segment_push_test(input_level, input_level, 1, DIRECTION_SOUTH));
+        EXPECT(snake_segment_push_test(input_level, input_level, 1, DIRECTION_EAST));
     }
 
-    // Right South East
-    {
-        const char* input_level[] = {
-            ".....",
-            "..ba.",
-            "..c..",
-            NULL
-        };
-
-        const char* output_level[] = {
-            ".....",
-            "...a.",
-            "..cb.",
-            NULL
-        };
-
-        Direction direction = DIRECTION_EAST;
-        EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, &direction));
-    }
-
-    // Left South West
-    {
-        const char* input_level[] = {
-            ".....",
-            ".ab..",
-            "..c..",
-            NULL
-        };
-
-        const char* output_level[] = {
-            ".....",
-            ".a...",
-            ".bc..",
-            NULL
-        };
-
-        Direction direction = DIRECTION_WEST;
-        EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, &direction));
-    }
-
-    // Collision
-
-    // Straight, first wall
-
-    // Right Vertical North
     {
         const char* input_level[] = {
             "..a..",
-            "..bW.",
-            "..c..",
-            "..d..",
-            "..e..",
-            NULL
-        };
-
-        const char* output_level[] = {
-            "..a..",
-            "..bW.",
-            "..cd.",
-            "...e.",
-            ".....",
-            NULL
-        };
-
-        EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, NULL));
-    }
-
-    // Left Vertical North
-    {
-        const char* input_level[] = {
-            "..a..",
-            ".Wb..",
-            "..c..",
-            "..d..",
-            "..e..",
-            NULL
-        };
-
-        const char* output_level[] = {
-            "..a..",
-            ".Wb..",
-            ".dc..",
-            ".e...",
-            ".....",
-            NULL
-        };
-
-        EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, NULL));
-    }
-
-    // Right Vertical South
-    {
-        const char* input_level[] = {
-            "..e..",
-            "..d..",
-            "..c..",
-            ".Wb..",
-            "..a..",
-            NULL
-        };
-
-        const char* output_level[] = {
-            ".....",
-            ".e...",
-            ".dc..",
-            ".Wb..",
-            "..a..",
-            NULL
-        };
-
-        Direction direction = DIRECTION_SOUTH;
-        EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, &direction));
-    }
-
-    // Left Vertical South
-    {
-        const char* input_level[] = {
-            "..e..",
-            "..d..",
-            "..c..",
-            "..bW.",
-            "..a..",
-            NULL
-        };
-
-        const char* output_level[] = {
-            ".....",
-            "...e.",
-            "..cd.",
-            "..bW.",
-            "..a..",
-            NULL
-        };
-
-        Direction direction = DIRECTION_SOUTH;
-        EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, &direction));
-    }
-
-    // Right Horizontal West
-    {
-        const char* input_level[] = {
-            ".....",
-            ".W...",
-            "abcde",
-            ".....",
-            ".....",
-            NULL
-        };
-
-        const char* output_level[] = {
-            ".....",
-            ".Wde.",
-            "abc..",
-            ".....",
-            ".....",
-            NULL
-        };
-
-        Direction direction = DIRECTION_WEST;
-        EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, &direction));
-    }
-
-    // Left Horizontal West
-    {
-        const char* input_level[] = {
-            ".....",
-            ".....",
-            "abcde",
-            ".W...",
-            ".....",
-            NULL
-        };
-
-        const char* output_level[] = {
-            ".....",
-            ".....",
-            "abc..",
-            ".Wde.",
-            ".....",
-            NULL
-        };
-
-        Direction direction = DIRECTION_WEST;
-        EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, &direction));
-    }
-
-    // Right Horizontal East
-    {
-        const char* input_level[] = {
-            ".....",
-            ".....",
-            "edcba",
-            "...W.",
-            ".....",
-            NULL
-        };
-
-        const char* output_level[] = {
-            ".....",
-            ".....",
-            "..cba",
-            ".edW.",
-            ".....",
-            NULL
-        };
-
-        Direction direction = DIRECTION_EAST;
-        EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, &direction));
-    }
-
-    // Left Horizontal East
-    {
-        const char* input_level[] = {
-            ".....",
-            "...W.",
-            "edcba",
-            ".....",
-            ".....",
-            NULL
-        };
-
-        const char* output_level[] = {
-            ".....",
-            ".edW.",
-            "..cba",
-            ".....",
-            ".....",
-            NULL
-        };
-
-        Direction direction = DIRECTION_EAST;
-        EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, &direction));
-    }
-
-    // Straight, second wall
-
-    // Right Vertical North
-    {
-        const char* input_level[] = {
-            "..a..",
-            "..b..",
-            "..cW.",
-            "..d..",
-            "..e..",
-            NULL
-        };
-
-        const char* output_level[] = {
-            "..a..",
-            "..b..",
-            "..cW.",
-            "..de.",
-            ".....",
-            NULL
-        };
-
-        EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, NULL));
-    }
-
-    // Left Vertical North
-    {
-        const char* input_level[] = {
-            "..a..",
-            "..b..",
-            ".Wc..",
-            "..d..",
-            "..e..",
-            NULL
-        };
-
-        const char* output_level[] = {
-            "..a..",
-            "..b..",
-            ".Wc..",
-            ".ed..",
-            ".....",
-            NULL
-        };
-
-        EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, NULL));
-    }
-
-    // Right Vertical South
-    {
-        const char* input_level[] = {
-            "..e..",
-            "..d..",
-            ".Wc..",
-            "..b..",
-            "..a..",
-            NULL
-        };
-
-        const char* output_level[] = {
-            ".....",
-            ".ed..",
-            ".Wc..",
-            "..b..",
-            "..a..",
-            NULL
-        };
-
-        Direction direction = DIRECTION_SOUTH;
-        EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, &direction));
-    }
-
-    // Left Vertical South
-    {
-        const char* input_level[] = {
-            "..e..",
-            "..d..",
-            "..cW.",
-            "..b..",
-            "..a..",
-            NULL
-        };
-
-        const char* output_level[] = {
-            ".....",
-            "..de.",
-            "..cW.",
-            "..b..",
-            "..a..",
-            NULL
-        };
-
-        Direction direction = DIRECTION_SOUTH;
-        EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, &direction));
-    }
-
-    // Right Horizontal West
-    {
-        const char* input_level[] = {
-            ".....",
-            ".....",
-            ".dcba",
-            ".eW..",
-            ".....",
-            NULL
-        };
-
-        const char* output_level[] = {
-            ".....",
-            ".....",
-            ".dcba",
-            ".eW..",
-            ".....",
-            NULL
-        };
-
-        Direction direction = DIRECTION_EAST;
-        EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, &direction));
-    }
-
-    // Left Horizontal West
-    {
-        const char* input_level[] = {
-            ".....",
-            "..W..",
-            "edcba",
-            ".....",
-            ".....",
-            NULL
-        };
-
-        const char* output_level[] = {
-            ".....",
-            ".eW..",
-            ".dcba",
-            ".....",
-            ".....",
-            NULL
-        };
-
-        Direction direction = DIRECTION_EAST;
-        EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, &direction));
-    }
-
-    // Right Horizontal East
-    {
-        const char* input_level[] = {
-            ".....",
-            ".....",
-            "edcba",
-            "..W..",
-            ".....",
-            NULL
-        };
-
-        const char* output_level[] = {
-            ".....",
-            ".....",
-            ".dcba",
-            ".eW..",
-            ".....",
-            NULL
-        };
-
-        Direction direction = DIRECTION_EAST;
-        EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_RIGHT, &direction));
-    }
-
-    // Left Horizontal East
-    {
-        const char* input_level[] = {
-            ".....",
-            "..W..",
-            "edcba",
-            ".....",
-            ".....",
-            NULL
-        };
-
-        const char* output_level[] = {
-            ".....",
-            ".eW..",
-            ".dcba",
-            ".....",
-            ".....",
-            NULL
-        };
-
-        Direction direction = DIRECTION_EAST;
-        EXPECT(snake_constrict_test(input_level, output_level, SNAKE_ACTION_CONSTRICT_LEFT, &direction));
-    }
-
-    // Inner Corner, Wall
-
-    // Right North East
-    {
-        const char* input_level[] = {
-            "..aW.",
             "..bc.",
+            "...d.",
             ".....",
             NULL
         };
 
-        EXPECT(snake_constrict_test(input_level, input_level, SNAKE_ACTION_CONSTRICT_RIGHT, NULL));
-    }
-
-    // Left North West
-    {
-        const char* input_level[] = {
-            ".Wa..",
-            ".cb..",
+        const char* output_level[] = {
+            "..ab.",
+            "...c.",
+            "...d.",
             ".....",
             NULL
         };
 
-        EXPECT(snake_constrict_test(input_level, input_level, SNAKE_ACTION_CONSTRICT_LEFT, NULL));
+        EXPECT(snake_segment_push_test(input_level, output_level, 1, DIRECTION_EAST));
+        EXPECT(snake_segment_push_test(input_level, output_level, 1, DIRECTION_NORTH));
+        EXPECT(snake_segment_push_test(input_level, input_level, 1, DIRECTION_SOUTH));
+        EXPECT(snake_segment_push_test(input_level, input_level, 1, DIRECTION_WEST));
     }
 
-    // Right South East
     {
         const char* input_level[] = {
-            "....",
-            "..ba",
-            "..cW",
+            "..a..",
+            "..b..",
+            "..c..",
+            "..d..",
             NULL
         };
 
-        Direction direction = DIRECTION_EAST;
-        EXPECT(snake_constrict_test(input_level, input_level, SNAKE_ACTION_CONSTRICT_RIGHT, &direction));
-    }
-
-    // Left South West
-    {
-        const char* input_level[] = {
-            "....",
-            "ab..",
-            "Wc..",
+        const char* output_level[] = {
+            "..a..",
+            "..b..",
+            ".dc..",
+            ".....",
             NULL
         };
 
-        Direction direction = DIRECTION_WEST;
-        EXPECT(snake_constrict_test(input_level, input_level, SNAKE_ACTION_CONSTRICT_LEFT, &direction));
+        EXPECT(snake_segment_push_test(input_level, output_level, 3, DIRECTION_WEST));
+        EXPECT(snake_segment_push_test(input_level, input_level, 1, DIRECTION_NORTH));
+        EXPECT(snake_segment_push_test(input_level, input_level, 1, DIRECTION_SOUTH));
+    }
+
+    {
+        const char* input_level[] = {
+            "..a..",
+            "..b..",
+            "..c..",
+            "..d..",
+            NULL
+        };
+
+        const char* output_level[] = {
+            "..a..",
+            "..b..",
+            "..cd.",
+            ".....",
+            NULL
+        };
+
+        EXPECT(snake_segment_push_test(input_level, output_level, 3, DIRECTION_EAST));
     }
 
     if (g_failed) {
@@ -1141,3 +1551,5 @@ int main(int argc, char** argv) {
     printf("unittests passed\n");
     return 0;
 }
+
+

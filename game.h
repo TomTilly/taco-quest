@@ -61,4 +61,7 @@ S32 game_count_tacos(Game* game);
 size_t game_serialize(const Game* game, void* buffer, size_t buffer_size);
 size_t game_deserialize(void * buffer, size_t size, Game * out);
 
+bool snake_segment_push(Game* game, S32 snake_index, S32 segment_index, Direction direction);
+bool snake_segment_constrict(Game* game, S32 snake_index, S32 segment_index, bool left);
+
 #endif /* game_h */
