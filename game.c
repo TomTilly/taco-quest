@@ -394,7 +394,7 @@ bool snake_segment_push(Game* game, S32 snake_index, S32 segment_index, Directio
     // ..3..    ..3..
     //
     if (segment_index == 0) {
-        if (direction == direction_to_head || direction == direction_to_tail) {
+        if (!directions_are_perpendicular(direction, direction_to_tail)) {
             return false;
         }
 
@@ -501,7 +501,7 @@ bool snake_segment_push(Game* game, S32 snake_index, S32 segment_index, Directio
     // .....    .....
     //
     if (segment_index == (snake->length - 1)) {
-        if (direction == direction_to_head || direction == direction_to_tail) {
+        if (!directions_are_perpendicular(direction, direction_to_head)) {
             return false;
         }
 
