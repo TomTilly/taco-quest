@@ -306,6 +306,8 @@ PushResult _game_object_push(Game* game, S32 x, S32 y, Direction direction) {
                 return PUSH_OBJECT_SUCCESS;
             }
             return PUSH_OBJECT_FAIL;
+        case CELL_TYPE_WALL:
+            return PUSH_OBJECT_FAIL;
         default:
             break;
         }
@@ -322,7 +324,7 @@ PushResult _game_object_push(Game* game, S32 x, S32 y, Direction direction) {
         break;
     }
 
-    return false;
+    return PUSH_OBJECT_EMPTY;
 }
 
 bool _snake_segment_can_expand(Game* game, S32 x, S32 y, Direction preferred_direction,
@@ -400,6 +402,7 @@ bool snake_segment_push(Game* game, S32 snake_index, S32 segment_index, Directio
         S32 first_cell_to_check_y = segment_to_move->y;
         adjacent_cell(direction, &first_cell_to_check_x, &first_cell_to_check_y);
 
+        // TODO: Check style check is duplicated a lot, we should consolidate.
         if (!_game_empty_at(game, first_cell_to_check_x, first_cell_to_check_y)) {
             PushResult first_push = _game_object_push(game, first_cell_to_check_x, first_cell_to_check_y, direction);
             PushResult second_push = PUSH_OBJECT_EMPTY;
@@ -409,6 +412,10 @@ bool snake_segment_push(Game* game, S32 snake_index, S32 segment_index, Directio
                     return false;
                 }
             }
+            // If we successfully pushed, its possible that the segment we're pushing before this
+            // push has moved, so lets retry.
+            // TODO: If recursion gets too much, we can return a value that means to retry and have
+            // the call site re-try.
             if (first_push == PUSH_OBJECT_SUCCESS || second_push == PUSH_OBJECT_SUCCESS) {
                 PushResult push_result = _game_object_push(game, original_x, original_y, direction);
                 return push_result != PUSH_OBJECT_FAIL;
@@ -510,7 +517,7 @@ bool snake_segment_push(Game* game, S32 snake_index, S32 segment_index, Directio
             PushResult first_push = _game_object_push(game, first_cell_to_check_x, first_cell_to_check_y, direction);
             PushResult second_push = PUSH_OBJECT_EMPTY;
             if (first_push == PUSH_OBJECT_FAIL) {
-                second_push = _game_object_push(game, first_cell_to_check_x, first_cell_to_check_y, direction_to_tail);
+                second_push = _game_object_push(game, first_cell_to_check_x, first_cell_to_check_y, direction_to_head);
                 if (second_push == PUSH_OBJECT_FAIL) {
                     return false;
                 }
@@ -525,7 +532,7 @@ bool snake_segment_push(Game* game, S32 snake_index, S32 segment_index, Directio
             PushResult first_push = _game_object_push(game, final_cell_move_x, final_cell_move_y, direction);
             PushResult second_push = PUSH_OBJECT_EMPTY;
             if (first_push == PUSH_OBJECT_FAIL) {
-                second_push = _game_object_push(game, final_cell_move_x, final_cell_move_y, direction_to_tail);
+                second_push = _game_object_push(game, final_cell_move_x, final_cell_move_y, direction_to_head);
                 if (second_push == PUSH_OBJECT_FAIL) {
                     return false;
                 }
@@ -651,9 +658,6 @@ bool snake_segment_constrict(Game* game, S32 snake_index, S32 segment_index, boo
     // In the cases below, the we are operating on segment 1
 
     if (!_game_empty_at(game, final_cell_move_x, final_cell_move_y)) {
-        // if (!_game_object_push(game, final_cell_move_x, final_cell_move_y, rotation_direction) &&
-        //     !_game_object_push(game, final_cell_move_x, final_cell_move_y, next_direction_to_head)) {
-
         // Case 2
         //
         // ..12.    ..1..
@@ -684,13 +688,8 @@ bool snake_segment_constrict(Game* game, S32 snake_index, S32 segment_index, boo
                 return false;
             }
         }
-
-        return false;
-        // }
-    }
-
-    // If the next segment creates a corner with the previous segment, just move towards the diagonal.
-    if (segment_is_corner) {
+    } else if (segment_is_corner) {
+        // If the next segment creates a corner with the previous segment, just move towards the diagonal.
         segment_to_move->x = (S16)(final_cell_move_x);
         segment_to_move->y = (S16)(final_cell_move_y);
         return true;
@@ -705,10 +704,31 @@ bool snake_segment_constrict(Game* game, S32 snake_index, S32 segment_index, boo
     //
 
     if (!_game_empty_at(game, initial_cell_move_x, initial_cell_move_y)) {
-        // if (!_game_object_push(game, initial_cell_move_x, initial_cell_move_y, rotation_direction) &&
-        //     !_game_object_push(game, initial_cell_move_x, initial_cell_move_y, next_direction_to_head)) {
-        return false;
-        // }
+        PushResult first_push = _game_object_push(game, initial_cell_move_x, initial_cell_move_y, rotation_direction);
+        PushResult second_push = PUSH_OBJECT_EMPTY;
+        if (first_push == PUSH_OBJECT_FAIL) {
+            second_push = _game_object_push(game, initial_cell_move_x, initial_cell_move_y, next_direction_to_head);
+            if (second_push == PUSH_OBJECT_FAIL) {
+                return false;
+            }
+        }
+        if (first_push == PUSH_OBJECT_SUCCESS || second_push == PUSH_OBJECT_SUCCESS) {
+            return snake_segment_constrict(game, snake_index, segment_index, left);
+        }
+    }
+
+    if (!_game_empty_at(game, final_cell_move_x, final_cell_move_y)) {
+        PushResult first_push = _game_object_push(game, final_cell_move_x, final_cell_move_y, rotation_direction);
+        PushResult second_push = PUSH_OBJECT_EMPTY;
+        if (first_push == PUSH_OBJECT_FAIL) {
+            second_push = _game_object_push(game, final_cell_move_x, final_cell_move_y, next_direction_to_head);
+            if (second_push == PUSH_OBJECT_FAIL) {
+                return false;
+            }
+        }
+        if (first_push == PUSH_OBJECT_SUCCESS || second_push == PUSH_OBJECT_SUCCESS) {
+            return snake_segment_constrict(game, snake_index, segment_index, left);
+        }
     }
 
     // As long as the adjacent squares are empty, we can drag the snake's body through it.

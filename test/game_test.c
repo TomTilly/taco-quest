@@ -797,6 +797,32 @@ int main(int argc, char** argv) {
         EXPECT(snake_segment_push_test(input_level, output_level, 3, DIRECTION_EAST));
     }
 
+    {
+        const char* input_level[] = {
+            "..A..",
+            "..Ba.",
+            "..Cb.",
+            "..Dc.",
+            "..Ed.",
+            "...e.",
+            ".....",
+            NULL
+        };
+
+        const char* output_level[] = {
+            ".BA..",
+            ".Cba.",
+            ".Dcd.",
+            ".E.e.",
+            ".....",
+            ".....",
+            ".....",
+            NULL
+        };
+
+        EXPECT(snake_segment_constrict_test(input_level, output_level, 0, true));
+    }
+
     if (g_failed) {
         printf("unittests failed\n");
         return 1;
