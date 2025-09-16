@@ -19,7 +19,7 @@
 typedef enum {
     GAME_STATE_WAITING,
     GAME_STATE_PLAYING,
-    GAME_STATE_GAME_OVER
+    GAME_STATE_GAME_OVER,
 } GameState;
 
 typedef enum {

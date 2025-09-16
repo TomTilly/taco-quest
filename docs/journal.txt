@@ -12,6 +12,66 @@ against the wall in the direction we're constricting, maybe figuring out the uni
 light.
 
 --------------------------------------------------------------------------------
+7/26/2025: In Person and over Discord since Tom T is sick
+
+Today:
+- Tom F created initial dev mode which allows pausing and stepping ticks forward
+  manually.
+- Tom T drew numbers on snake segments when dev mode is enabled.
+- Justin allowed repositioning snakes in dev mode with the mouse.
+- Pizza, wings, "salad" and ice cream and cookies and brownies and juice
+  beverage from concentra were all delicious.
+
+Next Time:
+- Continue on constricting ?
+- Other ideas for dev mode ?
+- What happens when playing multiplayer and using dev mode ?
+- More shenanigrams ?
+
+--------------------------------------------------------------------------------
+7/6/2025: Discord
+
+Today:
+- Justin's shenanigrams
+- Justin fixed recursion-related constriction bug
+- Justin improved constriction logic around pushing other snakes
+
+Next Time:
+- Continue refining snake pushing logic
+- Beginning to work on crushing detection
+- Play test constriction logic
+
+--------------------------------------------------------------------------------
+6/22/2025: Discord
+
+Today:
+- Justin and Tom worked on constriction logic
+
+--------------------------------------------------------------------------------
+6/15/2025: Discord
+
+Today:
+- Tom explained an alternate snake constriction method: segments move toward the
+"center" (average coordinate of all segments).
+    - problems: certain segment configurations don't easily move
+    - what's the center is snake shape is complex.
+- Justin diagramed constriction, pushing, collision, and squishing logic
+
+Next Time:
+- Symmetry in constricting logic
+- Migrate test app
+- Refactor constriction logic, prepping for pushing logic
+
+--------------------------------------------------------------------------------
+6/08/2025: In person, Chauncy Street
+
+Today:
+- Went to Shake Shack, did not order shakes.
+- Diagramed constriction logic.
+- Justin tweaked constriction system and fixed minor bugs.
+- Play tested.
+
+--------------------------------------------------------------------------------
 5/31/2025: Discord
 
 Today:

@@ -27,7 +27,28 @@ typedef enum {
     SESSION_TYPE_CLIENT
 } SessionType;
 
+typedef enum {
+	SNAKE_SELECTION_STATE_NONE,	
+	SNAKE_SELECTION_STATE_SELECTED,	
+	SNAKE_SELECTION_STATE_PLACING,	
+} DevSnakeSelectionState;
+
+typedef struct {
+    bool enabled;
+    bool step_mode;
+    bool should_step;
+    DevSnakeSelectionState snake_selection_state;
+    S32 snake_selection_index;
+} DevState;
+
 static int __tick;
+
+bool dev_mode_should_step(const DevState * dev_state)
+{
+    if (!dev_state->enabled) return true;
+    if (!dev_state->step_mode) return true;
+    return dev_state->should_step;
+}
 
 uint64_t microseconds_between_timestamps(struct timespec* previous, struct timespec* current) {
     return (current->tv_sec - previous->tv_sec) * 1000000LL +
@@ -112,6 +133,19 @@ void reset_game(Game* game) {
             }
         }
     }
+}
+
+S32 query_for_snake_at(Game* game, S32 cell_x, S32 cell_y) {
+    for (S32 i = 0; i < MAX_SNAKE_COUNT; i++) {
+        Snake *snake = game->snakes + i;
+        for (S32 j = 1; j < snake->length; j++) {
+            SnakeSegment *segment = snake->segments + j;
+            if (segment->x == cell_x && segment->y == cell_y) {
+                return i;
+            }
+        }
+    }
+    return -1;
 }
 
 int main(S32 argc, char** argv) {
@@ -289,6 +323,8 @@ int main(S32 argc, char** argv) {
         fprintf(stderr, "Failed to create texture from surface %s\n", SDL_GetError());
         return EXIT_FAILURE;
     }
+        
+    S32 cell_size = min_display_dimension / max_level_dimension;
 
     int64_t time_since_update_us = 0;
 
@@ -305,7 +341,10 @@ int main(S32 argc, char** argv) {
     PacketTransmissionState recv_game_state_state = {0};
     PacketTransmissionState recv_snake_action_states[MAX_SERVER_CLIENT_COUNT] = {0};
 
+    DevState dev_state = { 0 };
+
     bool quit = false;
+
     while (!quit) {
         // Calculate how much time has elapsed (in microseconds).
         struct timespec current_frame_timestamp = {0};
@@ -314,6 +353,7 @@ int main(S32 argc, char** argv) {
         last_frame_timestamp = current_frame_timestamp;
 
         SnakeAction snake_action = SNAKE_ACTION_NONE;
+
 
         // Handle events, such as input or window changes.
         SDL_Event event;
@@ -346,6 +386,12 @@ int main(S32 argc, char** argv) {
                     case SDLK_SPACE:
                         snake_action |= SNAKE_ACTION_CHOMP;
                         break;
+                    case SDLK_BACKQUOTE:
+                        dev_state.enabled = !dev_state.enabled;
+                        if (!dev_state.enabled) {
+                            dev_state = (DevState){0};
+                        }
+                        break;
                     }
                 } else if (game.state == GAME_STATE_WAITING) {
                     if (event.key.keysym.sym == SDLK_RETURN && session_type == SESSION_TYPE_SERVER) {
@@ -358,19 +404,112 @@ int main(S32 argc, char** argv) {
                         game.state = GAME_STATE_PLAYING;
                     }
                 }
-                break;
+                if (dev_state.enabled) {
+                    switch (event.key.keysym.sym) {
+                    case SDLK_TAB: // Switch to/from step mode
+                        dev_state.step_mode = !dev_state.step_mode;
+                        break;
+                    case SDLK_RETURN: // Signal to advance tick if in step mode
+                        if (dev_state.step_mode) {
+                            dev_state.should_step = true;
+                        }
+                        break;
+                    default:
+                        break;
+                    }
+                }
+                break; // SDL_KEYDOWN
             case SDL_KEYUP:
-            if (game.state == GAME_STATE_PLAYING) {
-                switch (event.key.keysym.sym) {
-                case SDLK_q:
-                    snake_action |= SNAKE_ACTION_CONSTRICT_LEFT_END;
-                    break;
-                case SDLK_e:
-                    snake_action |= SNAKE_ACTION_CONSTRICT_RIGHT_END;
+                if (game.state == GAME_STATE_PLAYING) {
+                    switch (event.key.keysym.sym) {
+                    case SDLK_q:
+                        snake_action |= SNAKE_ACTION_CONSTRICT_LEFT_END;
+                        break;
+                    case SDLK_e:
+                        snake_action |= SNAKE_ACTION_CONSTRICT_RIGHT_END;
+                        break;
+                    }
+                }
+            break;
+            }
+        }
+
+      		if (dev_state.enabled) {
+            int mouse_x = 0;
+            int mouse_y = 0;
+            U32 mouse_buttons_state = SDL_GetMouseState(&mouse_x, &mouse_y);
+
+            if (mouse_buttons_state & SDL_BUTTON(SDL_BUTTON_LEFT)) {
+                S32 cell_x = mouse_x / cell_size;
+                S32 cell_y = mouse_y / cell_size;
+
+                switch (dev_state.snake_selection_state) {
+	            case SNAKE_SELECTION_STATE_NONE: {
+                    S32 selected_snake_index = query_for_snake_at(&game, cell_x, cell_y);
+                    if (selected_snake_index >= 0) {
+                        dev_state.snake_selection_index = selected_snake_index;
+                        dev_state.snake_selection_state = SNAKE_SELECTION_STATE_SELECTED;
+                    }
                     break;
                 }
-            }
-            break;
+	            case SNAKE_SELECTION_STATE_SELECTED: {
+                    S32 selected_snake_index = query_for_snake_at(&game, cell_x, cell_y);
+                    if (selected_snake_index < 0) {
+                        Snake* snake = game.snakes + dev_state.snake_selection_index;
+                        snake->length = 1;
+                        snake->segments[0].x = (S16)(cell_x);
+                        snake->segments[0].y = (S16)(cell_y);
+                        dev_state.snake_selection_state = SNAKE_SELECTION_STATE_PLACING;
+                    } else if (selected_snake_index != dev_state.snake_selection_index) {
+                        dev_state.snake_selection_index = selected_snake_index;
+                    }
+                    break;
+                }
+	            case SNAKE_SELECTION_STATE_PLACING: {
+                    Snake* snake = game.snakes + dev_state.snake_selection_index;
+                    S32 previous_index = snake->length - 1;
+                    Direction adjacent_dir = direction_between_cells(cell_x,
+                                                                     cell_y,
+                                                                     snake->segments[previous_index].x,
+                                                                     snake->segments[previous_index].y);
+                    if (adjacent_dir != DIRECTION_NONE) {
+                        S32 previous_previous_index = snake->length - 2;
+                        if (previous_previous_index >= 0 &&
+                            snake->segments[previous_previous_index].x == cell_x &&
+                            snake->segments[previous_previous_index].y == cell_y) {
+                           snake->length--;
+                           break;
+                        }
+
+                        CellType cell_type = level_get_cell(&game.level, cell_x, cell_y);
+                        if (cell_type != CELL_TYPE_EMPTY) {
+                           break;
+                        }
+                        if (query_for_snake_at(&game, cell_x, cell_y) >= 0) {
+                           break;
+                        }
+
+                        // face the snake away from where we're dragging.
+                        if (snake->length == 1) {
+                           snake->direction = opposite_direction(adjacent_dir);
+                        }
+
+                        S32 new_index = snake->length;
+
+                        snake->length++;
+                        snake->segments[new_index].x = (S16)(cell_x);
+                        snake->segments[new_index].y = (S16)(cell_y);
+                        snake->segments[new_index].health = SNAKE_SEGMENT_MAX_HEALTH;
+                    }
+                    break;
+                }
+                default:
+                    break;
+                }
+            } else {
+                if (dev_state.snake_selection_state == SNAKE_SELECTION_STATE_PLACING) {
+                    dev_state.snake_selection_state = SNAKE_SELECTION_STATE_NONE;
+                }
             }
         }
 
@@ -379,8 +518,9 @@ int main(S32 argc, char** argv) {
         if (time_since_update_us >= GAME_SIMULATE_TIME_INTERVAL_US) {
             time_since_update_us -= GAME_SIMULATE_TIME_INTERVAL_US;
 
-            if (game.state == GAME_STATE_PLAYING) {
+            if (game.state == GAME_STATE_PLAYING && dev_mode_should_step(&dev_state)) {
                 game_should_tick = true;
+                dev_state.should_step = false;
                 __tick++;
             }
         }
@@ -559,7 +699,6 @@ int main(S32 argc, char** argv) {
         SDL_RenderClear(renderer);
 
         // Draw level
-        S32 cell_size = min_display_dimension / max_level_dimension;
         float scale = (float)(cell_size / 16); // 16 is the sprite sheet tile size.
 
         for(S32 y = 0; y < level->height; y++) {
@@ -618,7 +757,38 @@ int main(S32 argc, char** argv) {
         SDL_SetTextureColorMod(snake_texture, 255, 255, 255);
 
         PF_SetScale(font, scale * 2.0f);
+
+        if (dev_state.enabled) {
+            PF_SetForeground(font, 255, 255, 0, 255);
+            if ( dev_state.step_mode ) {
+                PF_RenderString(font, 2, 2, "Dev Step Mode!");
+            } else {
+                PF_RenderString(font, 2, 2, "Dev Mode!");
+            }
+
+            if (dev_state.snake_selection_state != SNAKE_SELECTION_STATE_NONE) {
+                PF_RenderString(font, window_width / 3, 2, "Selected Snake %d", dev_state.snake_selection_index);
+            }
+
+            PF_SetForeground(font, 0, 0, 0, 255);
+            PF_SetScale(font, scale);
+            PF_FontState font_state = PF_GetState(font);
+            for (S32 i = 0; i < MAX_SNAKE_COUNT; i++) {
+                Snake *snake = game.snakes + i;
+                for (S32 j = 1; j < snake->length; j++) {
+                    SnakeSegment *segment = snake->segments + j;
+                    PF_RenderChar(font,
+                                  (int)((segment->x * cell_size) + (cell_size - (font_state.char_width * font_state.scale)) / 2),
+                                  (int)((segment->y * cell_size) + (cell_size - (font_state.char_height * font_state.scale)) / 2),
+                                  (char)('1' + j));
+                }
+            }
+
+            PF_SetScale(font, scale * 2.0f);
+        }
+
         PF_SetForeground(font, 255, 255, 255, 255);
+
         switch(session_type) {
         case SESSION_TYPE_CLIENT:
             if (game.state == GAME_STATE_WAITING) {
