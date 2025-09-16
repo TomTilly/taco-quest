@@ -680,7 +680,7 @@ bool snake_segment_constrict(Game* game, S32 snake_index, S32 segment_index, boo
 
     // In the cases below, the we are operating on segment 1
 
-    if (!_game_empty_at(game, final_cell_move_x, final_cell_move_y)) {
+    if (segment_is_corner) {
         // Case 2
         //
         // ..12.    ..1..
@@ -689,30 +689,44 @@ bool snake_segment_constrict(Game* game, S32 snake_index, S32 segment_index, boo
         // .....    ..4..
         //
 
-        S32 segment_to_check_index = after_segment_to_move_index + 1;
-        if (segment_is_corner && segment_to_check_index < snake->length) {
-            SnakeSegment* check_segment = snake->segments + segment_to_check_index;
-            if (check_segment->x == final_cell_move_x &&
-                check_segment->y == final_cell_move_y) {
-                S32 tail_index = (snake->length - 1);
-                Direction tail_direction_to_expand = snake_segment_direction_to_tail(snake, tail_index);
-                S32 first_expanded_x = 0;
-                S32 first_expanded_y = 0;
-                S32 second_expanded_x = 0;
-                S32 second_expanded_y = 0;
-                SnakeSegment* tail = snake->segments + (snake->length - 1);
-                if (_snake_segment_can_expand(game, tail->x, tail->y,
-                                              tail_direction_to_expand, &first_expanded_x, &first_expanded_y) &&
-                    _snake_segment_can_expand(game, first_expanded_x, first_expanded_y,
-                                              tail_direction_to_expand, &second_expanded_x, &second_expanded_y)) {
-                    _snake_segment_expand(snake, segment_to_move_index, first_expanded_x, first_expanded_y);
-                    _snake_segment_expand(snake, segment_to_move_index, second_expanded_x, second_expanded_y);
-                    return true;
+        if (!_game_empty_at(game, final_cell_move_x, final_cell_move_y)) {
+            S32 segment_to_check_index = after_segment_to_move_index + 1;
+            if (segment_to_check_index < snake->length) {
+                SnakeSegment* check_segment = snake->segments + segment_to_check_index;
+                if (check_segment->x == final_cell_move_x &&
+                    check_segment->y == final_cell_move_y) {
+                    S32 tail_index = (snake->length - 1);
+                    Direction tail_direction_to_expand = snake_segment_direction_to_tail(snake, tail_index);
+                    S32 first_expanded_x = 0;
+                    S32 first_expanded_y = 0;
+                    S32 second_expanded_x = 0;
+                    S32 second_expanded_y = 0;
+                    SnakeSegment* tail = snake->segments + (snake->length - 1);
+                    if (_snake_segment_can_expand(game, tail->x, tail->y,
+                                                  tail_direction_to_expand, &first_expanded_x, &first_expanded_y) &&
+                        _snake_segment_can_expand(game, first_expanded_x, first_expanded_y,
+                                                  tail_direction_to_expand, &second_expanded_x, &second_expanded_y)) {
+                        _snake_segment_expand(snake, segment_to_move_index, first_expanded_x, first_expanded_y);
+                        _snake_segment_expand(snake, segment_to_move_index, second_expanded_x, second_expanded_y);
+                        return true;
+                    }
+                    return false;
                 }
-                return false;
+            }
+
+            PushResult first_push = _game_object_push(game, final_cell_move_x, final_cell_move_y, rotation_direction);
+            PushResult second_push = PUSH_OBJECT_EMPTY;
+            if (first_push == PUSH_OBJECT_FAIL) {
+                second_push = _game_object_push(game, final_cell_move_x, final_cell_move_y, next_direction_to_head);
+                if (second_push == PUSH_OBJECT_FAIL) {
+                    return false;
+                }
+            }
+            if (first_push == PUSH_OBJECT_SUCCESS || second_push == PUSH_OBJECT_SUCCESS) {
+                return snake_segment_constrict(game, snake_index, segment_index, left);
             }
         }
-    } else if (segment_is_corner) {
+
         // If the next segment creates a corner with the previous segment, just move towards the diagonal.
         segment_to_move->x = (S16)(final_cell_move_x);
         segment_to_move->y = (S16)(final_cell_move_y);
@@ -881,30 +895,30 @@ void _snake_constrict(Game* game, S32 snake_index) {
             _flood_fill_kill_checks(game, kill_checks, snake_index, cell_to_fill_x, cell_to_fill_y);
 
             // Debug printing.
-            printf("\n");
-            for (S32 y = 0; y < game->level.height; y++) {
-                for (S32 x = 0; x < game->level.width; x++) {
-                    SnakeKillCheck* entry = kill_check_entry(game, kill_checks, x, y);
-                    switch(*entry){
-                    case SNAKE_KILL_CHECK_UNREACHABLE:
-                        printf(" ");
-                        break;
-                    case SNAKE_KILL_CHECK_WALL:
-                        printf("w");
-                        break;
-                    case SNAKE_KILL_CHECK_CELL:
-                        printf(".");
-                        break;
-                    case SNAKE_KILL_CHECK_OTHER_SNAKE:
-                        printf("s");
-                        break;
-                    case SNAKE_KILL_CHECK_SELF:
-                        printf("m");
-                        break;
-                    }
-                }
-                printf("\n");
-            }
+            // printf("\n");
+            // for (S32 y = 0; y < game->level.height; y++) {
+            //     for (S32 x = 0; x < game->level.width; x++) {
+            //         SnakeKillCheck* entry = kill_check_entry(game, kill_checks, x, y);
+            //         switch(*entry){
+            //         case SNAKE_KILL_CHECK_UNREACHABLE:
+            //             printf(" ");
+            //             break;
+            //         case SNAKE_KILL_CHECK_WALL:
+            //             printf("w");
+            //             break;
+            //         case SNAKE_KILL_CHECK_CELL:
+            //             printf(".");
+            //             break;
+            //         case SNAKE_KILL_CHECK_OTHER_SNAKE:
+            //             printf("s");
+            //             break;
+            //         case SNAKE_KILL_CHECK_SELF:
+            //             printf("m");
+            //             break;
+            //         }
+            //     }
+            //     printf("\n");
+            // }
 
             // Track how many snake segments are inside the constriction and number of adjacent cells.
             S32 snake_segment_counts[MAX_SNAKE_COUNT];
