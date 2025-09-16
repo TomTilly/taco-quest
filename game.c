@@ -366,11 +366,11 @@ void _snake_segment_expand(Snake* snake, S32 starting_segment, S32 x, S32 y) {
         return;
     }
 
-    for (S32 i = starting_segment; i < (snake->length - 1); i++) {
+    S32 tail_index = snake->length - 1;
+    for (S32 i = starting_segment; i < tail_index; i++) {
         snake->segments[i].x = snake->segments[i + 1].x;
         snake->segments[i].y = snake->segments[i + 1].y;
     }
-    S32 tail_index = snake->length - 1;
     snake->segments[tail_index].x = (S16)(x);
     snake->segments[tail_index].y = (S16)(y);
 }
@@ -600,6 +600,21 @@ bool snake_segment_push(Game* game, S32 snake_index, S32 segment_index, Directio
         }
     }
 
+    if (!_game_empty_at(game, final_cell_move_x, final_cell_move_y)) {
+        PushResult first_push = _game_object_push(game, final_cell_move_x, final_cell_move_y, direction);
+        PushResult second_push = PUSH_OBJECT_EMPTY;
+        if (first_push == PUSH_OBJECT_FAIL) {
+            second_push = _game_object_push(game, final_cell_move_x, final_cell_move_y, direction_to_head);
+            if (second_push == PUSH_OBJECT_FAIL) {
+                return false;
+            }
+        }
+        if (first_push == PUSH_OBJECT_SUCCESS || second_push == PUSH_OBJECT_SUCCESS) {
+            PushResult push_result = _game_object_push(game, original_x, original_y, direction);
+            return push_result != PUSH_OBJECT_FAIL;
+        }
+    }
+
     segment_to_move->x = (S16)(second_cell_to_check_x);
     segment_to_move->y = (S16)(second_cell_to_check_y);
     _snake_drag_segments(snake, segment_index, first_cell_to_check_x, first_cell_to_check_y);
@@ -671,16 +686,17 @@ bool snake_segment_constrict(Game* game, S32 snake_index, S32 segment_index, boo
             SnakeSegment* check_segment = snake->segments + segment_to_check_index;
             if (check_segment->x == final_cell_move_x &&
                 check_segment->y == final_cell_move_y) {
-                Direction after_next_to_head = snake_segment_direction_to_tail(snake, segment_to_check_index);
+                S32 tail_index = (snake->length - 1);
+                Direction tail_direction_to_expand = snake_segment_direction_to_tail(snake, tail_index);
                 S32 first_expanded_x = 0;
                 S32 first_expanded_y = 0;
                 S32 second_expanded_x = 0;
                 S32 second_expanded_y = 0;
                 SnakeSegment* tail = snake->segments + (snake->length - 1);
                 if (_snake_segment_can_expand(game, tail->x, tail->y,
-                                              after_next_to_head, &first_expanded_x, &first_expanded_y) &&
+                                              tail_direction_to_expand, &first_expanded_x, &first_expanded_y) &&
                     _snake_segment_can_expand(game, first_expanded_x, first_expanded_y,
-                                              after_next_to_head, &second_expanded_x, &second_expanded_y)) {
+                                              tail_direction_to_expand, &second_expanded_x, &second_expanded_y)) {
                     _snake_segment_expand(snake, segment_to_move_index, first_expanded_x, first_expanded_y);
                     _snake_segment_expand(snake, segment_to_move_index, second_expanded_x, second_expanded_y);
                     return true;
