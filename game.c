@@ -383,6 +383,83 @@ void _snake_segment_expand(Snake* snake, S32 starting_segment, S32 x, S32 y) {
     snake->segments[tail_index].y = (S16)(y);
 }
 
+typedef struct {
+    bool should_return;
+    PushResult result;
+} TryPushResult;
+
+TryPushResult _game_if_cell_not_empty_try_push(Game* game,
+                                               S32 original_cell_x,
+                                               S32 original_cell_y,
+                                               S32 target_cell_x,
+                                               S32 target_cell_y,
+                                               Direction first_direction,
+                                               Direction second_direction) {
+    TryPushResult result = {0};
+    if (!_game_empty_at(game, target_cell_x, target_cell_y)) {
+        // If not empty at the target, attempt to push in the specified direction.
+        PushResult first_push = _game_object_push(game, target_cell_x, target_cell_y, first_direction);
+
+        PushResult second_push = PUSH_OBJECT_EMPTY;
+        if (first_push == PUSH_OBJECT_FAIL) {
+            // If the first push failed, try again but in the second specified direction.
+            second_push = _game_object_push(game, target_cell_x, target_cell_y, second_direction);
+            if (second_push == PUSH_OBJECT_FAIL) {
+                result.should_return = true;
+                result.result = second_push;
+            }
+        }
+        // If either succeed, try again
+        if (first_push == PUSH_OBJECT_SUCCESS || second_push == PUSH_OBJECT_SUCCESS) {
+            result.should_return = true;
+            // TODO: If recursion gets too much, we can return a value that means to retry and have
+            // the call site re-try.
+            result.result = _game_object_push(game, original_cell_x, original_cell_y, first_direction);
+        }
+    }
+
+    return result;
+}
+
+typedef struct {
+    bool should_return;
+    bool result;
+} TryConstrictResult;
+
+TryConstrictResult _game_if_cell_not_empty_try_constrict(Game* game,
+                                                         S32 snake_index,
+                                                         S32 segment_index,
+                                                         bool left,
+                                                         S32 target_cell_x,
+                                                         S32 target_cell_y,
+                                                         Direction first_direction,
+                                                         Direction second_direction) {
+    TryConstrictResult result = {0};
+    if (!_game_empty_at(game, target_cell_x, target_cell_y)) {
+
+        // If not empty at the target, attempt to push in the specified direction.
+        PushResult first_push = _game_object_push(game, target_cell_x, target_cell_y, first_direction);
+
+        PushResult second_push = PUSH_OBJECT_EMPTY;
+        if (first_push == PUSH_OBJECT_FAIL) {
+            // If the first push failed, try again but in the second specified direction.
+            second_push = _game_object_push(game, target_cell_x, target_cell_y, second_direction);
+            result.should_return = true;
+            result.result = (second_push != PUSH_OBJECT_FAIL);
+        }
+
+        // If either succeed, try again
+        if (first_push == PUSH_OBJECT_SUCCESS || second_push == PUSH_OBJECT_SUCCESS) {
+            // TODO: If recursion gets too much, we can return a value that means to retry and have
+            // the call site re-try.
+            result.should_return = true;
+            result.result = snake_segment_constrict(game, snake_index, segment_index, left);
+        }
+    }
+
+    return result;
+}
+
 // Push guarantees that if it returns true, the segment that was pushed moved and there is no
 // segment at that cell.
 bool snake_segment_push(Game* game, S32 snake_index, S32 segment_index, Direction direction) {
@@ -410,43 +487,24 @@ bool snake_segment_push(Game* game, S32 snake_index, S32 segment_index, Directio
         S32 first_cell_to_check_y = segment_to_move->y;
         adjacent_cell(direction, &first_cell_to_check_x, &first_cell_to_check_y);
 
-        // TODO: Check style check is duplicated a lot, we should consolidate.
-        if (!_game_empty_at(game, first_cell_to_check_x, first_cell_to_check_y)) {
-            PushResult first_push = _game_object_push(game, first_cell_to_check_x, first_cell_to_check_y, direction);
-            PushResult second_push = PUSH_OBJECT_EMPTY;
-            if (first_push == PUSH_OBJECT_FAIL) {
-                second_push = _game_object_push(game, first_cell_to_check_x, first_cell_to_check_y, direction_to_tail);
-                if (second_push == PUSH_OBJECT_FAIL) {
-                    return false;
-                }
-            }
-            // If we successfully pushed, its possible that the segment we're pushing before this
-            // push has moved, so lets retry.
-            // TODO: If recursion gets too much, we can return a value that means to retry and have
-            // the call site re-try.
-            if (first_push == PUSH_OBJECT_SUCCESS || second_push == PUSH_OBJECT_SUCCESS) {
-                PushResult push_result = _game_object_push(game, original_x, original_y, direction);
-                return push_result != PUSH_OBJECT_FAIL;
-            }
+        TryPushResult try_push_result = _game_if_cell_not_empty_try_push(game, original_x, original_y,
+                                                                         first_cell_to_check_x,
+                                                                         first_cell_to_check_y,
+                                                                         direction, direction_to_tail);
+        if (try_push_result.should_return) {
+            return try_push_result.result != PUSH_OBJECT_FAIL;
         }
 
         S32 final_cell_move_x = first_cell_to_check_x;
         S32 final_cell_move_y = first_cell_to_check_y;
         adjacent_cell(direction_to_tail, &final_cell_move_x, &final_cell_move_y);
 
-        if (!_game_empty_at(game, final_cell_move_x, final_cell_move_y)) {
-            PushResult first_push = _game_object_push(game, final_cell_move_x, final_cell_move_y, direction);
-            PushResult second_push = PUSH_OBJECT_EMPTY;
-            if (first_push == PUSH_OBJECT_FAIL) {
-                second_push = _game_object_push(game, final_cell_move_x, final_cell_move_y, direction_to_tail);
-                if (second_push == PUSH_OBJECT_FAIL) {
-                    return false;
-                }
-            }
-            if (first_push == PUSH_OBJECT_SUCCESS || second_push == PUSH_OBJECT_SUCCESS) {
-                PushResult push_result = _game_object_push(game, original_x, original_y, direction);
-                return push_result != PUSH_OBJECT_FAIL;
-            }
+        try_push_result = _game_if_cell_not_empty_try_push(game, original_x, original_y,
+                                                           final_cell_move_x,
+                                                           final_cell_move_y,
+                                                           direction, direction_to_tail);
+        if (try_push_result.should_return) {
+            return try_push_result.result != PUSH_OBJECT_FAIL;
         }
 
         segment_to_move->x = (S16)(final_cell_move_x);
@@ -475,19 +533,12 @@ bool snake_segment_push(Game* game, S32 snake_index, S32 segment_index, Directio
         S32 final_cell_move_y = first_cell_to_check_y;
         adjacent_cell(direction_to_head, &final_cell_move_x, &final_cell_move_y);
 
-        if (!_game_empty_at(game, final_cell_move_x, final_cell_move_y)) {
-            PushResult first_push = _game_object_push(game, final_cell_move_x, final_cell_move_y, direction_to_tail);
-            PushResult second_push = PUSH_OBJECT_EMPTY;
-            if (first_push == PUSH_OBJECT_FAIL) {
-                second_push = _game_object_push(game, final_cell_move_x, final_cell_move_y, direction_to_head);
-                if (second_push == PUSH_OBJECT_FAIL) {
-                    return false;
-                }
-            }
-            if (first_push == PUSH_OBJECT_SUCCESS || second_push == PUSH_OBJECT_SUCCESS) {
-                PushResult push_result = _game_object_push(game, original_x, original_y, direction);
-                return push_result != PUSH_OBJECT_FAIL;
-            }
+        TryPushResult try_push_result = _game_if_cell_not_empty_try_push(game, original_x, original_y,
+                                                                         final_cell_move_x,
+                                                                         final_cell_move_y,
+                                                                         direction_to_tail, direction_to_head);
+        if (try_push_result.should_return) {
+            return try_push_result.result != PUSH_OBJECT_FAIL;
         }
 
         if ((segment_index + 1) < snake->length) {
@@ -517,38 +568,24 @@ bool snake_segment_push(Game* game, S32 snake_index, S32 segment_index, Directio
         S32 first_cell_to_check_y = segment_to_move->y;
         adjacent_cell(direction, &first_cell_to_check_x, &first_cell_to_check_y);
 
+        TryPushResult try_push_result = _game_if_cell_not_empty_try_push(game, original_x, original_y,
+                                                                         first_cell_to_check_x,
+                                                                         first_cell_to_check_y,
+                                                                         direction, direction_to_head);
+        if (try_push_result.should_return) {
+            return try_push_result.result != PUSH_OBJECT_FAIL;
+        }
+
         S32 final_cell_move_x = first_cell_to_check_x;
         S32 final_cell_move_y = first_cell_to_check_y;
         adjacent_cell(direction_to_head, &final_cell_move_x, &final_cell_move_y);
 
-        if (!_game_empty_at(game, first_cell_to_check_x, first_cell_to_check_y)) {
-            PushResult first_push = _game_object_push(game, first_cell_to_check_x, first_cell_to_check_y, direction);
-            PushResult second_push = PUSH_OBJECT_EMPTY;
-            if (first_push == PUSH_OBJECT_FAIL) {
-                second_push = _game_object_push(game, first_cell_to_check_x, first_cell_to_check_y, direction_to_head);
-                if (second_push == PUSH_OBJECT_FAIL) {
-                    return false;
-                }
-            }
-            if (first_push == PUSH_OBJECT_SUCCESS || second_push == PUSH_OBJECT_SUCCESS) {
-                PushResult push_result = _game_object_push(game, original_x, original_y, direction);
-                return push_result != PUSH_OBJECT_FAIL;
-            }
-        }
-
-        if (!_game_empty_at(game, final_cell_move_x, final_cell_move_y)) {
-            PushResult first_push = _game_object_push(game, final_cell_move_x, final_cell_move_y, direction);
-            PushResult second_push = PUSH_OBJECT_EMPTY;
-            if (first_push == PUSH_OBJECT_FAIL) {
-                second_push = _game_object_push(game, final_cell_move_x, final_cell_move_y, direction_to_head);
-                if (second_push == PUSH_OBJECT_FAIL) {
-                    return false;
-                }
-            }
-            if (first_push == PUSH_OBJECT_SUCCESS || second_push == PUSH_OBJECT_SUCCESS) {
-                PushResult push_result = _game_object_push(game, original_x, original_y, direction);
-                return push_result != PUSH_OBJECT_FAIL;
-            }
+        try_push_result = _game_if_cell_not_empty_try_push(game, original_x, original_y,
+                                                           final_cell_move_x,
+                                                           final_cell_move_y,
+                                                           direction, direction_to_head);
+        if (try_push_result.should_return) {
+            return try_push_result.result != PUSH_OBJECT_FAIL;
         }
 
         segment_to_move->x = (S16)(final_cell_move_x);
@@ -574,53 +611,36 @@ bool snake_segment_push(Game* game, S32 snake_index, S32 segment_index, Directio
     S32 first_cell_to_check_y = segment_to_move->y;
     adjacent_cell(direction, &first_cell_to_check_x, &first_cell_to_check_y);
 
+    TryPushResult try_push_result = _game_if_cell_not_empty_try_push(game, original_x, original_y,
+                                                                     first_cell_to_check_x,
+                                                                     first_cell_to_check_y,
+                                                                     direction, direction_to_head);
+    if (try_push_result.should_return) {
+        return try_push_result.result != PUSH_OBJECT_FAIL;
+    }
+
     S32 second_cell_to_check_x = first_cell_to_check_x;
     S32 second_cell_to_check_y = first_cell_to_check_y;
     adjacent_cell(opposite_direction(direction_to_head), &second_cell_to_check_x, &second_cell_to_check_y);
+
+    try_push_result = _game_if_cell_not_empty_try_push(game, original_x, original_y,
+                                                       second_cell_to_check_x,
+                                                       second_cell_to_check_y,
+                                                       direction, direction_to_head);
+    if (try_push_result.should_return) {
+        return try_push_result.result != PUSH_OBJECT_FAIL;
+    }
 
     S32 final_cell_move_x = first_cell_to_check_x;
     S32 final_cell_move_y = first_cell_to_check_y;
     adjacent_cell(direction_to_head, &final_cell_move_x, &final_cell_move_y);
 
-    if (!_game_empty_at(game, first_cell_to_check_x, first_cell_to_check_y)) {
-        PushResult push = _game_object_push(game, first_cell_to_check_x, first_cell_to_check_y, direction_to_tail);
-        if (push == PUSH_OBJECT_FAIL) {
-            return false;
-        }
-        if (push == PUSH_OBJECT_SUCCESS) {
-            PushResult push_result = _game_object_push(game, original_x, original_y, direction);
-            return push_result != PUSH_OBJECT_FAIL;
-        }
-    }
-
-    if (!_game_empty_at(game, second_cell_to_check_x, second_cell_to_check_y)) {
-        PushResult first_push = _game_object_push(game, second_cell_to_check_x, second_cell_to_check_y, direction_to_tail);
-        PushResult second_push = PUSH_OBJECT_EMPTY;
-        if (first_push == PUSH_OBJECT_FAIL) {
-            second_push = _game_object_push(game, second_cell_to_check_x, second_cell_to_check_y, opposite_direction(direction_to_head));
-            if (second_push == PUSH_OBJECT_FAIL) {
-                return false;
-            }
-        }
-        if (first_push == PUSH_OBJECT_SUCCESS || second_push == PUSH_OBJECT_SUCCESS) {
-            PushResult push_result = _game_object_push(game, original_x, original_y, direction);
-            return push_result != PUSH_OBJECT_FAIL;
-        }
-    }
-
-    if (!_game_empty_at(game, final_cell_move_x, final_cell_move_y)) {
-        PushResult first_push = _game_object_push(game, final_cell_move_x, final_cell_move_y, direction);
-        PushResult second_push = PUSH_OBJECT_EMPTY;
-        if (first_push == PUSH_OBJECT_FAIL) {
-            second_push = _game_object_push(game, final_cell_move_x, final_cell_move_y, direction_to_head);
-            if (second_push == PUSH_OBJECT_FAIL) {
-                return false;
-            }
-        }
-        if (first_push == PUSH_OBJECT_SUCCESS || second_push == PUSH_OBJECT_SUCCESS) {
-            PushResult push_result = _game_object_push(game, original_x, original_y, direction);
-            return push_result != PUSH_OBJECT_FAIL;
-        }
+    try_push_result = _game_if_cell_not_empty_try_push(game, original_x, original_y,
+                                                       final_cell_move_x,
+                                                       final_cell_move_y,
+                                                       direction, direction_to_head);
+    if (try_push_result.should_return) {
+        return try_push_result.result != PUSH_OBJECT_FAIL;
     }
 
     segment_to_move->x = (S16)(second_cell_to_check_x);
@@ -714,16 +734,16 @@ bool snake_segment_constrict(Game* game, S32 snake_index, S32 segment_index, boo
                 }
             }
 
-            PushResult first_push = _game_object_push(game, final_cell_move_x, final_cell_move_y, rotation_direction);
-            PushResult second_push = PUSH_OBJECT_EMPTY;
-            if (first_push == PUSH_OBJECT_FAIL) {
-                second_push = _game_object_push(game, final_cell_move_x, final_cell_move_y, next_direction_to_head);
-                if (second_push == PUSH_OBJECT_FAIL) {
-                    return false;
-                }
-            }
-            if (first_push == PUSH_OBJECT_SUCCESS || second_push == PUSH_OBJECT_SUCCESS) {
-                return snake_segment_constrict(game, snake_index, segment_index, left);
+            TryConstrictResult try_constrict_result = _game_if_cell_not_empty_try_constrict(game,
+                                                                                            snake_index,
+                                                                                            segment_index,
+                                                                                            left,
+                                                                                            final_cell_move_x,
+                                                                                            final_cell_move_y,
+                                                                                            rotation_direction,
+                                                                                            next_direction_to_head);
+            if (try_constrict_result.should_return) {
+                return try_constrict_result.result;
             }
         }
 
@@ -741,32 +761,28 @@ bool snake_segment_constrict(Game* game, S32 snake_index, S32 segment_index, boo
     // ..4..    .....
     //
 
-    if (!_game_empty_at(game, initial_cell_move_x, initial_cell_move_y)) {
-        PushResult first_push = _game_object_push(game, initial_cell_move_x, initial_cell_move_y, rotation_direction);
-        PushResult second_push = PUSH_OBJECT_EMPTY;
-        if (first_push == PUSH_OBJECT_FAIL) {
-            second_push = _game_object_push(game, initial_cell_move_x, initial_cell_move_y, next_direction_to_head);
-            if (second_push == PUSH_OBJECT_FAIL) {
-                return false;
-            }
-        }
-        if (first_push == PUSH_OBJECT_SUCCESS || second_push == PUSH_OBJECT_SUCCESS) {
-            return snake_segment_constrict(game, snake_index, segment_index, left);
-        }
+    TryConstrictResult try_constrict_result = _game_if_cell_not_empty_try_constrict(game,
+                                                                                    snake_index,
+                                                                                    segment_index,
+                                                                                    left,
+                                                                                    initial_cell_move_x,
+                                                                                    initial_cell_move_y,
+                                                                                    rotation_direction,
+                                                                                    next_direction_to_head);
+    if (try_constrict_result.should_return) {
+        return try_constrict_result.result;
     }
 
-    if (!_game_empty_at(game, final_cell_move_x, final_cell_move_y)) {
-        PushResult first_push = _game_object_push(game, final_cell_move_x, final_cell_move_y, rotation_direction);
-        PushResult second_push = PUSH_OBJECT_EMPTY;
-        if (first_push == PUSH_OBJECT_FAIL) {
-            second_push = _game_object_push(game, final_cell_move_x, final_cell_move_y, next_direction_to_head);
-            if (second_push == PUSH_OBJECT_FAIL) {
-                return false;
-            }
-        }
-        if (first_push == PUSH_OBJECT_SUCCESS || second_push == PUSH_OBJECT_SUCCESS) {
-            return snake_segment_constrict(game, snake_index, segment_index, left);
-        }
+    try_constrict_result = _game_if_cell_not_empty_try_constrict(game,
+                                                                 snake_index,
+                                                                 segment_index,
+                                                                 left,
+                                                                 final_cell_move_x,
+                                                                 final_cell_move_y,
+                                                                 rotation_direction,
+                                                                 next_direction_to_head);
+    if (try_constrict_result.should_return) {
+        return try_constrict_result.result;
     }
 
     // As long as the adjacent squares are empty, we can drag the snake's body through it.
