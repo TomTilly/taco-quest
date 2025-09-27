@@ -44,9 +44,10 @@ typedef struct {
     S8 health;
 } SnakeSegment;
 
-typedef struct {
-    S32 index;
-    bool left;
+typedef enum {
+    SNAKE_CONSTRICT_STATE_NONE,
+    SNAKE_CONSTRICT_STATE_LEFT,
+    SNAKE_CONSTRICT_STATE_RIGHT,
 } SnakeConstrictState;
 
 typedef struct {
@@ -55,7 +56,6 @@ typedef struct {
     S32 capacity; // I hate STL
     Direction direction;
     S8 chomp_cooldown;
-    SnakeConstrictState constrict_state;
 } Snake;
 
 typedef struct {

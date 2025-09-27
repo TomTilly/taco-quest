@@ -429,7 +429,7 @@ int main(S32 argc, char** argv) {
                         snake_action |= SNAKE_ACTION_CONSTRICT_RIGHT_END;
                         break;
                     }
-                }
+                 }
             break;
             }
         }

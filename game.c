@@ -436,7 +436,6 @@ TryConstrictResult _game_if_cell_not_empty_try_constrict(Game* game,
                                                          Direction second_direction) {
     TryConstrictResult result = {0};
     if (!_game_empty_at(game, target_cell_x, target_cell_y)) {
-
         // If not empty at the target, attempt to push in the specified direction.
         PushResult first_push = _game_object_push(game, target_cell_x, target_cell_y, first_direction);
 
@@ -836,11 +835,14 @@ void _flood_fill_kill_checks(Game* game, SnakeKillCheck* kill_checks, S32 snake_
     }
 }
 
-void _snake_constrict(Game* game, S32 snake_index) {
+void _snake_constrict(Game* game, S32 snake_index, SnakeConstrictState constrict_state) {
     Snake* snake = game->snakes + snake_index;
     // TODO: update this comment.
     // First pass finds the shapes to operate on. This is so we don't operate on corners that we
     // create during this pass and only operate on the existing ones.
+    if (constrict_state == SNAKE_CONSTRICT_STATE_NONE) {
+        return;
+    }
 
     // Allocate an array of the size of the level wherel each cell is flood filled inside where
     // the snake is constricting.
@@ -849,11 +851,13 @@ void _snake_constrict(Game* game, S32 snake_index) {
 
     // How many elements were impacted by a constrict pass on this tick. If any, advance passed them
     // otherwise we will see the chain constrict effect.
-    for (S32 segment_index = snake->constrict_state.index; segment_index < snake->length; segment_index++) {
+    for (S32 segment_index = 0; segment_index < snake->length; segment_index++) {
         Game cloned_game = {0};
         game_clone(game, &cloned_game);
 
-        if (snake_segment_constrict(&cloned_game, snake_index, segment_index, snake->constrict_state.left)) {
+        bool left = (constrict_state == SNAKE_CONSTRICT_STATE_LEFT);
+
+        if (snake_segment_constrict(&cloned_game, snake_index, segment_index, left)) {
             // Apply the push by overwriting the original game with the clone.
             game_clone(&cloned_game, game);
             game_destroy(&cloned_game);
@@ -861,14 +865,7 @@ void _snake_constrict(Game* game, S32 snake_index) {
             // Update our snake pointer in case any re-allocation was required.
             snake = game->snakes + snake_index;
 
-            S32 new_constrict_index = segment_index + 2;
-            if (new_constrict_index >= snake->length) {
-                snake->constrict_state.index = -1;
-            } else {
-                snake->constrict_state.index = new_constrict_index;
-            }
-            free(kill_checks);
-            return;
+            segment_index++;
         } else {
             // Check for a kill !
 
@@ -898,7 +895,7 @@ void _snake_constrict(Game* game, S32 snake_index) {
             S32 cell_to_fill_x = segment->x;
             S32 cell_to_fill_y = segment->y;
             Direction direction_to_cell = DIRECTION_NONE;
-            if (snake->constrict_state.left) {
+            if (left) {
                 direction_to_cell = rotate_counter_clockwise(direction_to_head);
             } else {
                 direction_to_cell = rotate_clockwise(direction_to_head);
@@ -989,8 +986,6 @@ void _snake_constrict(Game* game, S32 snake_index) {
         game_destroy(&cloned_game);
     }
 
-    // If we made it to the end without constricting, reset the state.
-    snake->constrict_state.index = -1;
     free(kill_checks);
 }
 
@@ -1036,24 +1031,21 @@ void game_update(Game* game, SnakeAction* snake_actions) {
         }
     }
 
+    SnakeConstrictState constrict_state = SNAKE_CONSTRICT_STATE_NONE;
     for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
         SnakeAction snake_action = snake_actions[s];
-        if (game->snakes[s].constrict_state.index >= 0) {
-            _snake_constrict(game, s);
-        } else if (snake_action & SNAKE_ACTION_CONSTRICT_LEFT) {
-            game->snakes[s].constrict_state.index = 0;
-            game->snakes[s].constrict_state.left = true;
-            _snake_constrict(game, s);
+        if (snake_action & SNAKE_ACTION_CONSTRICT_LEFT) {
+            constrict_state = SNAKE_CONSTRICT_STATE_LEFT;
+            _snake_constrict(game, s, constrict_state);
         } else if (snake_action & SNAKE_ACTION_CONSTRICT_RIGHT) {
-            game->snakes[s].constrict_state.index = 0;
-            game->snakes[s].constrict_state.left = false;
-            _snake_constrict(game, s);
+            constrict_state = SNAKE_CONSTRICT_STATE_RIGHT;
+            _snake_constrict(game, s, constrict_state);
         }
     }
 
     for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
         // Only allow movement if we aren't constricting.
-        if (game->snakes[s].constrict_state.index == -1) {
+        if (constrict_state == SNAKE_CONSTRICT_STATE_NONE) {
             _snake_move(game->snakes + s, game);
         }
         if (game->snakes[s].length != 0) {
