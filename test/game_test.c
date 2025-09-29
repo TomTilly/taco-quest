@@ -229,7 +229,12 @@ bool snake_segment_push_test(const char** input_level,
     Game input_game = {0};
     game_from_string(input_level, &input_game);
 
-    snake_segment_push(&input_game, 0, segment_index, direction);
+    PushState push_state = {0};
+    init_push_state(&input_game, &push_state);
+
+    snake_segment_push(&input_game, &push_state, 0, segment_index, direction);
+
+    free(push_state.cells);
 
     Game output_game = {0};
     game_from_string(output_level, &output_game);
@@ -861,6 +866,28 @@ int main(int argc, char** argv) {
         };
 
         EXPECT(snake_segment_constrict_test(input_level, output_level, 2, false));
+    }
+
+    {
+        const char* input_level[] = {
+            "...W...",
+            ".aBA...",
+            ".bC....",
+            ".cD....",
+            ".d.....",
+            NULL
+        };
+
+        const char* output_level[] = {
+            "...W...",
+            ".abA...",
+            ".dcB...",
+            "..DC...",
+            ".......",
+            NULL
+        };
+
+        EXPECT(snake_segment_constrict_test(input_level, output_level, 0, false));
     }
 
     if (g_failed) {
