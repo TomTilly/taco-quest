@@ -68,4 +68,6 @@ size_t game_deserialize(void * buffer, size_t size, Game * out);
 bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 segment_index, Direction direction);
 bool snake_segment_constrict(Game* game, S32 snake_index, S32 segment_index, bool left);
 
+void init_push_state(Game* game, PushState* push_state);
+
 #endif /* game_h */
