@@ -42,4 +42,6 @@ bool directions_are_perpendicular(Direction a, Direction b);
 // A to B
 Direction direction_between_cells(S32 a_x, S32 a_y, S32 b_x, S32 b_y);
 
+const char* direction_to_string(Direction direction);
+
 #endif /* direction_h */

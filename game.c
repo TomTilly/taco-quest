@@ -30,28 +30,37 @@ typedef enum {
 } SnakeKillCheck;
 
 void _print_game(Game* game) {
-    char** string = malloc(game->level.height * sizeof(char*));
-    S32 string_length = game->level.width + 1; // plus one for null terminator.
-    for (S32 i = 0; i < game->level.height; i++) {
+    S32 print_height = game->level.height + 1; // For coordinates.
+    char** string = malloc(print_height * sizeof(char*));
+    S32 string_length = game->level.width + 2; // For coordinates plus null terminator.
+    for (S32 i = 0; i < print_height; i++) {
         string[i] = malloc(string_length);
         memset(string[i], 0, string_length);
     }
 
+    string[0][0] = ' ';
+    for (S32 x = 0; x < game->level.width; x++) {
+        string[0][x + 1] = '0' + (x % 10);
+    }
+
     for (S32 y = 0; y < game->level.height; y++) {
+        S32 print_y = y + 1;
+        string[print_y][0] = '0' + (y % 10);
         for (S32 x = 0; x < game->level.width; x++) {
             CellType cell = level_get_cell(&game->level, x, y);
+            S32 print_x = x + 1;
             switch(cell) {
             case CELL_TYPE_EMPTY:
-                string[y][x] = '.';
+                string[print_y][print_x] = '.';
                 break;
             case CELL_TYPE_WALL:
-                string[y][x] = 'W';
+                string[print_y][print_x] = 'W';
                 break;
             case CELL_TYPE_TACO:
-                string[y][x] = 'T';
+                string[print_y][print_x] = 'T';
                 break;
             default:
-                string[y][x] = ' ';
+                string[print_y][print_x] = ' ';
                 break;
             }
         }
@@ -61,15 +70,16 @@ void _print_game(Game* game) {
     for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
         for (S32 e = 0; e < game->snakes[s].length; e++) {
             SnakeSegment* segment = game->snakes[s].segments + e;
-            string[segment->y][segment->x] = (char)(base_chars[s] + e);
+            string[segment->y + 1][segment->x + 1] = (char)(base_chars[s] + (e % 26));
         }
     }
 
-    for (S32 i = 0; i < game->level.height; i++) {
+    printf("\n");
+    for (S32 i = 0; i < print_height; i++) {
         printf("%s\n", string[i]);
     }
 
-    for (S32 i = 0; i < game->level.height; i++) {
+    for (S32 i = 0; i < print_height; i++) {
         free(string[i]);
     }
     free(string);
@@ -280,13 +290,32 @@ typedef enum {
     PUSH_OBJECT_FAIL
 } PushResult;
 
-PushResult _game_object_push(Game* game, S32 x, S32 y, Direction direction);
+void init_push_state(Game* game, PushState* push_state) {
+    S32 size = game->level.height * game->level.width;
+    push_state->cells = malloc(size);
+    memset(push_state->cells, 0, size);
+}
 
-bool _taco_push(Game* game, S32 x, S32 y, Direction direction) {
+bool has_been_pushed(PushState* push_state, Game* game, S32 x, S32 y, Direction direction) {
+    assert(direction < DIRECTION_COUNT);
+    S32 index = y * game->level.height + x;
+    return push_state->cells[index] & (1 >> direction);
+}
+
+void mark_pushed(PushState* push_state, Game* game, S32 x, S32 y, Direction direction) {
+    assert(direction < DIRECTION_COUNT);
+    S32 index = y * game->level.height + x;
+    push_state->cells[index] |= (1 >> direction);
+}
+
+PushResult _game_object_push(Game* game, S32 x, S32 y, Direction direction);
+PushResult _game_object_push_impl(Game* game, PushState* push_state, S32 x, S32 y, Direction direction);
+
+bool _taco_push(Game* game, PushState* push_state, S32 x, S32 y, Direction direction) {
     S32 adjacent_x = x;
     S32 adjacent_y = y;
     adjacent_cell(direction, &adjacent_x, &adjacent_y);
-    if (_game_object_push(game, adjacent_x, adjacent_y, direction) == PUSH_OBJECT_FAIL) {
+    if (_game_object_push_impl(game, push_state, adjacent_x, adjacent_y, direction) == PUSH_OBJECT_FAIL) {
         return false;
     }
 
@@ -301,6 +330,19 @@ bool _game_empty_at(Game* game, S32 x, S32 y) {
 }
 
 PushResult _game_object_push(Game* game, S32 x, S32 y, Direction direction) {
+    PushState push_state = {0};
+    init_push_state(game, &push_state);
+    PushResult result = _game_object_push_impl(game, &push_state, x, y, direction);
+    free(push_state.cells);
+    return result;
+}
+
+PushResult _game_object_push_impl(Game* game, PushState* push_state, S32 x, S32 y, Direction direction) {
+    if (has_been_pushed(push_state, game, x, y, direction)) {
+        return PUSH_OBJECT_FAIL;
+    }
+    mark_pushed(push_state, game, x, y, direction);
+
     QueriedObject queried_object = game_query(game, x, y);
     switch (queried_object.type) {
     case QUERIED_OBJECT_TYPE_NONE:
@@ -310,7 +352,7 @@ PushResult _game_object_push(Game* game, S32 x, S32 y, Direction direction) {
         case CELL_TYPE_EMPTY:
             return PUSH_OBJECT_EMPTY;
         case CELL_TYPE_TACO:
-            if (_taco_push(game, x, y, direction)) {
+            if (_taco_push(game, push_state, x, y, direction)) {
                 return PUSH_OBJECT_SUCCESS;
             }
             return PUSH_OBJECT_FAIL;
@@ -322,6 +364,7 @@ PushResult _game_object_push(Game* game, S32 x, S32 y, Direction direction) {
         break;
     case QUERIED_OBJECT_TYPE_SNAKE:
         if (snake_segment_push(game,
+                               push_state,
                                queried_object.snake.index,
                                queried_object.snake.segment_index,
                                direction)) {
@@ -389,6 +432,7 @@ typedef struct {
 } TryPushResult;
 
 TryPushResult _game_if_cell_not_empty_try_push(Game* game,
+                                               PushState* push_state,
                                                S32 original_cell_x,
                                                S32 original_cell_y,
                                                S32 target_cell_x,
@@ -398,12 +442,12 @@ TryPushResult _game_if_cell_not_empty_try_push(Game* game,
     TryPushResult result = {0};
     if (!_game_empty_at(game, target_cell_x, target_cell_y)) {
         // If not empty at the target, attempt to push in the specified direction.
-        PushResult first_push = _game_object_push(game, target_cell_x, target_cell_y, first_direction);
+        PushResult first_push = _game_object_push_impl(game, push_state, target_cell_x, target_cell_y, first_direction);
 
         PushResult second_push = PUSH_OBJECT_EMPTY;
         if (first_push == PUSH_OBJECT_FAIL) {
             // If the first push failed, try again but in the second specified direction.
-            second_push = _game_object_push(game, target_cell_x, target_cell_y, second_direction);
+            second_push = _game_object_push_impl(game, push_state, target_cell_x, target_cell_y, second_direction);
             if (second_push == PUSH_OBJECT_FAIL) {
                 result.should_return = true;
                 result.result = second_push;
@@ -414,7 +458,7 @@ TryPushResult _game_if_cell_not_empty_try_push(Game* game,
             result.should_return = true;
             // TODO: If recursion gets too much, we can return a value that means to retry and have
             // the call site re-try.
-            result.result = _game_object_push(game, original_cell_x, original_cell_y, first_direction);
+            result.result = _game_object_push_impl(game, push_state, original_cell_x, original_cell_y, first_direction);
         }
     }
 
@@ -461,7 +505,7 @@ TryConstrictResult _game_if_cell_not_empty_try_constrict(Game* game,
 
 // Push guarantees that if it returns true, the segment that was pushed moved and there is no
 // segment at that cell.
-bool snake_segment_push(Game* game, S32 snake_index, S32 segment_index, Direction direction) {
+bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 segment_index, Direction direction) {
     Snake* snake = game->snakes + snake_index;
     SnakeSegment* segment_to_move = snake->segments + segment_index;
 
@@ -486,7 +530,10 @@ bool snake_segment_push(Game* game, S32 snake_index, S32 segment_index, Directio
         S32 first_cell_to_check_y = segment_to_move->y;
         adjacent_cell(direction, &first_cell_to_check_x, &first_cell_to_check_y);
 
-        TryPushResult try_push_result = _game_if_cell_not_empty_try_push(game, original_x, original_y,
+        TryPushResult try_push_result = _game_if_cell_not_empty_try_push(game,
+                                                                         push_state,
+                                                                         original_x,
+                                                                         original_y,
                                                                          first_cell_to_check_x,
                                                                          first_cell_to_check_y,
                                                                          direction, direction_to_tail);
@@ -498,7 +545,10 @@ bool snake_segment_push(Game* game, S32 snake_index, S32 segment_index, Directio
         S32 final_cell_move_y = first_cell_to_check_y;
         adjacent_cell(direction_to_tail, &final_cell_move_x, &final_cell_move_y);
 
-        try_push_result = _game_if_cell_not_empty_try_push(game, original_x, original_y,
+        try_push_result = _game_if_cell_not_empty_try_push(game,
+                                                           push_state,
+                                                           original_x,
+                                                           original_y,
                                                            final_cell_move_x,
                                                            final_cell_move_y,
                                                            direction, direction_to_tail);
@@ -532,7 +582,10 @@ bool snake_segment_push(Game* game, S32 snake_index, S32 segment_index, Directio
         S32 final_cell_move_y = first_cell_to_check_y;
         adjacent_cell(direction_to_head, &final_cell_move_x, &final_cell_move_y);
 
-        TryPushResult try_push_result = _game_if_cell_not_empty_try_push(game, original_x, original_y,
+        TryPushResult try_push_result = _game_if_cell_not_empty_try_push(game,
+                                                                         push_state,
+                                                                         original_x,
+                                                                         original_y,
                                                                          final_cell_move_x,
                                                                          final_cell_move_y,
                                                                          direction_to_tail, direction_to_head);
@@ -567,7 +620,10 @@ bool snake_segment_push(Game* game, S32 snake_index, S32 segment_index, Directio
         S32 first_cell_to_check_y = segment_to_move->y;
         adjacent_cell(direction, &first_cell_to_check_x, &first_cell_to_check_y);
 
-        TryPushResult try_push_result = _game_if_cell_not_empty_try_push(game, original_x, original_y,
+        TryPushResult try_push_result = _game_if_cell_not_empty_try_push(game,
+                                                                         push_state,
+                                                                         original_x,
+                                                                         original_y,
                                                                          first_cell_to_check_x,
                                                                          first_cell_to_check_y,
                                                                          direction, direction_to_head);
@@ -579,7 +635,10 @@ bool snake_segment_push(Game* game, S32 snake_index, S32 segment_index, Directio
         S32 final_cell_move_y = first_cell_to_check_y;
         adjacent_cell(direction_to_head, &final_cell_move_x, &final_cell_move_y);
 
-        try_push_result = _game_if_cell_not_empty_try_push(game, original_x, original_y,
+        try_push_result = _game_if_cell_not_empty_try_push(game,
+                                                           push_state,
+                                                           original_x,
+                                                           original_y,
                                                            final_cell_move_x,
                                                            final_cell_move_y,
                                                            direction, direction_to_head);
@@ -610,7 +669,10 @@ bool snake_segment_push(Game* game, S32 snake_index, S32 segment_index, Directio
     S32 first_cell_to_check_y = segment_to_move->y;
     adjacent_cell(direction, &first_cell_to_check_x, &first_cell_to_check_y);
 
-    TryPushResult try_push_result = _game_if_cell_not_empty_try_push(game, original_x, original_y,
+    TryPushResult try_push_result = _game_if_cell_not_empty_try_push(game,
+                                                                     push_state,
+                                                                     original_x,
+                                                                     original_y,
                                                                      first_cell_to_check_x,
                                                                      first_cell_to_check_y,
                                                                      direction, direction_to_head);
@@ -622,7 +684,10 @@ bool snake_segment_push(Game* game, S32 snake_index, S32 segment_index, Directio
     S32 second_cell_to_check_y = first_cell_to_check_y;
     adjacent_cell(opposite_direction(direction_to_head), &second_cell_to_check_x, &second_cell_to_check_y);
 
-    try_push_result = _game_if_cell_not_empty_try_push(game, original_x, original_y,
+    try_push_result = _game_if_cell_not_empty_try_push(game,
+                                                       push_state,
+                                                       original_x,
+                                                       original_y,
                                                        second_cell_to_check_x,
                                                        second_cell_to_check_y,
                                                        direction, direction_to_head);
@@ -634,7 +699,10 @@ bool snake_segment_push(Game* game, S32 snake_index, S32 segment_index, Directio
     S32 final_cell_move_y = first_cell_to_check_y;
     adjacent_cell(direction_to_head, &final_cell_move_x, &final_cell_move_y);
 
-    try_push_result = _game_if_cell_not_empty_try_push(game, original_x, original_y,
+    try_push_result = _game_if_cell_not_empty_try_push(game,
+                                                       push_state,
+                                                       original_x,
+                                                       original_y,
                                                        final_cell_move_x,
                                                        final_cell_move_y,
                                                        direction, direction_to_head);
@@ -848,6 +916,8 @@ void _snake_constrict(Game* game, S32 snake_index, SnakeConstrictState constrict
     // the snake is constricting.
     S32 cell_count = game->level.width * game->level.height;
     SnakeKillCheck* kill_checks = malloc(cell_count * sizeof(*kill_checks));
+
+    // TODO: Evaluate if we want to go back to doing a single segment constrict per tick.
 
     // How many elements were impacted by a constrict pass on this tick. If any, advance passed them
     // otherwise we will see the chain constrict effect.

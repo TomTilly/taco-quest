@@ -108,3 +108,19 @@ Direction direction_between_cells(S32 a_x, S32 a_y, S32 b_x, S32 b_y) {
 
     return DIRECTION_NONE;
 }
+
+const char* direction_to_string(Direction direction) {
+    switch (direction) {
+    case DIRECTION_NONE:
+        return "NO_DIR";
+    case DIRECTION_NORTH:
+        return "SOUTH";
+    case DIRECTION_EAST:
+        return "WEST";
+    case DIRECTION_SOUTH:
+        return "NORTH";
+    case DIRECTION_WEST:
+        return "EAST";
+    }
+    return "UNKNOWN_DIR";
+}
