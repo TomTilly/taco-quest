@@ -890,6 +890,50 @@ int main(int argc, char** argv) {
         EXPECT(snake_segment_constrict_test(input_level, output_level, 0, false));
     }
 
+    {
+        const char* input_level[] = {
+            "WWWWWWW",
+            "...aA..",
+            "..cbB..",
+            "..dWC..",
+            "..eWD..",
+            NULL
+        };
+
+        const char* output_level[] = {
+            "WWWWWWW",
+            "...ab..",
+            "..edcA.",
+            "...WCB.",
+            "...WD..",
+            NULL
+        };
+
+        EXPECT(snake_segment_constrict_test(input_level, output_level, 0, false));
+    }
+
+    {
+        const char* input_level[] = {
+            ".edcbaW",
+            "..GFABW",
+            "..HEDCW",
+            "..I...W",
+            "..JWWWW",
+            NULL
+        };
+
+        const char* output_level[] = {
+            "...edaW",
+            "..GFcbW",
+            "..HEDAW",
+            "..I.CBW",
+            "..JWWWW",
+            NULL
+        };
+
+        EXPECT(snake_segment_constrict_test(input_level, output_level, 0, false));
+    }
+
     if (g_failed) {
         printf("unittests failed\n");
         return 1;

@@ -29,6 +29,49 @@ typedef enum {
     SNAKE_KILL_CHECK_SELF,
 } SnakeKillCheck;
 
+typedef struct {
+    S32 current_x;
+    S32 current_y;
+    S32 previous_x;
+    S32 previous_y;
+    S32 next_x;
+    S32 next_y;
+} SnakeSegmentPosition;
+
+void _track_snake_segment_position(Snake* snake, S32 segment_index, SnakeSegmentPosition* snake_segment_position) {
+    memset(snake_segment_position, 0, sizeof(*snake_segment_position));
+    if (segment_index < 0 || segment_index >= snake->length) {
+        return;
+    }
+
+    SnakeSegment* segment = snake->segments + segment_index;
+    snake_segment_position->current_x = segment->x;
+    snake_segment_position->current_y = segment->y;
+
+    S32 previous_segment_index = segment_index - 1;
+    if (previous_segment_index >= 0) {
+        SnakeSegment* previous_segment = snake->segments + previous_segment_index;
+        snake_segment_position->previous_x = previous_segment->x;
+        snake_segment_position->previous_y = previous_segment->y;
+    }
+
+    S32 next_segment_index = segment_index + 1;
+    if (next_segment_index < snake->length) {
+        SnakeSegment* next_segment = snake->segments + next_segment_index;
+        snake_segment_position->next_x = next_segment->x;
+        snake_segment_position->next_y = next_segment->y;
+    }
+}
+
+bool _snake_segment_positions_equal(SnakeSegmentPosition* a, SnakeSegmentPosition* b) {
+    return a->current_x == b->current_x &&
+           a->current_y == b->current_y &&
+           a->previous_x == b->previous_x &&
+           a->previous_y == b->previous_y &&
+           a->next_x == b->next_x &&
+           a->next_y == b->next_y;
+}
+
 void _print_game(Game* game) {
     S32 print_height = game->level.height + 1; // For coordinates.
     char** string = malloc(print_height * sizeof(char*));
@@ -473,8 +516,8 @@ bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 
     Snake* snake = game->snakes + snake_index;
     SnakeSegment* segment_to_move = snake->segments + segment_index;
 
-    S32 original_x = segment_to_move->x;
-    S32 original_y = segment_to_move->y;
+    SnakeSegmentPosition original_segment_pos = {0};
+    _track_snake_segment_position(snake, segment_index, &original_segment_pos);
 
     Direction direction_to_head = snake_segment_direction_to_head(snake, segment_index);
     Direction direction_to_tail = snake_segment_direction_to_tail(snake, segment_index);
@@ -502,7 +545,9 @@ bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 
         if (push_result == PUSH_OBJECT_FAIL) {
             return false;
         } else if (push_result == PUSH_OBJECT_SUCCESS) {
-            if (segment_to_move->x != original_x || segment_to_move->y != original_y) {
+            SnakeSegmentPosition updated_segment_pos = {0};
+            _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
+            if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
                 return false;
             }
         }
@@ -519,7 +564,9 @@ bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 
         if (push_result == PUSH_OBJECT_FAIL) {
             return false;
         } else if (push_result == PUSH_OBJECT_SUCCESS) {
-            if (segment_to_move->x != original_x || segment_to_move->y != original_y) {
+            SnakeSegmentPosition updated_segment_pos = {0};
+            _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
+            if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
                 return false;
             }
         }
@@ -559,7 +606,9 @@ bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 
         if (push_result == PUSH_OBJECT_FAIL) {
             return false;
         } else if (push_result == PUSH_OBJECT_SUCCESS) {
-            if (segment_to_move->x != original_x || segment_to_move->y != original_y) {
+            SnakeSegmentPosition updated_segment_pos = {0};
+            _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
+            if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
                 return false;
             }
         }
@@ -599,7 +648,9 @@ bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 
         if (push_result == PUSH_OBJECT_FAIL) {
             return false;
         } else if (push_result == PUSH_OBJECT_SUCCESS) {
-            if (segment_to_move->x != original_x || segment_to_move->y != original_y) {
+            SnakeSegmentPosition updated_segment_pos = {0};
+            _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
+            if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
                 return false;
             }
         }
@@ -616,7 +667,9 @@ bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 
         if (push_result == PUSH_OBJECT_FAIL) {
             return false;
         } else if (push_result == PUSH_OBJECT_SUCCESS) {
-            if (segment_to_move->x != original_x || segment_to_move->y != original_y) {
+            SnakeSegmentPosition updated_segment_pos = {0};
+            _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
+            if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
                 return false;
             }
         }
@@ -652,7 +705,9 @@ bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 
     if (push_result == PUSH_OBJECT_FAIL) {
         return false;
     } else if (push_result == PUSH_OBJECT_SUCCESS) {
-        if (segment_to_move->x != original_x || segment_to_move->y != original_y) {
+        SnakeSegmentPosition updated_segment_pos = {0};
+        _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
+        if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
             return false;
         }
     }
@@ -669,7 +724,9 @@ bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 
     if (push_result == PUSH_OBJECT_FAIL) {
         return false;
     } else if (push_result == PUSH_OBJECT_SUCCESS) {
-        if (segment_to_move->x != original_x || segment_to_move->y != original_y) {
+        SnakeSegmentPosition updated_segment_pos = {0};
+        _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
+        if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
             return false;
         }
     }
@@ -686,7 +743,9 @@ bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 
     if (push_result == PUSH_OBJECT_FAIL) {
         return false;
     } else if (push_result == PUSH_OBJECT_SUCCESS) {
-        if (segment_to_move->x != original_x || segment_to_move->y != original_y) {
+        SnakeSegmentPosition updated_segment_pos = {0};
+        _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
+        if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
             return false;
         }
     }
@@ -720,8 +779,8 @@ bool snake_segment_constrict(Game* game, S32 snake_index, S32 segment_index, boo
         return false;
     }
 
-    S32 original_x = segment_to_move->x;
-    S32 original_y = segment_to_move->y;
+    SnakeSegmentPosition original_segment_pos = {0};
+    _track_snake_segment_position(snake, segment_to_move_index, &original_segment_pos);
 
     // Figure out adjacent cells we plan to move through.
     S32 initial_cell_move_x = segment_to_move->x;
@@ -794,7 +853,9 @@ bool snake_segment_constrict(Game* game, S32 snake_index, S32 segment_index, boo
             if (push_result == PUSH_OBJECT_FAIL) {
                 return false;
             } else if (push_result == PUSH_OBJECT_SUCCESS) {
-                if (segment_to_move->x != original_x || segment_to_move->y != original_y) {
+                SnakeSegmentPosition updated_segment_pos = {0};
+                _track_snake_segment_position(snake, segment_to_move_index, &updated_segment_pos);
+                if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
                     return false;
                 }
             }
@@ -844,7 +905,9 @@ bool snake_segment_constrict(Game* game, S32 snake_index, S32 segment_index, boo
     }
 
     if (first_push_result == PUSH_OBJECT_SUCCESS || second_push_result == PUSH_OBJECT_SUCCESS) {
-        if (segment_to_move->x != original_x || segment_to_move->y != original_y) {
+        SnakeSegmentPosition updated_segment_pos = {0};
+        _track_snake_segment_position(snake, segment_to_move_index, &updated_segment_pos);
+        if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
             return false;
         }
     }
