@@ -43,6 +43,7 @@ typedef struct {
 
 typedef struct {
     U8* cells;
+    S32 original_snake_index;
 } PushState;
 
 typedef struct {

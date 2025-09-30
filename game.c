@@ -351,7 +351,6 @@ void mark_pushed(PushState* push_state, Game* game, S32 x, S32 y, Direction dire
     push_state->cells[index] |= (1 << direction);
 }
 
-PushResult _game_object_push(Game* game, S32 x, S32 y, Direction direction);
 PushResult _game_object_push_impl(Game* game, PushState* push_state, S32 x, S32 y, Direction direction);
 
 bool _taco_push(Game* game, PushState* push_state, S32 x, S32 y, Direction direction) {
@@ -370,14 +369,6 @@ bool _taco_push(Game* game, PushState* push_state, S32 x, S32 y, Direction direc
 bool _game_empty_at(Game* game, S32 x, S32 y) {
     QueriedObject queried_object = game_query(game, x, y);
     return queried_object.type == QUERIED_OBJECT_TYPE_NONE;
-}
-
-PushResult _game_object_push(Game* game, S32 x, S32 y, Direction direction) {
-    PushState push_state = {0};
-    init_push_state(game, &push_state);
-    PushResult result = _game_object_push_impl(game, &push_state, x, y, direction);
-    free(push_state.cells);
-    return result;
 }
 
 PushResult _game_object_push_impl(Game* game, PushState* push_state, S32 x, S32 y, Direction direction) {
@@ -406,6 +397,9 @@ PushResult _game_object_push_impl(Game* game, PushState* push_state, S32 x, S32 
         }
         break;
     case QUERIED_OBJECT_TYPE_SNAKE:
+        if (push_state->original_snake_index == queried_object.snake.index) {
+            return PUSH_OBJECT_FAIL;
+        }
         if (snake_segment_push(game,
                                push_state,
                                queried_object.snake.index,
@@ -491,12 +485,15 @@ PushResult _game_if_cell_not_empty_try_push_impl(Game* game,
 }
 
 PushResult _game_if_cell_not_empty_try_push(Game* game,
+                                            S32 original_snake_index,
                                             S32 target_cell_x,
                                             S32 target_cell_y,
                                             Direction first_direction,
                                             Direction second_direction) {
     PushState push_state = {0};
     init_push_state(game, &push_state);
+    // TODO: Maybe init_push_state() should take this as a param.
+    push_state.original_snake_index = original_snake_index;
 
     PushResult result = _game_if_cell_not_empty_try_push_impl(game,
                                                               &push_state,
@@ -851,6 +848,7 @@ bool snake_segment_constrict(Game* game, S32 snake_index, S32 segment_index, boo
             }
 
             PushResult push_result = _game_if_cell_not_empty_try_push(game,
+                                                                      snake_index,
                                                                       final_cell_move_x,
                                                                       final_cell_move_y,
                                                                       rotation_direction,
@@ -882,12 +880,14 @@ bool snake_segment_constrict(Game* game, S32 snake_index, S32 segment_index, boo
     //
 
     PushResult first_push_result = _game_if_cell_not_empty_try_push(game,
+                                                                    snake_index,
                                                                     initial_cell_move_x,
                                                                     initial_cell_move_y,
                                                                     rotation_direction,
                                                                     next_direction_to_head);
 
     PushResult second_push_result = _game_if_cell_not_empty_try_push(game,
+                                                                     snake_index,
                                                                      final_cell_move_x,
                                                                      final_cell_move_y,
                                                                      rotation_direction,
@@ -900,6 +900,7 @@ bool snake_segment_constrict(Game* game, S32 snake_index, S32 segment_index, boo
 
         // If the second push result succeeded, retry the first push to see if that will now succeed.
         first_push_result = _game_if_cell_not_empty_try_push(game,
+                                                             snake_index,
                                                              initial_cell_move_x,
                                                              initial_cell_move_y,
                                                              rotation_direction,
