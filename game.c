@@ -341,14 +341,14 @@ void init_push_state(Game* game, PushState* push_state) {
 
 bool has_been_pushed(PushState* push_state, Game* game, S32 x, S32 y, Direction direction) {
     assert(direction < DIRECTION_COUNT);
-    S32 index = y * game->level.height + x;
-    return push_state->cells[index] & (1 >> direction);
+    S32 index = y * game->level.width + x;
+    return push_state->cells[index] & (1 << direction);
 }
 
 void mark_pushed(PushState* push_state, Game* game, S32 x, S32 y, Direction direction) {
     assert(direction < DIRECTION_COUNT);
-    S32 index = y * game->level.height + x;
-    push_state->cells[index] |= (1 >> direction);
+    S32 index = y * game->level.width + x;
+    push_state->cells[index] |= (1 << direction);
 }
 
 PushResult _game_object_push(Game* game, S32 x, S32 y, Direction direction);
@@ -509,7 +509,6 @@ PushResult _game_if_cell_not_empty_try_push(Game* game,
     return result;
 }
 
-
 // Push guarantees that if it returns true, the segment that was pushed moved and there is no
 // segment at that cell.
 bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 segment_index, Direction direction) {
@@ -538,18 +537,20 @@ bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 
         adjacent_cell(direction, &first_cell_to_check_x, &first_cell_to_check_y);
 
         PushResult push_result = _game_if_cell_not_empty_try_push_impl(game,
-                                                                  push_state,
-                                                                  first_cell_to_check_x,
-                                                                  first_cell_to_check_y,
-                                                                  direction, direction_to_tail);
+                                                                       push_state,
+                                                                       first_cell_to_check_x,
+                                                                       first_cell_to_check_y,
+                                                                       direction,
+                                                                       direction_to_tail);
+
         if (push_result == PUSH_OBJECT_FAIL) {
             return false;
-        } else if (push_result == PUSH_OBJECT_SUCCESS) {
-            SnakeSegmentPosition updated_segment_pos = {0};
-            _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
-            if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
-                return false;
-            }
+        }
+
+        SnakeSegmentPosition updated_segment_pos = {0};
+        _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
+        if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
+            return _game_empty_at(game, original_segment_pos.current_x, original_segment_pos.current_y);
         }
 
         S32 final_cell_move_x = first_cell_to_check_x;
@@ -557,18 +558,18 @@ bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 
         adjacent_cell(direction_to_tail, &final_cell_move_x, &final_cell_move_y);
 
         push_result = _game_if_cell_not_empty_try_push_impl(game,
-                                                       push_state,
-                                                       final_cell_move_x,
-                                                       final_cell_move_y,
-                                                       direction, direction_to_tail);
+                                                            push_state,
+                                                            final_cell_move_x,
+                                                            final_cell_move_y,
+                                                            direction,
+                                                            direction_to_tail);
         if (push_result == PUSH_OBJECT_FAIL) {
             return false;
-        } else if (push_result == PUSH_OBJECT_SUCCESS) {
-            SnakeSegmentPosition updated_segment_pos = {0};
-            _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
-            if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
-                return false;
-            }
+        }
+
+        _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
+        if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
+            return _game_empty_at(game, original_segment_pos.current_x, original_segment_pos.current_y);
         }
 
         segment_to_move->x = (S16)(final_cell_move_x);
@@ -598,19 +599,20 @@ bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 
         adjacent_cell(direction_to_head, &final_cell_move_x, &final_cell_move_y);
 
         PushResult push_result = _game_if_cell_not_empty_try_push_impl(game,
-                                                                  push_state,
-                                                                  final_cell_move_x,
-                                                                  final_cell_move_y,
-                                                                  direction_to_tail, direction_to_head);
+                                                                       push_state,
+                                                                       final_cell_move_x,
+                                                                       final_cell_move_y,
+                                                                       direction_to_tail,
+                                                                       direction_to_head);
 
         if (push_result == PUSH_OBJECT_FAIL) {
             return false;
-        } else if (push_result == PUSH_OBJECT_SUCCESS) {
-            SnakeSegmentPosition updated_segment_pos = {0};
-            _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
-            if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
-                return false;
-            }
+        }
+
+        SnakeSegmentPosition updated_segment_pos = {0};
+        _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
+        if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
+            return _game_empty_at(game, original_segment_pos.current_x, original_segment_pos.current_y);
         }
 
         if ((segment_index + 1) < snake->length) {
@@ -641,18 +643,19 @@ bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 
         adjacent_cell(direction, &first_cell_to_check_x, &first_cell_to_check_y);
 
         PushResult push_result = _game_if_cell_not_empty_try_push_impl(game,
-                                                                  push_state,
-                                                                  first_cell_to_check_x,
-                                                                  first_cell_to_check_y,
-                                                                  direction, direction_to_head);
+                                                                       push_state,
+                                                                       first_cell_to_check_x,
+                                                                       first_cell_to_check_y,
+                                                                       direction,
+                                                                       direction_to_head);
         if (push_result == PUSH_OBJECT_FAIL) {
             return false;
-        } else if (push_result == PUSH_OBJECT_SUCCESS) {
-            SnakeSegmentPosition updated_segment_pos = {0};
-            _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
-            if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
-                return false;
-            }
+        }
+
+        SnakeSegmentPosition updated_segment_pos = {0};
+        _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
+        if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
+            return _game_empty_at(game, original_segment_pos.current_x, original_segment_pos.current_y);
         }
 
         S32 final_cell_move_x = first_cell_to_check_x;
@@ -660,18 +663,17 @@ bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 
         adjacent_cell(direction_to_head, &final_cell_move_x, &final_cell_move_y);
 
         push_result = _game_if_cell_not_empty_try_push_impl(game,
-                                                       push_state,
-                                                       final_cell_move_x,
-                                                       final_cell_move_y,
-                                                       direction, direction_to_head);
+                                                            push_state,
+                                                            final_cell_move_x,
+                                                            final_cell_move_y,
+                                                            direction, direction_to_head);
         if (push_result == PUSH_OBJECT_FAIL) {
             return false;
-        } else if (push_result == PUSH_OBJECT_SUCCESS) {
-            SnakeSegmentPosition updated_segment_pos = {0};
-            _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
-            if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
-                return false;
-            }
+        }
+
+        _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
+        if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
+            return _game_empty_at(game, original_segment_pos.current_x, original_segment_pos.current_y);
         }
 
         segment_to_move->x = (S16)(final_cell_move_x);
@@ -698,18 +700,19 @@ bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 
     adjacent_cell(direction, &first_cell_to_check_x, &first_cell_to_check_y);
 
     PushResult push_result = _game_if_cell_not_empty_try_push_impl(game,
-                                                              push_state,
-                                                              first_cell_to_check_x,
-                                                              first_cell_to_check_y,
-                                                              direction, direction_to_head);
+                                                                   push_state,
+                                                                   first_cell_to_check_x,
+                                                                   first_cell_to_check_y,
+                                                                   direction,
+                                                                   direction_to_head);
     if (push_result == PUSH_OBJECT_FAIL) {
         return false;
-    } else if (push_result == PUSH_OBJECT_SUCCESS) {
-        SnakeSegmentPosition updated_segment_pos = {0};
-        _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
-        if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
-            return false;
-        }
+    }
+
+    SnakeSegmentPosition updated_segment_pos = {0};
+    _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
+    if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
+        return _game_empty_at(game, original_segment_pos.current_x, original_segment_pos.current_y);
     }
 
     S32 second_cell_to_check_x = first_cell_to_check_x;
@@ -717,18 +720,18 @@ bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 
     adjacent_cell(opposite_direction(direction_to_head), &second_cell_to_check_x, &second_cell_to_check_y);
 
     push_result = _game_if_cell_not_empty_try_push_impl(game,
-                                                   push_state,
-                                                   second_cell_to_check_x,
-                                                   second_cell_to_check_y,
-                                                   direction, direction_to_head);
+                                                        push_state,
+                                                        second_cell_to_check_x,
+                                                        second_cell_to_check_y,
+                                                        direction,
+                                                        direction_to_head);
     if (push_result == PUSH_OBJECT_FAIL) {
         return false;
-    } else if (push_result == PUSH_OBJECT_SUCCESS) {
-        SnakeSegmentPosition updated_segment_pos = {0};
-        _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
-        if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
-            return false;
-        }
+    }
+
+    _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
+    if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
+        return _game_empty_at(game, original_segment_pos.current_x, original_segment_pos.current_y);
     }
 
     S32 final_cell_move_x = first_cell_to_check_x;
@@ -736,18 +739,18 @@ bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 
     adjacent_cell(direction_to_head, &final_cell_move_x, &final_cell_move_y);
 
     push_result = _game_if_cell_not_empty_try_push_impl(game,
-                                                   push_state,
-                                                   final_cell_move_x,
-                                                   final_cell_move_y,
-                                                   direction, direction_to_head);
+                                                        push_state,
+                                                        final_cell_move_x,
+                                                        final_cell_move_y,
+                                                        direction,
+                                                        direction_to_head);
     if (push_result == PUSH_OBJECT_FAIL) {
         return false;
-    } else if (push_result == PUSH_OBJECT_SUCCESS) {
-        SnakeSegmentPosition updated_segment_pos = {0};
-        _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
-        if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
-            return false;
-        }
+    }
+
+    _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
+    if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
+        return _game_empty_at(game, original_segment_pos.current_x, original_segment_pos.current_y);
     }
 
     segment_to_move->x = (S16)(second_cell_to_check_x);
@@ -769,6 +772,9 @@ bool snake_segment_constrict(Game* game, S32 snake_index, S32 segment_index, boo
 
     Direction current_direction_to_head = snake_segment_direction_to_head(snake, segment_index);
     Direction next_direction_to_head = snake_segment_direction_to_head(snake, segment_to_move_index);
+
+    assert(current_direction_to_head < DIRECTION_COUNT);
+    assert(next_direction_to_head < DIRECTION_COUNT);
 
     Direction rotation_direction = (left) ?
         rotate_counter_clockwise(next_direction_to_head) :
@@ -852,12 +858,12 @@ bool snake_segment_constrict(Game* game, S32 snake_index, S32 segment_index, boo
 
             if (push_result == PUSH_OBJECT_FAIL) {
                 return false;
-            } else if (push_result == PUSH_OBJECT_SUCCESS) {
-                SnakeSegmentPosition updated_segment_pos = {0};
-                _track_snake_segment_position(snake, segment_to_move_index, &updated_segment_pos);
-                if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
-                    return false;
-                }
+            }
+
+            SnakeSegmentPosition updated_segment_pos = {0};
+            _track_snake_segment_position(snake, segment_to_move_index, &updated_segment_pos);
+            if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
+                return false;
             }
         }
 
@@ -904,12 +910,10 @@ bool snake_segment_constrict(Game* game, S32 snake_index, S32 segment_index, boo
         return false;
     }
 
-    if (first_push_result == PUSH_OBJECT_SUCCESS || second_push_result == PUSH_OBJECT_SUCCESS) {
-        SnakeSegmentPosition updated_segment_pos = {0};
-        _track_snake_segment_position(snake, segment_to_move_index, &updated_segment_pos);
-        if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
-            return false;
-        }
+    SnakeSegmentPosition updated_segment_pos = {0};
+    _track_snake_segment_position(snake, segment_to_move_index, &updated_segment_pos);
+    if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
+        return false;
     }
 
     // As long as the adjacent squares are empty, we can drag the snake's body through it.
