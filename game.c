@@ -25,6 +25,7 @@ typedef enum {
     SNAKE_KILL_CHECK_UNREACHABLE,
     SNAKE_KILL_CHECK_CELL,
     SNAKE_KILL_CHECK_WALL,
+    SNAKE_KILL_CHECK_TACO,
     SNAKE_KILL_CHECK_OTHER_SNAKE,
     SNAKE_KILL_CHECK_SELF,
 } SnakeKillCheck;
@@ -948,8 +949,11 @@ void _flood_fill_kill_checks(Game* game, SnakeKillCheck* kill_checks, S32 snake_
         if (queried_object.cell == CELL_TYPE_WALL) {
             *entry = SNAKE_KILL_CHECK_WALL;
             return;
+        } else if (queried_object.cell == CELL_TYPE_TACO) {
+            *entry = SNAKE_KILL_CHECK_TACO;
+        } else {
+            *entry = SNAKE_KILL_CHECK_CELL;
         }
-        *entry = SNAKE_KILL_CHECK_CELL;
         break;
     }
 
@@ -1052,6 +1056,9 @@ void _snake_constrict(Game* game, S32 snake_index, SnakeConstrictState constrict
             //             break;
             //         case SNAKE_KILL_CHECK_WALL:
             //             printf("w");
+            //             break;
+            //         case SNAKE_KILL_CHECK_TACO:
+            //             printf("T");
             //             break;
             //         case SNAKE_KILL_CHECK_CELL:
             //             printf(".");
