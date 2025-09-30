@@ -880,6 +880,10 @@ bool snake_segment_constrict(Game* game, S32 snake_index, S32 segment_index, boo
     // ..4..    .....
     //
 
+    // Clone the game before making the push.
+    Game cloned_game = {0};
+    game_clone(game, &cloned_game);
+
     PushResult first_push_result = _game_if_cell_not_empty_try_push(game,
                                                                     snake_index,
                                                                     initial_cell_move_x,
@@ -894,23 +898,34 @@ bool snake_segment_constrict(Game* game, S32 snake_index, S32 segment_index, boo
                                                                      rotation_direction,
                                                                      next_direction_to_head);
 
-    if (first_push_result == PUSH_OBJECT_FAIL) {
-        if (second_push_result != PUSH_OBJECT_SUCCESS) {
+    // If either of the first attempts fail, try reversing the order of the pushes. We found
+    // scenarios where this retry works and keeps our rules simple.
+    if (first_push_result == PUSH_OBJECT_FAIL || second_push_result == PUSH_OBJECT_FAIL) {
+        first_push_result = _game_if_cell_not_empty_try_push(&cloned_game,
+                                                             snake_index,
+                                                             final_cell_move_x,
+                                                             final_cell_move_y,
+                                                             rotation_direction,
+                                                             next_direction_to_head);
+
+        second_push_result = _game_if_cell_not_empty_try_push(&cloned_game,
+                                                              snake_index,
+                                                              initial_cell_move_x,
+                                                              initial_cell_move_y,
+                                                              rotation_direction,
+                                                              next_direction_to_head);
+
+        if (first_push_result == PUSH_OBJECT_FAIL || second_push_result == PUSH_OBJECT_FAIL) {
+            game_destroy(&cloned_game);
             return false;
         }
 
-        // If the second push result succeeded, retry the first push to see if that will now succeed.
-        first_push_result = _game_if_cell_not_empty_try_push(game,
-                                                             snake_index,
-                                                             initial_cell_move_x,
-                                                             initial_cell_move_y,
-                                                             rotation_direction,
-                                                             next_direction_to_head);
+        game_clone(&cloned_game, game);
+
+        snake = game->snakes + snake_index;
     }
 
-    if (first_push_result == PUSH_OBJECT_FAIL || second_push_result == PUSH_OBJECT_FAIL) {
-        return false;
-    }
+    game_destroy(&cloned_game);
 
     SnakeSegmentPosition updated_segment_pos = {0};
     _track_snake_segment_position(snake, segment_to_move_index, &updated_segment_pos);

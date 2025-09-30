@@ -612,9 +612,9 @@ int main(int argc, char** argv) {
         };
 
         const char* output_level[] = {
-            ".....",
-            ".ab..",
-            ".dc..",
+            "..a..",
+            ".cb..",
+            ".d...",
             ".....",
             NULL
         };
@@ -632,9 +632,9 @@ int main(int argc, char** argv) {
         };
 
         const char* output_level[] = {
-            ".....",
-            "..ba.",
-            "..cd.",
+            "..a..",
+            "..bc.",
+            "...d.",
             ".....",
             NULL
         };
