@@ -57,6 +57,7 @@ bool game_init(Game* game, S32 level_width, S32 level_height, S32 max_taco_count
 void game_clone(Game* input, Game* output);
 void game_apply_snake_action(Game* game, SnakeAction snake_action, S32 snake_index);
 QueriedObject game_query(Game* game, S32 x, S32 y);
+bool game_empty_at(Game* game, S32 x, S32 y);
 void game_update(Game* game, SnakeAction* snake_actions);
 void game_destroy(Game* game);
 

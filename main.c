@@ -138,7 +138,7 @@ void reset_game(Game* game) {
 S32 query_for_snake_at(Game* game, S32 cell_x, S32 cell_y) {
     for (S32 i = 0; i < MAX_SNAKE_COUNT; i++) {
         Snake *snake = game->snakes + i;
-        for (S32 j = 1; j < snake->length; j++) {
+        for (S32 j = 0; j < snake->length; j++) {
             SnakeSegment *segment = snake->segments + j;
             if (segment->x == cell_x && segment->y == cell_y) {
                 return i;
@@ -404,6 +404,7 @@ int main(S32 argc, char** argv) {
                         game.state = GAME_STATE_PLAYING;
                     }
                 }
+
                 if (dev_state.enabled) {
                     switch (event.key.keysym.sym) {
                     case SDLK_TAB: // Switch to/from step mode
@@ -414,6 +415,17 @@ int main(S32 argc, char** argv) {
                             dev_state.should_step = true;
                         }
                         break;
+                    case SDLK_t: {
+                        int mouse_x = 0;
+                        int mouse_y = 0;
+                        SDL_GetMouseState(&mouse_x, &mouse_y);
+                        S32 cell_x = mouse_x / cell_size;
+                        S32 cell_y = mouse_y / cell_size;
+                        if (game_empty_at(&game, cell_x, cell_y)) {
+                            level_set_cell(&game.level, cell_x, cell_y, CELL_TYPE_TACO);
+                        }
+                        break;
+                    }
                     default:
                         break;
                     }

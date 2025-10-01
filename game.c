@@ -367,7 +367,7 @@ bool _taco_push(Game* game, PushState* push_state, S32 x, S32 y, Direction direc
     return true;
 }
 
-bool _game_empty_at(Game* game, S32 x, S32 y) {
+bool game_empty_at(Game* game, S32 x, S32 y) {
     QueriedObject queried_object = game_query(game, x, y);
     return queried_object.type == QUERIED_OBJECT_TYPE_NONE;
 }
@@ -424,7 +424,7 @@ bool _snake_segment_can_expand(Game* game, S32 x, S32 y, Direction preferred_dir
     adjacent_cell(preferred_direction, &check_x, &check_y);
 
     // TODO: We may need to push things out the way.
-    if (_game_empty_at(game, check_x, check_y)) {
+    if (game_empty_at(game, check_x, check_y)) {
         *result_x = check_x;
         *result_y = check_y;
         return true;
@@ -440,7 +440,7 @@ bool _snake_segment_can_expand(Game* game, S32 x, S32 y, Direction preferred_dir
         check_y = y;
         adjacent_cell(direction, &check_x, &check_y);
 
-        if (_game_empty_at(game, check_x, check_y)) {
+        if (game_empty_at(game, check_x, check_y)) {
             *result_x = check_x;
             *result_y = check_y;
             return true;
@@ -472,7 +472,7 @@ PushResult _game_if_cell_not_empty_try_push_impl(Game* game,
                                                  Direction second_direction) {
 
     PushResult result = {0};
-    if (!_game_empty_at(game, target_cell_x, target_cell_y)) {
+    if (!game_empty_at(game, target_cell_x, target_cell_y)) {
         // If not empty at the target, attempt to push in the specified direction.
         result = _game_object_push_impl(game, push_state, target_cell_x, target_cell_y, first_direction);
 
@@ -548,7 +548,7 @@ bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 
         SnakeSegmentPosition updated_segment_pos = {0};
         _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
         if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
-            return _game_empty_at(game, original_segment_pos.current_x, original_segment_pos.current_y);
+            return game_empty_at(game, original_segment_pos.current_x, original_segment_pos.current_y);
         }
 
         S32 final_cell_move_x = first_cell_to_check_x;
@@ -567,7 +567,7 @@ bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 
 
         _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
         if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
-            return _game_empty_at(game, original_segment_pos.current_x, original_segment_pos.current_y);
+            return game_empty_at(game, original_segment_pos.current_x, original_segment_pos.current_y);
         }
 
         segment_to_move->x = (S16)(final_cell_move_x);
@@ -610,7 +610,7 @@ bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 
         SnakeSegmentPosition updated_segment_pos = {0};
         _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
         if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
-            return _game_empty_at(game, original_segment_pos.current_x, original_segment_pos.current_y);
+            return game_empty_at(game, original_segment_pos.current_x, original_segment_pos.current_y);
         }
 
         if ((segment_index + 1) < snake->length) {
@@ -653,7 +653,7 @@ bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 
         SnakeSegmentPosition updated_segment_pos = {0};
         _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
         if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
-            return _game_empty_at(game, original_segment_pos.current_x, original_segment_pos.current_y);
+            return game_empty_at(game, original_segment_pos.current_x, original_segment_pos.current_y);
         }
 
         S32 final_cell_move_x = first_cell_to_check_x;
@@ -671,7 +671,7 @@ bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 
 
         _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
         if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
-            return _game_empty_at(game, original_segment_pos.current_x, original_segment_pos.current_y);
+            return game_empty_at(game, original_segment_pos.current_x, original_segment_pos.current_y);
         }
 
         segment_to_move->x = (S16)(final_cell_move_x);
@@ -710,7 +710,7 @@ bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 
     SnakeSegmentPosition updated_segment_pos = {0};
     _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
     if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
-        return _game_empty_at(game, original_segment_pos.current_x, original_segment_pos.current_y);
+        return game_empty_at(game, original_segment_pos.current_x, original_segment_pos.current_y);
     }
 
     S32 second_cell_to_check_x = first_cell_to_check_x;
@@ -729,7 +729,7 @@ bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 
 
     _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
     if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
-        return _game_empty_at(game, original_segment_pos.current_x, original_segment_pos.current_y);
+        return game_empty_at(game, original_segment_pos.current_x, original_segment_pos.current_y);
     }
 
     S32 final_cell_move_x = first_cell_to_check_x;
@@ -748,7 +748,7 @@ bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 
 
     _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
     if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
-        return _game_empty_at(game, original_segment_pos.current_x, original_segment_pos.current_y);
+        return game_empty_at(game, original_segment_pos.current_x, original_segment_pos.current_y);
     }
 
     segment_to_move->x = (S16)(second_cell_to_check_x);
@@ -823,7 +823,7 @@ bool snake_segment_constrict(Game* game, S32 snake_index, S32 segment_index, boo
         // .....    ..4..
         //
 
-        if (!_game_empty_at(game, final_cell_move_x, final_cell_move_y)) {
+        if (!game_empty_at(game, final_cell_move_x, final_cell_move_y)) {
             S32 segment_to_check_index = after_segment_to_move_index + 1;
             if (segment_to_check_index < snake->length) {
                 SnakeSegment* check_segment = snake->segments + segment_to_check_index;
@@ -926,6 +926,13 @@ bool snake_segment_constrict(Game* game, S32 snake_index, S32 segment_index, boo
     }
 
     game_destroy(&cloned_game);
+
+    // Check that both cells are empty after our successful pushes, because the first could have
+    // succeed, then the second one succeeded and pushed something into the first.
+    if (!game_empty_at(game, initial_cell_move_x, initial_cell_move_y) ||
+        !game_empty_at(game, final_cell_move_x, final_cell_move_y)) {
+        return false;
+    }
 
     SnakeSegmentPosition updated_segment_pos = {0};
     _track_snake_segment_position(snake, segment_to_move_index, &updated_segment_pos);
