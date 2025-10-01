@@ -514,6 +514,10 @@ PushResult _game_if_cell_not_empty_try_push(Game* game,
 // Push guarantees that if it returns true, the segment that was pushed moved and there is no
 // segment at that cell.
 bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 segment_index, Direction direction) {
+    if (!snake_segment_is_pushable(game, snake_index, segment_index, direction)) {
+        return false;
+    }
+
     Snake* snake = game->snakes + snake_index;
     SnakeSegment* segment_to_move = snake->segments + segment_index;
 
@@ -948,6 +952,74 @@ bool snake_segment_constrict(Game* game, S32 snake_index, S32 segment_index, boo
     // TODO: If we can push things out of the way, that works too.
     _snake_drag_segments(snake, segment_to_move_index, initial_cell_move_x, initial_cell_move_y);
     _snake_drag_segments(snake, segment_to_move_index, final_cell_move_x, final_cell_move_y);
+    return true;
+}
+
+bool snake_segment_is_pushable(Game* game, S32 snake_index, S32 segment_index, Direction from) {
+    if (snake_index < 0 || snake_index >= MAX_SNAKE_COUNT) {
+        return false;
+    }
+
+    Snake* snake = game->snakes + snake_index;
+
+    if (segment_index < 0 || segment_index >= snake->length) {
+        return false;
+    }
+
+    // Corners are always pushable. This is a bit of a hack cause we assume you have to succeed in
+    // pushing the adjacent segments to even push an inner corner.
+    if (directions_are_perpendicular(snake_segment_direction_to_head(snake, segment_index),
+                                     snake_segment_direction_to_tail(snake, segment_index))
+                                     // The head and tail cannot be corners.
+                                     && segment_index != 0 && segment_index != (snake->length - 1) ) {
+        return true;
+    }
+
+    Direction towards_head_turn = DIRECTION_COUNT;
+    Direction towards_tail_turn = DIRECTION_COUNT;
+
+    S32 prev_segment_index = segment_index - 1;
+    Direction original_direction = opposite_direction(snake_segment_direction_to_tail(snake, segment_index));
+    while (prev_segment_index >= 0) {
+        Direction current_direction = snake_segment_direction_to_head(snake, prev_segment_index);
+        if (current_direction != original_direction) {
+            towards_head_turn = current_direction;
+            break;
+        }
+        prev_segment_index--;
+    }
+
+    S32 next_segment_index = segment_index + 1;
+    original_direction = opposite_direction(snake_segment_direction_to_head(snake, segment_index));
+    while (next_segment_index < snake->length) {
+        Direction current_direction = snake_segment_direction_to_tail(snake, next_segment_index);
+        if (current_direction != original_direction) {
+            towards_tail_turn = current_direction;
+            break;
+        }
+        next_segment_index++;
+    }
+
+    if (towards_head_turn == towards_tail_turn) {
+        // If the snake is straight, it is pushable.
+        if (towards_head_turn == DIRECTION_COUNT) {
+            return true;
+        }
+
+        // With 2 inner corners on either side, we cannot be pushed.
+        if (towards_head_turn == opposite_direction(from)) {
+            return false;
+        }
+    // Uncomment this to enable the head and tail to act as inner anchors as well.
+    // } else {
+    //     // If either end is the head or tail, use the other (since we know they are not equal).
+    //     if (towards_head_turn == DIRECTION_COUNT && towards_tail_turn == opposite_direction(from)) {
+    //         return false;
+    //     } else if (towards_tail_turn == DIRECTION_COUNT && towards_head_turn == opposite_direction(from)) {
+    //         return false;
+    //     }
+    }
+
     return true;
 }
 
