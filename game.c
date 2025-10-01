@@ -177,6 +177,10 @@ void _snake_chomp(Snake* snake, Game* game) {
 }
 
 void _snake_move(Snake* snake, Game* game) {
+    if (snake->length <= 0) {
+        return;
+    }
+
     S32 new_snake_x = (S32)(snake->segments[0].x);
     S32 new_snake_y = (S32)(snake->segments[0].y);
 
