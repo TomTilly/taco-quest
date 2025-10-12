@@ -83,14 +83,14 @@ void reset_game(Game* game) {
     Level* level = &game->level;
 
     snake_spawn(game->snakes + 0,
-                8,
-                10,
-                DIRECTION_NORTH);
+                3,
+                2,
+                DIRECTION_EAST);
 
     snake_spawn(game->snakes + 1,
-                9,
-                10,
-                DIRECTION_NORTH);
+                (S16)(level->width - 3),
+                2,
+                DIRECTION_SOUTH);
 
     snake_spawn(game->snakes + 2,
                 (S16)(level->width - 2),
