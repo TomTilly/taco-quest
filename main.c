@@ -440,8 +440,8 @@ int main(S32 argc, char** argv) {
                     if (selected_snake_index < 0) {
                         Snake* snake = game.snakes + dev_state.snake_selection_index;
                         snake->length = 1;
-                        snake->segments[0].x = cell_x;
-                        snake->segments[0].y = cell_y;
+                        snake->segments[0].x = (S16)(cell_x);
+                        snake->segments[0].y = (S16)(cell_y);
                         dev_state.snake_selection_state = SNAKE_SELECTION_STATE_PLACING;
                     } else if (selected_snake_index != dev_state.snake_selection_index) {
                         dev_state.snake_selection_index = selected_snake_index;
@@ -480,8 +480,8 @@ int main(S32 argc, char** argv) {
                         S32 new_index = snake->length;
 
                         snake->length++;
-                        snake->segments[new_index].x = cell_x;
-                        snake->segments[new_index].y = cell_y;
+                        snake->segments[new_index].x = (S16)(cell_x);
+                        snake->segments[new_index].y = (S16)(cell_y);
                         snake->segments[new_index].health = SNAKE_SEGMENT_MAX_HEALTH;
                     }
                     break;
@@ -761,9 +761,9 @@ int main(S32 argc, char** argv) {
                 for (S32 j = 1; j < snake->length; j++) {
                     SnakeSegment *segment = snake->segments + j;
                     PF_RenderChar(font,
-                                  (segment->x * cell_size) + (cell_size - (font_state.char_width * font_state.scale)) / 2,
-                                  (segment->y * cell_size) + (cell_size - (font_state.char_height * font_state.scale)) / 2,
-                                  '1' + j);
+                                  (S16)((segment->x * cell_size) + (cell_size - (font_state.char_width * font_state.scale)) / 2),
+                                  (S16)((segment->y * cell_size) + (cell_size - (font_state.char_height * font_state.scale)) / 2),
+                                  (char)('1' + j));
                 }
             }
 
