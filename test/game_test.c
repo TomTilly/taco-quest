@@ -222,15 +222,17 @@ bool snake_segment_constrict_test(const char** input_level,
     return result;
 }
 
-bool snake_segment_push_test(const char** input_level,
-                             const char** output_level,
-                             S32 segment_index,
-                             Direction direction) {
+bool snake_segment_push_by_snake_test(const char** input_level,
+                                      const char** output_level,
+                                      S32 segment_index,
+                                      S32 push_by_snake_index,
+                                      Direction direction) {
     Game input_game = {0};
     game_from_string(input_level, &input_game);
 
     PushState push_state = {0};
     init_push_state(&input_game, &push_state);
+    push_state.original_snake_index = push_by_snake_index;
 
     snake_segment_push(&input_game, &push_state, 0, segment_index, direction);
 
@@ -243,6 +245,13 @@ bool snake_segment_push_test(const char** input_level,
     game_destroy(&input_game);
     game_destroy(&output_game);
     return result;
+}
+
+bool snake_segment_push_test(const char** input_level,
+                             const char** output_level,
+                             S32 segment_index,
+                             Direction direction) {
+    return snake_segment_push_by_snake_test(input_level, output_level, segment_index, 0, direction);
 }
 
 int main(int argc, char** argv) {
@@ -976,6 +985,30 @@ int main(int argc, char** argv) {
 
         EXPECT(snake_segment_is_pushable(&input_game, 0, 9, DIRECTION_SOUTH));
         EXPECT(snake_segment_is_pushable(&input_game, 0, 9, DIRECTION_NORTH));
+    }
+
+    {
+        const char* input_level[] = {
+            "W.fg...",
+            "W.eh...",
+            "Wcdij..",
+            "Wbmlk..",
+            "Wanop..",
+            "WWWWWWW",
+            NULL
+        };
+
+        const char* output_level[] = {
+            "W.fg...",
+            "Wdeh...",
+            "Wc.ij..",
+            "Wbmlk..",
+            "Wanop..",
+            "WWWWWWW",
+            NULL
+        };
+
+        EXPECT(snake_segment_push_by_snake_test(input_level, output_level, 9, 1, DIRECTION_WEST));
     }
 
     if (g_failed) {

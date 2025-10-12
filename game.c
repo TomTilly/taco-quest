@@ -514,6 +514,7 @@ PushResult _game_if_cell_not_empty_try_push(Game* game,
 // Push guarantees that if it returns true, the segment that was pushed moved and there is no
 // segment at that cell.
 bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 segment_index, Direction direction) {
+    printf("snake_segment_push(): %d, %d, %s\n", snake_index, segment_index, direction_to_string(direction));
     if (!snake_segment_is_pushable(game, snake_index, segment_index, direction)) {
         return false;
     }
@@ -593,6 +594,15 @@ bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 
     if (segment_is_corner) {
         if (direction == opposite_direction(direction_to_head) ||
             direction == opposite_direction(direction_to_tail)) {
+            // TODO: consolidate this with the push fail below.
+            S32 adjacent_cell_to_push_x = segment_to_move->x;
+            S32 adjacent_cell_to_push_y = segment_to_move->y;
+            adjacent_cell(direction, &adjacent_cell_to_push_x, &adjacent_cell_to_push_y);
+            _game_object_push_impl(game,
+                                   push_state,
+                                   adjacent_cell_to_push_x,
+                                   adjacent_cell_to_push_y,
+                                   direction);
             return false;
         }
 
@@ -612,7 +622,15 @@ bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 
                                                                        direction_to_head);
 
         if (push_result == PUSH_OBJECT_FAIL) {
-            return false;
+            S32 adjacent_cell_to_push_x = segment_to_move->x;
+            S32 adjacent_cell_to_push_y = segment_to_move->y;
+            adjacent_cell(direction, &adjacent_cell_to_push_x, &adjacent_cell_to_push_y);
+            _game_object_push_impl(game,
+                                   push_state,
+                                   adjacent_cell_to_push_x,
+                                   adjacent_cell_to_push_y,
+                                   direction);
+            return false; // snake_segment_push(game, push_state, snake_index, segment_index, direction);
         }
 
         SnakeSegmentPosition updated_segment_pos = {0};

@@ -120,11 +120,11 @@ const char* direction_to_string(Direction direction) {
     case DIRECTION_NORTH:
         return "SOUTH";
     case DIRECTION_EAST:
-        return "WEST";
+        return "EAST";
     case DIRECTION_SOUTH:
         return "NORTH";
     case DIRECTION_WEST:
-        return "EAST";
+        return "WEST";
     case DIRECTION_COUNT:
         return "Whaaaa";
     }
