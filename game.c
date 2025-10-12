@@ -1294,7 +1294,7 @@ void game_update(Game* game, SnakeAction* snake_actions) {
     }
 
     S32 taco_count = game_count_tacos(game);
-    for (size_t i = taco_count; i < game->max_taco_count; i++) {
+    for (size_t i = taco_count; i < (size_t)game->max_taco_count; i++) {
         game_spawn_taco(game);
     }
 

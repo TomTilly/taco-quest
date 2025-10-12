@@ -8,7 +8,9 @@
 #ifndef game_h
 #define game_h
 
+#ifdef PLATFORM_WINDOWS
 #pragma warning(disable : 4201)
+#endif
 
 #include "snake.h"
 #include "level.h"

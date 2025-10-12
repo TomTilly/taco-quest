@@ -23,6 +23,8 @@ void adjacent_cell(Direction direction, S32* x, S32* y) {
     case DIRECTION_WEST:
         (*x)--;
         break;
+    case DIRECTION_COUNT:
+        break;
     }
 }
 
@@ -58,6 +60,8 @@ Direction opposite_direction(Direction direction) {
         return DIRECTION_NORTH;
     case DIRECTION_WEST:
         return DIRECTION_EAST;
+    case DIRECTION_COUNT:
+        break;
     }
 
     return DIRECTION_NONE;
@@ -121,6 +125,8 @@ const char* direction_to_string(Direction direction) {
         return "NORTH";
     case DIRECTION_WEST:
         return "EAST";
+    case DIRECTION_COUNT:
+        return "Whaaaa";
     }
     return "UNKNOWN_DIR";
 }
