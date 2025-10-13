@@ -332,12 +332,6 @@ typedef struct {
     S32 y;
 } CellMove;
 
-typedef enum {
-    PUSH_OBJECT_EMPTY,
-    PUSH_OBJECT_SUCCESS,
-    PUSH_OBJECT_FAIL
-} PushResult;
-
 void init_push_state(Game* game, PushState* push_state) {
     S32 size = game->level.height * game->level.width;
     push_state->cells = malloc(size);
@@ -385,11 +379,11 @@ PushResult _game_object_push_impl(Game* game, PushState* push_state, S32 x, S32 
     QueriedObject queried_object = game_query(game, x, y);
     switch (queried_object.type) {
     case QUERIED_OBJECT_TYPE_NONE:
-        return PUSH_OBJECT_EMPTY;
+        return PUSH_OBJECT_SUCCESS;
     case QUERIED_OBJECT_TYPE_CELL:
         switch(queried_object.cell) {
         case CELL_TYPE_EMPTY:
-            return PUSH_OBJECT_EMPTY;
+            return PUSH_OBJECT_SUCCESS;
         case CELL_TYPE_TACO:
             if (_taco_push(game, push_state, x, y, direction)) {
                 return PUSH_OBJECT_SUCCESS;
@@ -417,7 +411,7 @@ PushResult _game_object_push_impl(Game* game, PushState* push_state, S32 x, S32 
         break;
     }
 
-    return PUSH_OBJECT_EMPTY;
+    return PUSH_OBJECT_SUCCESS;
 }
 
 bool _snake_segment_can_expand(Game* game, S32 x, S32 y, Direction preferred_direction,
@@ -529,9 +523,10 @@ PushResult _pass_along_game_object_push(Game* game,
 // Push guarantees that if it returns true, the segment that was pushed moved and there is no
 // segment at that cell.
 bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 segment_index, Direction direction) {
-    if (!snake_segment_is_pushable(game, snake_index, segment_index, direction)) {
-        return false;
-    }
+    // TODO: More testing before we do something like this
+    // if (!snake_segment_is_pushable(game, snake_index, segment_index, direction)) {
+    //     return false;
+    // }
 
     Snake* snake = game->snakes + snake_index;
     SnakeSegment* segment_to_move = snake->segments + segment_index;
@@ -609,7 +604,6 @@ bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 
         if (direction == opposite_direction(direction_to_head) ||
             direction == opposite_direction(direction_to_tail)) {
             // TODO: consolidate this with the push fail below.
-            _pass_along_game_object_push(game, push_state, segment_to_move->x, segment_to_move->y, direction);
             return false;
         }
 
@@ -629,7 +623,6 @@ bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 
                                                                        direction_to_head);
 
         if (push_result == PUSH_OBJECT_FAIL) {
-            _pass_along_game_object_push(game, push_state, segment_to_move->x, segment_to_move->y, direction);
             return false;
         }
 
@@ -910,14 +903,14 @@ bool snake_segment_constrict(Game* game, S32 snake_index, S32 segment_index, boo
     Game cloned_game = {0};
     game_clone(game, &cloned_game);
 
-    PushResult first_push_result = _game_if_cell_not_empty_try_push(game,
+    PushResult first_push_result = _game_if_cell_not_empty_try_push(&cloned_game,
                                                                     snake_index,
                                                                     initial_cell_move_x,
                                                                     initial_cell_move_y,
                                                                     rotation_direction,
                                                                     next_direction_to_head);
 
-    PushResult second_push_result = _game_if_cell_not_empty_try_push(game,
+    PushResult second_push_result = _game_if_cell_not_empty_try_push(&cloned_game,
                                                                      snake_index,
                                                                      final_cell_move_x,
                                                                      final_cell_move_y,
@@ -927,6 +920,8 @@ bool snake_segment_constrict(Game* game, S32 snake_index, S32 segment_index, boo
     // If either of the first attempts fail, try reversing the order of the pushes. We found
     // scenarios where this retry works and keeps our rules simple.
     if (first_push_result == PUSH_OBJECT_FAIL || second_push_result == PUSH_OBJECT_FAIL) {
+        game_clone(game, &cloned_game);
+
         first_push_result = _game_if_cell_not_empty_try_push(&cloned_game,
                                                              snake_index,
                                                              final_cell_move_x,
@@ -945,11 +940,11 @@ bool snake_segment_constrict(Game* game, S32 snake_index, S32 segment_index, boo
             game_destroy(&cloned_game);
             return false;
         }
-
-        game_clone(&cloned_game, game);
-
-        snake = game->snakes + snake_index;
     }
+
+    game_clone(&cloned_game, game);
+
+    snake = game->snakes + snake_index;
 
     game_destroy(&cloned_game);
 
@@ -1088,7 +1083,7 @@ void _flood_fill_kill_checks(Game* game, SnakeKillCheck* kill_checks, S32 snake_
     }
 }
 
-void _snake_constrict(Game* game, S32 snake_index, SnakeConstrictState constrict_state) {
+void snake_constrict(Game* game, S32 snake_index, SnakeConstrictState constrict_state) {
     Snake* snake = game->snakes + snake_index;
     // TODO: update this comment.
     // First pass finds the shapes to operate on. This is so we don't operate on corners that we
@@ -1296,10 +1291,10 @@ void game_update(Game* game, SnakeAction* snake_actions) {
         SnakeAction snake_action = snake_actions[s];
         if (snake_action & SNAKE_ACTION_CONSTRICT_LEFT) {
             constrict_state[s] = SNAKE_CONSTRICT_STATE_LEFT;
-            _snake_constrict(game, s, constrict_state[s]);
+            snake_constrict(game, s, constrict_state[s]);
         } else if (snake_action & SNAKE_ACTION_CONSTRICT_RIGHT) {
             constrict_state[s] = SNAKE_CONSTRICT_STATE_RIGHT;
-            _snake_constrict(game, s, constrict_state[s]);
+            snake_constrict(game, s, constrict_state[s]);
         }
     }
 

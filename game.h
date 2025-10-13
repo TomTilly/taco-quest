@@ -55,6 +55,12 @@ typedef struct {
     S32 max_taco_count;
 } Game;
 
+typedef enum {
+    PUSH_OBJECT_SUCCESS,
+    PUSH_OBJECT_FAIL,
+    PUSH_OBJECT_PROGRESS,
+} PushResult;
+
 bool game_init(Game* game, S32 level_width, S32 level_height, S32 max_taco_count);
 void game_clone(Game* input, Game* output);
 void game_apply_snake_action(Game* game, SnakeAction snake_action, S32 snake_index);
@@ -68,6 +74,8 @@ S32 game_count_tacos(Game* game);
 
 size_t game_serialize(const Game* game, void* buffer, size_t buffer_size);
 size_t game_deserialize(void * buffer, size_t size, Game * out);
+
+void snake_constrict(Game* game, S32 snake_index, SnakeConstrictState constrict_state);
 
 bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 segment_index, Direction direction);
 bool snake_segment_constrict(Game* game, S32 snake_index, S32 segment_index, bool left);

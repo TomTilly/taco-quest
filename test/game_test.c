@@ -254,6 +254,24 @@ bool snake_segment_push_test(const char** input_level,
     return snake_segment_push_by_snake_test(input_level, output_level, segment_index, 0, direction);
 }
 
+bool snake_constrict_test(const char** input_level,
+                          const char** output_level,
+                          S32 snake_index,
+                          SnakeConstrictState snake_constrict_state) {
+    Game input_game = {0};
+    game_from_string(input_level, &input_game);
+
+    snake_constrict(&input_game, snake_index, snake_constrict_state);
+
+    Game output_game = {0};
+    game_from_string(output_level, &output_game);
+
+    bool result = games_are_equal(&input_game, &output_game);
+    game_destroy(&input_game);
+    game_destroy(&output_game);
+    return result;
+}
+
 int main(int argc, char** argv) {
     (void)(argc);
     (void)(argv);
@@ -921,6 +939,7 @@ int main(int argc, char** argv) {
         EXPECT(snake_segment_constrict_test(input_level, output_level, 0, false));
     }
 
+    // Doesn't work yet.
     {
         const char* input_level[] = {
             ".edcbaW",
@@ -932,11 +951,11 @@ int main(int argc, char** argv) {
         };
 
         const char* output_level[] = {
-            "...edaW",
-            "..GFcbW",
-            "..HEDAW",
-            "..I.CBW",
-            "..JWWWW",
+            ".edcbaW",
+            "..IHABW",
+            "..JGFCW",
+            "....EDW",
+            "...WWWW",
             NULL
         };
 
@@ -1009,6 +1028,34 @@ int main(int argc, char** argv) {
         };
 
         EXPECT(snake_segment_push_by_snake_test(input_level, output_level, 9, 1, DIRECTION_WEST));
+    }
+
+    {
+        const char* input_level[] = {
+            "WWWWWWW",
+            "WABCD..",
+            "W.fgE..",
+            "W.ehFG.",
+            "WcdijH.",
+            "WbmlkI.",
+            "WanopJ.",
+            "WWWWWK.",
+            NULL
+        };
+
+        const char* output_level[] = {
+            "WWWWWWW",
+            "WABC...",
+            "WTTD...",
+            "WTTEFG.",
+            "WTTTTH.",
+            "WTTTTI.",
+            "WTTTTJ.",
+            "WWWWWK.",
+            NULL
+        };
+
+        EXPECT(snake_constrict_test(input_level, output_level, 1, true));
     }
 
     if (g_failed) {
