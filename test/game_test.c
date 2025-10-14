@@ -952,9 +952,9 @@ int main(int argc, char** argv) {
 
         const char* output_level[] = {
             ".edcbaW",
-            "..IHABW",
-            "..JGFCW",
-            "....EDW",
+            "..IHA.W",
+            "..JGBCW",
+            "...FEDW",
             "...WWWW",
             NULL
         };
@@ -1045,10 +1045,10 @@ int main(int argc, char** argv) {
 
         const char* output_level[] = {
             "WWWWWWW",
-            "WABC...",
-            "WTTD...",
-            "WTTEFG.",
-            "WTTTTH.",
+            "WABCD..",
+            "W.TTE..",
+            "WTTTFG.",
+            "WT.TTH.",
             "WTTTTI.",
             "WTTTTJ.",
             "WWWWWK.",

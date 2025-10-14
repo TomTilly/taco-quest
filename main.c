@@ -28,9 +28,9 @@ typedef enum {
 } SessionType;
 
 typedef enum {
-	SNAKE_SELECTION_STATE_NONE,	
-	SNAKE_SELECTION_STATE_SELECTED,	
-	SNAKE_SELECTION_STATE_PLACING,	
+    SNAKE_SELECTION_STATE_NONE,
+    SNAKE_SELECTION_STATE_SELECTED,
+    SNAKE_SELECTION_STATE_PLACING,
 } DevSnakeSelectionState;
 
 typedef struct {
@@ -323,7 +323,7 @@ int main(S32 argc, char** argv) {
         fprintf(stderr, "Failed to create texture from surface %s\n", SDL_GetError());
         return EXIT_FAILURE;
     }
-        
+
     S32 cell_size = min_display_dimension / max_level_dimension;
 
     int64_t time_since_update_us = 0;
@@ -354,7 +354,6 @@ int main(S32 argc, char** argv) {
 
         SnakeAction snake_action = SNAKE_ACTION_NONE;
 
-
         // Handle events, such as input or window changes.
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
@@ -365,27 +364,6 @@ int main(S32 argc, char** argv) {
             case SDL_KEYDOWN:
                 if (game.state == GAME_STATE_PLAYING) {
                     switch (event.key.keysym.sym) {
-                    case SDLK_w:
-                        snake_action |= SNAKE_ACTION_FACE_NORTH;
-                        break;
-                    case SDLK_a:
-                        snake_action |= SNAKE_ACTION_FACE_WEST;
-                        break;
-                    case SDLK_s:
-                        snake_action |= SNAKE_ACTION_FACE_SOUTH;
-                        break;
-                    case SDLK_d:
-                        snake_action |= SNAKE_ACTION_FACE_EAST;
-                        break;
-                    case SDLK_q:
-                        snake_action |= SNAKE_ACTION_CONSTRICT_LEFT;
-                        break;
-                    case SDLK_e:
-                        snake_action |= SNAKE_ACTION_CONSTRICT_RIGHT;
-                        break;
-                    case SDLK_SPACE:
-                        snake_action |= SNAKE_ACTION_CHOMP;
-                        break;
                     case SDLK_BACKQUOTE:
                         dev_state.enabled = !dev_state.enabled;
                         if (!dev_state.enabled) {
@@ -431,18 +409,32 @@ int main(S32 argc, char** argv) {
                     }
                 }
                 break; // SDL_KEYDOWN
-            case SDL_KEYUP:
-                if (game.state == GAME_STATE_PLAYING) {
-                    switch (event.key.keysym.sym) {
-                    case SDLK_q:
-                        snake_action |= SNAKE_ACTION_CONSTRICT_LEFT_END;
-                        break;
-                    case SDLK_e:
-                        snake_action |= SNAKE_ACTION_CONSTRICT_RIGHT_END;
-                        break;
-                    }
-                 }
-            break;
+            }
+        }
+
+        // Handle snake action keys separately.
+        {
+            const U8* keyboard_state = SDL_GetKeyboardState(NULL);
+            if (keyboard_state[SDL_SCANCODE_W]) {
+                snake_action |= SNAKE_ACTION_FACE_NORTH;
+            }
+            if (keyboard_state[SDL_SCANCODE_A]) {
+                snake_action |= SNAKE_ACTION_FACE_WEST;
+            }
+            if (keyboard_state[SDL_SCANCODE_S]) {
+                snake_action |= SNAKE_ACTION_FACE_SOUTH;
+            }
+            if (keyboard_state[SDL_SCANCODE_D]) {
+                snake_action |= SNAKE_ACTION_FACE_EAST;
+            }
+            if (keyboard_state[SDL_SCANCODE_Q]) {
+                snake_action |= SNAKE_ACTION_CONSTRICT_LEFT;
+            }
+            if (keyboard_state[SDL_SCANCODE_E]) {
+                snake_action |= SNAKE_ACTION_CONSTRICT_RIGHT;
+            }
+            if (keyboard_state[SDL_SCANCODE_SPACE]) {
+                snake_action |= SNAKE_ACTION_CHOMP;
             }
         }
 

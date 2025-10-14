@@ -56,10 +56,11 @@ typedef struct {
 } Game;
 
 typedef enum {
-    PUSH_OBJECT_SUCCESS,
-    PUSH_OBJECT_FAIL,
-    PUSH_OBJECT_PROGRESS,
-} PushResult;
+    MOVE_OBJECT_SUCCESS,
+    MOVE_OBJECT_FAIL,
+    MOVE_OBJECT_PROGRESS,
+    MOVE_OBJECT_EMPTY,
+} MoveResult;
 
 bool game_init(Game* game, S32 level_width, S32 level_height, S32 max_taco_count);
 void game_clone(Game* input, Game* output);
@@ -77,8 +78,8 @@ size_t game_deserialize(void * buffer, size_t size, Game * out);
 
 void snake_constrict(Game* game, S32 snake_index, SnakeConstrictState constrict_state);
 
-bool snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 segment_index, Direction direction);
-bool snake_segment_constrict(Game* game, S32 snake_index, S32 segment_index, bool left);
+MoveResult snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 segment_index, Direction direction);
+MoveResult snake_segment_constrict(Game* game, S32 snake_index, S32 segment_index, bool left);
 
 bool snake_segment_is_pushable(Game* game, S32 snake_index, S32 segment_index, Direction from);
 
