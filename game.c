@@ -378,8 +378,12 @@ MoveResult _taco_push(Game* game, PushState* push_state, S32 x, S32 y, Direction
     adjacent_cell(direction, &adjacent_x, &adjacent_y);
     MoveResult move_result = _game_object_push_impl(game, push_state, adjacent_x, adjacent_y, direction);
     if (move_result == MOVE_OBJECT_SUCCESS || move_result == MOVE_OBJECT_EMPTY) {
-        level_set_cell(&game->level, x, y, CELL_TYPE_EMPTY);
-        level_set_cell(&game->level, adjacent_x, adjacent_y, CELL_TYPE_TACO);
+        if (game_empty_at(game, adjacent_x, adjacent_y)) {
+            level_set_cell(&game->level, x, y, CELL_TYPE_EMPTY);
+            level_set_cell(&game->level, adjacent_x, adjacent_y, CELL_TYPE_TACO);
+        } else {
+            return MOVE_OBJECT_PROGRESS;
+        }
     }
     return move_result;
 }
