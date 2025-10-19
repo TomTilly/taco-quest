@@ -408,7 +408,7 @@ Direction snake_segment_direction_to_head(Snake* snake, S32 segment_index) {
     }
 
     if (segment_index == 0) {
-        return snake->direction;
+        return opposite_direction(snake_segment_direction_to_tail(snake, segment_index));
     }
 
     SnakeSegment* curr_segment = snake->segments + segment_index;

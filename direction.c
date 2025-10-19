@@ -118,11 +118,11 @@ const char* direction_to_string(Direction direction) {
     case DIRECTION_NONE:
         return "NO_DIR";
     case DIRECTION_NORTH:
-        return "SOUTH";
+        return "NORTH";
     case DIRECTION_EAST:
         return "EAST";
     case DIRECTION_SOUTH:
-        return "NORTH";
+        return "SOUTH";
     case DIRECTION_WEST:
         return "WEST";
     case DIRECTION_COUNT:

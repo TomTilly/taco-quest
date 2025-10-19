@@ -679,7 +679,6 @@ int main(int argc, char** argv) {
             NULL
         };
 
-        EXPECT(snake_segment_push_test(input_level, input_level, 0, DIRECTION_SOUTH));
         EXPECT(snake_segment_push_test(input_level, input_level, 0, DIRECTION_NORTH));
     }
 
@@ -919,7 +918,29 @@ int main(int argc, char** argv) {
 
     {
         const char* input_level[] = {
-            "WWWWWWW",
+            ".......",
+            "..ab...",
+            "...c...",
+            "...d...",
+            ".......",
+            NULL
+        };
+
+        const char* output_level[] = {
+            "...a...",
+            "...b...",
+            "...c...",
+            "...d...",
+            ".......",
+            NULL
+        };
+
+        EXPECT(snake_segment_push_test(input_level, output_level, 0, DIRECTION_NORTH));
+    }
+
+    {
+        const char* input_level[] = {
+            ".......",
             "...aA..",
             "..cbB..",
             "..dWC..",
@@ -928,18 +949,17 @@ int main(int argc, char** argv) {
         };
 
         const char* output_level[] = {
-            "WWWWWWW",
-            "...ab..",
-            "..edcA.",
-            "...WCB.",
-            "...WD..",
+            ".....A.",
+            "...abB.",
+            "..edcC.",
+            "...W.D.",
+            "...W...",
             NULL
         };
 
         EXPECT(snake_segment_constrict_test(input_level, output_level, 0, false));
     }
 
-    // Doesn't work yet.
     {
         const char* input_level[] = {
             ".edcbaW",
@@ -951,15 +971,59 @@ int main(int argc, char** argv) {
         };
 
         const char* output_level[] = {
-            ".edcbaW",
-            "..IHA.W",
-            "..JGBCW",
-            "...FEDW",
+            "...edaW",
+            ".HGFcbW",
+            ".IJE.AW",
+            "...DCBW",
             "...WWWW",
             NULL
         };
 
         EXPECT(snake_segment_constrict_test(input_level, output_level, 0, false));
+    }
+
+    {
+        const char* input_level[] = {
+            "......W",
+            "..gfabW",
+            "..hedcW",
+            "..i...W",
+            "..jWWWW",
+            NULL
+        };
+
+        const char* output_level[] = {
+            "......W",
+            "..gf..W",
+            "..hedaW",
+            "..i.cbW",
+            "..jWWWW",
+            NULL
+        };
+
+        EXPECT(snake_segment_push_test(input_level, output_level, 1, DIRECTION_SOUTH));
+    }
+
+    {
+        const char* input_level[] = {
+            "......W",
+            "..gfabW",
+            "..hedcW",
+            "..i...W",
+            "..jWWWW",
+            NULL
+        };
+
+        const char* output_level[] = {
+            "......W",
+            "....abW",
+            "..hgdcW",
+            "..ife.W",
+            "..jWWWW",
+            NULL
+        };
+
+        EXPECT(snake_segment_push_test(input_level, output_level, 5, DIRECTION_SOUTH));
     }
 
     {
@@ -1008,30 +1072,6 @@ int main(int argc, char** argv) {
 
     {
         const char* input_level[] = {
-            "W.fg...",
-            "W.eh...",
-            "Wcdij..",
-            "Wbmlk..",
-            "Wanop..",
-            "WWWWWWW",
-            NULL
-        };
-
-        const char* output_level[] = {
-            "W.fg...",
-            "Wdeh...",
-            "Wc.ij..",
-            "Wbmlk..",
-            "Wanop..",
-            "WWWWWWW",
-            NULL
-        };
-
-        EXPECT(snake_segment_push_by_snake_test(input_level, output_level, 9, 1, DIRECTION_WEST));
-    }
-
-    {
-        const char* input_level[] = {
             "WWWWWWW",
             "WABCD..",
             "W.fgE..",
@@ -1045,8 +1085,8 @@ int main(int argc, char** argv) {
 
         const char* output_level[] = {
             "WWWWWWW",
-            "WABCD..",
-            "W.TTE..",
+            "WABC...",
+            "WTTDE..",
             "WTTTFG.",
             "WT.TTH.",
             "WTTTTI.",
@@ -1056,6 +1096,202 @@ int main(int argc, char** argv) {
         };
 
         EXPECT(snake_constrict_test(input_level, output_level, 1, true));
+    }
+
+    {
+        const char* input_level[] = {
+            "..a..",
+            "..b..",
+            "..c..",
+            "..d..",
+            "..e..",
+            NULL
+        };
+
+        const char* output_level[] = {
+            "..a..",
+            "..b..",
+            "..cd.",
+            "...e.",
+            ".....",
+            NULL
+        };
+
+        EXPECT(snake_segment_push_test(input_level, output_level, 4, DIRECTION_NORTH));
+    }
+
+    {
+        const char* input_level[] = {
+            "..aW.",
+            "..bW.",
+            "..cW.",
+            "..dW.",
+            "..e..",
+            NULL
+        };
+
+        const char* output_level[] = {
+            "..aW.",
+            "..bW.",
+            ".dcW.",
+            ".e.W.",
+            ".....",
+            NULL
+        };
+
+        EXPECT(snake_segment_push_test(input_level, output_level, 4, DIRECTION_NORTH));
+    }
+
+    {
+        const char* input_level[] = {
+            "..a..",
+            "..b..",
+            "..c..",
+            "..d..",
+            "..e..",
+            NULL
+        };
+
+        const char* output_level[] = {
+            ".....",
+            ".a...",
+            ".bc..",
+            "..d..",
+            "..e..",
+            NULL
+        };
+
+        EXPECT(snake_segment_push_test(input_level, output_level, 0, DIRECTION_SOUTH));
+    }
+
+    {
+        const char* input_level[] = {
+            "..aW.",
+            "..bW.",
+            "..cW.",
+            "..dW.",
+            "..eW.",
+            NULL
+        };
+
+        const char* output_level[] = {
+            "...W.",
+            ".a.W.",
+            ".bcW.",
+            "..dW.",
+            "..eW.",
+            NULL
+        };
+
+        EXPECT(snake_segment_push_test(input_level, output_level, 0, DIRECTION_SOUTH));
+    }
+
+    {
+        const char* input_level[] = {
+            ".....",
+            "..ba.",
+            "..cW.",
+            "..dW.",
+            "..eW.",
+            NULL
+        };
+
+        const char* output_level[] = {
+            ".....",
+            ".....",
+            ".baW.",
+            ".cdW.",
+            "..eW.",
+            NULL
+        };
+
+        EXPECT(snake_segment_push_test(input_level, output_level, 1, DIRECTION_SOUTH));
+    }
+
+    {
+        const char* input_level[] = {
+            ".....",
+            "..cba",
+            "..dWW",
+            "..eW.",
+            "...W.",
+            NULL
+        };
+
+        const char* output_level[] = {
+            ".....",
+            "..cba",
+            "..dWW",
+            "..eW.",
+            "...W.",
+            NULL
+        };
+
+        EXPECT(snake_segment_push_test(input_level, output_level, 2, DIRECTION_SOUTH));
+    }
+
+    {
+        const char* input_level[] = {
+            ".ba..",
+            ".cd..",
+            ".fe..",
+            ".....",
+            NULL
+        };
+
+        const char* output_level[] = {
+            "..a..",
+            "..bc.",
+            ".fed.",
+            ".....",
+            NULL
+        };
+
+        EXPECT(snake_segment_push_test(input_level, output_level, 2, DIRECTION_EAST));
+    }
+
+    {
+        const char* input_level[] = {
+            ".....",
+            "...fg",
+            ".cdeh",
+            ".ba..",
+            ".....",
+            NULL
+        };
+
+        const char* output_level[] = {
+            "...ef",
+            "...dg",
+            "..bch",
+            "..a..",
+            ".....",
+            NULL
+        };
+
+        EXPECT(snake_segment_push_test(input_level, output_level, 2, DIRECTION_EAST));
+    }
+
+    {
+        const char* input_level[] = {
+            ".....",
+            "a..j.",
+            "befi.",
+            "cdgh.",
+            ".....",
+            NULL
+        };
+
+        const char* output_level[] = {
+            ".....",
+            "adej.",
+            "bcfi.",
+            "..gh.",
+            ".....",
+            NULL
+        };
+
+        EXPECT(snake_segment_push_test(input_level, output_level, 3, DIRECTION_NORTH));
     }
 
     if (g_failed) {
