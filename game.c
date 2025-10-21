@@ -1352,6 +1352,57 @@ void _flood_fill_kill_checks(Game* game, SnakeKillCheck* kill_checks, S32 snake_
     }
 }
 
+bool _kill_checks_has_adjacent_empty(Game* game,
+                                     SnakeKillCheck* kill_checks,
+                                     bool* adjacent_checked,
+                                     S32 x,
+                                     S32 y,
+                                     S32 snake_index) {
+    // TODO: clean this up.
+    S32 adjacent_check_index = y * game->level.width + x;
+    if (adjacent_checked[adjacent_check_index]) {
+        return false;
+    }
+    adjacent_checked[adjacent_check_index] = true;
+
+    SnakeKillCheck* current_entry = kill_check_entry(game, kill_checks, x, y);
+
+    for (S8 d = 0; d < DIRECTION_COUNT; d++) {
+        S32 adjacent_x = x;
+        S32 adjacent_y = y;
+        adjacent_cell(d, &adjacent_x, &adjacent_y);
+
+        SnakeKillCheck* adjacent_entry = kill_check_entry(game, kill_checks, adjacent_x, adjacent_y);
+        if (*current_entry == SNAKE_KILL_CHECK_CELL && *adjacent_entry == SNAKE_KILL_CHECK_CELL) {
+            return true;
+        }
+
+        bool check_adjacent = (*adjacent_entry == SNAKE_KILL_CHECK_CELL ||
+                               *adjacent_entry == SNAKE_KILL_CHECK_TACO);
+
+        // If the adjacent cell has a snake, only check it if it is our snake !
+        if (*adjacent_entry == SNAKE_KILL_CHECK_OTHER_SNAKE) {
+            QueriedObject query = game_query(game, adjacent_x, adjacent_y);
+            check_adjacent = (query.type == QUERIED_OBJECT_TYPE_SNAKE &&
+                              query.snake.index == snake_index);
+        }
+
+        if (check_adjacent) {
+            bool check = _kill_checks_has_adjacent_empty(game,
+                                                         kill_checks,
+                                                         adjacent_checked,
+                                                         adjacent_x,
+                                                         adjacent_y,
+                                                         snake_index);
+            if (check) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 void snake_constrict(Game* game, S32 snake_index, SnakeConstrictState constrict_state) {
     Snake* snake = game->snakes + snake_index;
     // TODO: update this comment.
@@ -1365,6 +1416,7 @@ void snake_constrict(Game* game, S32 snake_index, SnakeConstrictState constrict_
     // the snake is constricting.
     S32 cell_count = game->level.width * game->level.height;
     SnakeKillCheck* kill_checks = malloc(cell_count * sizeof(*kill_checks));
+    bool* adjacent_checks = malloc(cell_count);
 
     // TODO: Evaluate if we want to go back to doing a single segment constrict per tick.
 
@@ -1467,58 +1519,59 @@ void snake_constrict(Game* game, S32 snake_index, SnakeConstrictState constrict_
             //     printf("\n");
             // }
 
-            // There are configurations where a single empty cell is unavoidable, but as long as
-            // there are not multiple empty cells together, then we kill the any snake inside.
-            S32 adjacent_empty_cells = 0;
-            for (S32 y = 0; y < game->level.height; y++) {
-                for (S32 x = 0; x < game->level.width; x++) {
-                    SnakeKillCheck* entry = kill_check_entry(game, kill_checks, x, y);
-                    if (*entry == SNAKE_KILL_CHECK_CELL) {
-                        for (S8 d = 0; d < DIRECTION_COUNT; d++) {
-                            S32 adjacent_x = x;
-                            S32 adjacent_y = y;
-                            adjacent_cell(d, &adjacent_x, &adjacent_y);
 
-                            SnakeKillCheck* adjacent_entry = kill_check_entry(game, kill_checks, adjacent_x, adjacent_y);
-                            if (*adjacent_entry == SNAKE_KILL_CHECK_CELL) {
-                                adjacent_empty_cells++;
-                            }
-                        }
-                    }
+            for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
+                if (s == snake_index) {
+                    continue;
                 }
-            }
 
-            if (adjacent_empty_cells == 0) {
+                Snake* check_snake = game->snakes + s;
+                if (check_snake->length == 0) {
+                    continue;
+                }
+
+                SnakeSegment* check_segment = check_snake->segments + 0;
+                memset(adjacent_checks, 0, cell_count);
+
+                // There are configurations where a single empty cell is unavoidable, but as long as
+                // there are not multiple empty cells together, then we kill the any snake inside.
+                if (_kill_checks_has_adjacent_empty(game,
+                                                    kill_checks,
+                                                    adjacent_checks,
+                                                    check_segment->x,
+                                                    check_segment->y,
+                                                    s)) {
+                    continue;
+                }
+
                 // Track how many snake segments are inside the constriction and number of adjacent cells.
-                S32 snake_segment_counts[MAX_SNAKE_COUNT];
-                memset(snake_segment_counts, 0, sizeof(snake_segment_counts[0]) * MAX_SNAKE_COUNT);
+                S32 snake_segment_count = 0;
                 for (S32 y = 0; y < game->level.height; y++) {
                     for (S32 x = 0; x < game->level.width; x++) {
                         SnakeKillCheck* entry = kill_check_entry(game, kill_checks, x, y);
                         if (*entry == SNAKE_KILL_CHECK_OTHER_SNAKE) {
                             QueriedObject queried_object = game_query(game, x, y);
-                            if (queried_object.type == QUERIED_OBJECT_TYPE_SNAKE) {
-                                snake_segment_counts[queried_object.snake.index]++;
+                            if (queried_object.type == QUERIED_OBJECT_TYPE_SNAKE &&
+                                queried_object.snake.index == s) {
+                                snake_segment_count++;
                             }
                         }
                     }
                 }
 
                 // If all of the segments are found within the constriction, kill the snake and replace with tacos.
-                for (S32 i = 0; i < MAX_SNAKE_COUNT; i++) {
-                    Snake* snake_to_kill = game->snakes + i;
-                    if (snake_segment_counts[i] == snake_to_kill->length) {
-                        for (S32 l = 0; l < snake_to_kill->length; l++) {
-                            SnakeSegment* segment_to_kill = snake_to_kill->segments + l;
-                            level_set_cell(&game->level, segment_to_kill->x, segment_to_kill->y, CELL_TYPE_TACO);
-                        }
-                        game->snakes[i].length = 0;
+                if (snake_segment_count == check_snake->length) {
+                    for (S32 l = 0; l < check_snake->length; l++) {
+                        SnakeSegment* segment_to_kill = check_snake->segments + l;
+                        level_set_cell(&game->level, segment_to_kill->x, segment_to_kill->y, CELL_TYPE_TACO);
                     }
+                    check_snake->length = 0;
                 }
             }
         }
     }
 
+    free(adjacent_checks);
     free(kill_checks);
 }
 
