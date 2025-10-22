@@ -130,6 +130,11 @@ void _print_game(Game* game) {
 }
 
 void _snake_chomp_segment(Game* game, SnakeCollision* snake_collision) {
+    // The head is invincible ! Constricting is the only way to kill.
+    if (snake_collision->segment_index == 0) {
+        return;
+    }
+
     Snake* snake = game->snakes + snake_collision->snake_index;
     SnakeSegment* chomped_segment = snake->segments + snake_collision->segment_index;
     chomped_segment->health--;
@@ -1552,11 +1557,7 @@ void snake_constrict(Game* game, S32 snake_index, SnakeConstrictState constrict_
 
                 // If all of the segments are found within the constriction, kill the snake and replace with tacos.
                 if (snake_segment_count == check_snake->length) {
-                    for (S32 l = 0; l < check_snake->length; l++) {
-                        SnakeSegment* segment_to_kill = check_snake->segments + l;
-                        level_set_cell(&game->level, segment_to_kill->x, segment_to_kill->y, CELL_TYPE_TACO);
-                    }
-                    check_snake->length = 0;
+                    check_snake->life_state = SNAKE_LIFE_STATE_DYING;
                 }
             }
         }
@@ -1594,6 +1595,22 @@ QueriedObject game_query(Game* game, S32 x, S32 y) {
 void game_update(Game* game, SnakeAction* snake_actions) {
     S32 snakes_alive = 0;
     for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
+        Snake* snake = game->snakes + s;
+        if (snake->life_state != SNAKE_LIFE_STATE_DEAD) {
+            snakes_alive++;
+        }
+
+        if (snake->life_state == SNAKE_LIFE_STATE_DYING) {
+            for (S32 l = 0; l < snake->length; l++) {
+                SnakeSegment* segment_to_kill = snake->segments + l;
+                level_set_cell(&game->level, segment_to_kill->x, segment_to_kill->y, CELL_TYPE_TACO);
+            }
+            snake->length = 0;
+            snake->life_state = SNAKE_LIFE_STATE_DEAD;
+        }
+    }
+
+    for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
         SnakeAction snake_action = snake_actions[s];
         _snake_turn(game, snake_action, s);
     }
@@ -1626,9 +1643,6 @@ void game_update(Game* game, SnakeAction* snake_actions) {
         // Only allow movement if we aren't constricting.
         if (constrict_state[s] == SNAKE_CONSTRICT_STATE_NONE) {
             _snake_move(game->snakes + s, game);
-        }
-        if (game->snakes[s].length != 0) {
-            snakes_alive++;
         }
     }
 

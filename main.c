@@ -675,7 +675,6 @@ int main(S32 argc, char** argv) {
             break;
         }
         case SESSION_TYPE_SINGLE_PLAYER: {
-
             if ( snake_action != SNAKE_ACTION_NONE ) {
                 action_buffer_add(&server_actions, snake_action,game.snakes[0].direction);
             }

@@ -276,7 +276,6 @@ int main(int argc, char** argv) {
     (void)(argc);
     (void)(argv);
 
-#if 0
     // Snake on snake collision
     {
         const char* input_level[] = {
@@ -1026,7 +1025,6 @@ int main(int argc, char** argv) {
 
         EXPECT(snake_segment_push_test(input_level, output_level, 5, DIRECTION_SOUTH));
     }
-#endif
 
     {
         const char* input_level[] = {
@@ -1098,7 +1096,6 @@ int main(int argc, char** argv) {
         EXPECT(snake_segment_push_test(input_level, output_level, 2, DIRECTION_SOUTH));
     }
 
-#if 0
 
     {
         const char* input_level[] = {
@@ -1323,7 +1320,6 @@ int main(int argc, char** argv) {
 
         EXPECT(snake_segment_push_test(input_level, output_level, 3, DIRECTION_NORTH));
     }
-#endif
 
     {
         const char* input_level[] = {

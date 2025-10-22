@@ -50,12 +50,19 @@ typedef enum {
     SNAKE_CONSTRICT_STATE_RIGHT,
 } SnakeConstrictState;
 
+typedef enum {
+    SNAKE_LIFE_STATE_ALIVE,
+    SNAKE_LIFE_STATE_DYING,
+    SNAKE_LIFE_STATE_DEAD,
+} SnakeLifeState;
+
 typedef struct {
     SnakeSegment* segments;
     S32 length;
     S32 capacity; // I hate STL
     Direction direction;
     S8 chomp_cooldown;
+    SnakeLifeState life_state;
 } Snake;
 
 typedef struct {

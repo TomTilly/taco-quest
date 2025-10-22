@@ -10,7 +10,6 @@ bool snake_init(Snake* snake, int32_t capacity) {
         return false;
     }
     snake->capacity = capacity;
-    snake->chomp_cooldown = 0;
     return true;
 }
 
@@ -25,6 +24,8 @@ SnakeSegment snake_init_segment(S16 x, S16 y) {
 void snake_spawn(Snake* snake, S16 x, S16 y, Direction direction) {
     snake->length = INITIAL_SNAKE_LEN;
     snake->direction = direction;
+    snake->chomp_cooldown = 0;
+    snake->life_state = SNAKE_LIFE_STATE_ALIVE;
 
     for (int i = 0; i < snake->length; i++) {
         snake->segments[i] = snake_init_segment(x, y);
