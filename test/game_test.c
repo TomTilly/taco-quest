@@ -254,14 +254,20 @@ bool snake_segment_push_test(const char** input_level,
     return snake_segment_push_by_snake_test(input_level, output_level, segment_index, 0, direction);
 }
 
-bool snake_constrict_test(const char** input_level,
-                          const char** output_level,
-                          S32 snake_index,
-                          SnakeConstrictState snake_constrict_state) {
+bool snake_constrict_and_update_test(const char** input_level,
+                                     const char** output_level,
+                                     S32 snake_index,
+                                     SnakeConstrictState snake_constrict_state) {
     Game input_game = {0};
     game_from_string(input_level, &input_game);
 
     snake_constrict(&input_game, snake_index, snake_constrict_state);
+
+    // We update the game because the unittests expect the snake to get killed by it takes 1 tick
+    // for that to happen.
+    SnakeAction snake_actions[MAX_SNAKE_COUNT];
+    memset(snake_actions, 0, sizeof(snake_actions[0]) * MAX_SNAKE_COUNT);
+    game_update(&input_game, snake_actions);
 
     Game output_game = {0};
     game_from_string(output_level, &output_game);
@@ -972,10 +978,10 @@ int main(int argc, char** argv) {
 
         const char* output_level[] = {
             "...edaW",
-            ".HGFcbW",
-            ".IJE.AW",
-            "...DCBW",
-            "...WWWW",
+            "..GFcbW",
+            "..HEDAW",
+            "..I.CBW",
+            "..JWWWW",
             NULL
         };
 
@@ -1039,16 +1045,14 @@ int main(int argc, char** argv) {
         Game input_game = {0};
         game_from_string(input_level, &input_game);
 
-        EXPECT(!snake_segment_is_pushable(&input_game, 0, 0, DIRECTION_EAST));
-        EXPECT(!snake_segment_is_pushable(&input_game, 0, 0, DIRECTION_WEST));
+        EXPECT(snake_segment_is_pushable(&input_game, 0, 0, DIRECTION_EAST));
+        EXPECT(snake_segment_is_pushable(&input_game, 0, 0, DIRECTION_WEST));
 
         EXPECT(snake_segment_is_pushable(&input_game, 0, 1, DIRECTION_EAST));
-        EXPECT(!snake_segment_is_pushable(&input_game, 0, 1, DIRECTION_WEST));
+        EXPECT(snake_segment_is_pushable(&input_game, 0, 1, DIRECTION_WEST));
 
         EXPECT(snake_segment_is_pushable(&input_game, 0, 2, DIRECTION_EAST));
         EXPECT(snake_segment_is_pushable(&input_game, 0, 2, DIRECTION_NORTH));
-        EXPECT(!snake_segment_is_pushable(&input_game, 0, 2, DIRECTION_WEST));
-        EXPECT(!snake_segment_is_pushable(&input_game, 0, 2, DIRECTION_SOUTH));
 
         EXPECT(snake_segment_is_pushable(&input_game, 0, 3, DIRECTION_NORTH));
         EXPECT(!snake_segment_is_pushable(&input_game, 0, 3, DIRECTION_SOUTH));
@@ -1058,19 +1062,15 @@ int main(int argc, char** argv) {
 
         EXPECT(snake_segment_is_pushable(&input_game, 0, 5, DIRECTION_NORTH));
         EXPECT(snake_segment_is_pushable(&input_game, 0, 5, DIRECTION_WEST));
-        EXPECT(!snake_segment_is_pushable(&input_game, 0, 5, DIRECTION_EAST));
-        EXPECT(!snake_segment_is_pushable(&input_game, 0, 5, DIRECTION_SOUTH));
 
-        EXPECT(!snake_segment_is_pushable(&input_game, 0, 6, DIRECTION_EAST));
-        EXPECT(!snake_segment_is_pushable(&input_game, 0, 6, DIRECTION_WEST));
+        EXPECT(snake_segment_is_pushable(&input_game, 0, 6, DIRECTION_EAST));
+        EXPECT(snake_segment_is_pushable(&input_game, 0, 6, DIRECTION_WEST));
 
-        EXPECT(snake_segment_is_pushable(&input_game, 0, 7, DIRECTION_EAST));
+        EXPECT(snake_segment_is_pushable(&input_game, 0, 7, DIRECTION_WEST));
         EXPECT(snake_segment_is_pushable(&input_game, 0, 7, DIRECTION_SOUTH));
-        EXPECT(!snake_segment_is_pushable(&input_game, 0, 7, DIRECTION_WEST));
-        EXPECT(!snake_segment_is_pushable(&input_game, 0, 7, DIRECTION_NORTH));
 
         EXPECT(snake_segment_is_pushable(&input_game, 0, 8, DIRECTION_SOUTH));
-        EXPECT(!snake_segment_is_pushable(&input_game, 0, 8, DIRECTION_NORTH));
+        EXPECT(snake_segment_is_pushable(&input_game, 0, 8, DIRECTION_NORTH));
 
         EXPECT(snake_segment_is_pushable(&input_game, 0, 9, DIRECTION_SOUTH));
         EXPECT(snake_segment_is_pushable(&input_game, 0, 9, DIRECTION_NORTH));
@@ -1122,7 +1122,7 @@ int main(int argc, char** argv) {
             NULL
         };
 
-        EXPECT(snake_constrict_test(input_level, output_level, 1, true));
+        EXPECT(snake_constrict_and_update_test(input_level, output_level, 1, true));
     }
 
     {
@@ -1340,7 +1340,7 @@ int main(int argc, char** argv) {
             NULL
         };
 
-        EXPECT(snake_constrict_test(input_level, output_level, 0, true));
+        EXPECT(snake_constrict_and_update_test(input_level, output_level, 0, true));
     }
 
     if (g_failed) {

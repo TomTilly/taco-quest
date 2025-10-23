@@ -1249,53 +1249,62 @@ bool snake_segment_is_pushable(Game* game, S32 snake_index, S32 segment_index, D
 
     Snake* snake = game->snakes + snake_index;
 
-    if (segment_index == 0) {
+    if (segment_index < 0 || segment_index >= snake->length) {
         return false;
     }
 
-    Direction direction_to_head = snake_segment_direction_to_head(snake, segment_index);
-    Direction direction_to_tail = snake_segment_direction_to_tail(snake, segment_index);
+    // Corners are always pushable. This is a bit of a hack cause we assume you have to succeed in
+    // pushing the adjacent segments to even push an inner corner.
+    if (directions_are_perpendicular(snake_segment_direction_to_head(snake, segment_index),
+                                     snake_segment_direction_to_tail(snake, segment_index))
+                                     // The head and tail cannot be corners.
+                                     && segment_index != 0 && segment_index != (snake->length - 1) ) {
+        return true;
+    }
 
-    // If our segment is a corner, return based on the outside or inside.
-    if (directions_are_perpendicular(direction_to_head, direction_to_tail)) {
-        if (from == opposite_direction(direction_to_head) ||
-            from == opposite_direction(direction_to_tail)) {
+    Direction towards_head_turn = DIRECTION_COUNT;
+    Direction towards_tail_turn = DIRECTION_COUNT;
+
+    S32 prev_segment_index = segment_index - 1;
+    Direction original_direction = opposite_direction(snake_segment_direction_to_tail(snake, segment_index));
+    while (prev_segment_index >= 0) {
+        Direction current_direction = snake_segment_direction_to_head(snake, prev_segment_index);
+        if (current_direction != original_direction) {
+            towards_head_turn = current_direction;
+            break;
+        }
+        prev_segment_index--;
+    }
+
+    S32 next_segment_index = segment_index + 1;
+    original_direction = opposite_direction(snake_segment_direction_to_head(snake, segment_index));
+    while (next_segment_index < snake->length) {
+        Direction current_direction = snake_segment_direction_to_tail(snake, next_segment_index);
+        if (current_direction != original_direction) {
+            towards_tail_turn = current_direction;
+            break;
+        }
+        next_segment_index++;
+    }
+
+    if (towards_head_turn == towards_tail_turn) {
+        // If the snake is straight, it is pushable.
+        if (towards_head_turn == DIRECTION_COUNT) {
+            return true;
+        }
+
+        // With 2 inner corners on either side, we cannot be pushed.
+        if (towards_head_turn == opposite_direction(from)) {
             return false;
         }
-    }
-
-    // Check the previous segment for being a corner.
-    if (segment_index > 0) {
-        S32 prev_segment_index = segment_index - 1;
-        Direction prev_direction_to_head = snake_segment_direction_to_head(snake, prev_segment_index);
-        Direction prev_direction_to_tail = snake_segment_direction_to_tail(snake, prev_segment_index);
-        if (directions_are_perpendicular(prev_direction_to_head, prev_direction_to_tail)) {
-            if (direction_to_head == opposite_direction(prev_direction_to_head) &&
-                from == opposite_direction(prev_direction_to_tail)) {
-                return false;
-            }
-            if (direction_to_head == opposite_direction(prev_direction_to_tail) &&
-                from == opposite_direction(prev_direction_to_head)) {
-                return false;
-            }
-        }
-    }
-
-    // Check the next segment for being a corner.
-    if (segment_index < (snake->length - 1)) {
-        S32 next_segment_index = segment_index + 1;
-        Direction next_direction_to_head = snake_segment_direction_to_head(snake, next_segment_index);
-        Direction next_direction_to_tail = snake_segment_direction_to_tail(snake, next_segment_index);
-        if (directions_are_perpendicular(next_direction_to_head, next_direction_to_tail)) {
-            if (direction_to_tail == opposite_direction(next_direction_to_head) &&
-                from == opposite_direction(next_direction_to_tail)) {
-                return false;
-            }
-            if (direction_to_tail == opposite_direction(next_direction_to_tail) &&
-                from == opposite_direction(next_direction_to_head)) {
-                return false;
-            }
-        }
+    // Uncomment this to enable the head and tail to act as inner anchors as well.
+    // } else {
+    //     // If either end is the head or tail, use the other (since we know they are not equal).
+    //     if (towards_head_turn == DIRECTION_COUNT && towards_tail_turn == opposite_direction(from)) {
+    //         return false;
+    //     } else if (towards_tail_turn == DIRECTION_COUNT && towards_head_turn == opposite_direction(from)) {
+    //         return false;
+    //     }
     }
 
     return true;
