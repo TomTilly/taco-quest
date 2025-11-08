@@ -76,12 +76,12 @@ S32 game_count_tacos(Game* game);
 size_t game_serialize(const Game* game, void* buffer, size_t buffer_size);
 size_t game_deserialize(void * buffer, size_t size, Game * out);
 
-void snake_constrict(Game* game, S32 snake_index, SnakeConstrictState constrict_state);
+void snake_constrict(Game* game, S32 snake_index);
 
 MoveResult snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 segment_index, Direction direction);
 MoveResult snake_segment_constrict(Game* game, S32 snake_index, S32 segment_index, bool left);
 
-bool snake_segment_is_pushable(Game* game, S32 snake_index, S32 segment_index, Direction from);
+bool snake_segment_is_constricting_towards(Game* game, S32 snake_index, S32 segment_index, Direction from);
 
 void init_push_state(Game* game, PushState* push_state);
 

@@ -261,7 +261,10 @@ bool snake_constrict_and_update_test(const char** input_level,
     Game input_game = {0};
     game_from_string(input_level, &input_game);
 
-    snake_constrict(&input_game, snake_index, snake_constrict_state);
+    Snake* snake = input_game.snakes + snake_index;
+    snake->constrict_state = snake_constrict_state;
+
+    snake_constrict(&input_game, snake_index);
 
     // We update the game because the unittests expect the snake to get killed by it takes 1 tick
     // for that to happen.
@@ -978,10 +981,10 @@ int main(int argc, char** argv) {
 
         const char* output_level[] = {
             "...edaW",
-            "..GFcbW",
-            "..HEDAW",
-            "..I.CBW",
-            "..JWWWW",
+            ".HGFcbW",
+            ".IJE.AW",
+            "...DCBW",
+            "...WWWW",
             NULL
         };
 
@@ -1045,35 +1048,83 @@ int main(int argc, char** argv) {
         Game input_game = {0};
         game_from_string(input_level, &input_game);
 
-        EXPECT(snake_segment_is_pushable(&input_game, 0, 0, DIRECTION_EAST));
-        EXPECT(snake_segment_is_pushable(&input_game, 0, 0, DIRECTION_WEST));
+        input_game.snakes[0].constrict_state = SNAKE_CONSTRICT_STATE_LEFT;
 
-        EXPECT(snake_segment_is_pushable(&input_game, 0, 1, DIRECTION_EAST));
-        EXPECT(snake_segment_is_pushable(&input_game, 0, 1, DIRECTION_WEST));
+        EXPECT(snake_segment_is_constricting_towards(&input_game, 0, 0, DIRECTION_EAST));
+        EXPECT(!snake_segment_is_constricting_towards(&input_game, 0, 0, DIRECTION_WEST));
 
-        EXPECT(snake_segment_is_pushable(&input_game, 0, 2, DIRECTION_EAST));
-        EXPECT(snake_segment_is_pushable(&input_game, 0, 2, DIRECTION_NORTH));
+        EXPECT(snake_segment_is_constricting_towards(&input_game, 0, 1, DIRECTION_EAST));
+        EXPECT(!snake_segment_is_constricting_towards(&input_game, 0, 1, DIRECTION_WEST));
 
-        EXPECT(snake_segment_is_pushable(&input_game, 0, 3, DIRECTION_NORTH));
-        EXPECT(!snake_segment_is_pushable(&input_game, 0, 3, DIRECTION_SOUTH));
+        EXPECT(snake_segment_is_constricting_towards(&input_game, 0, 2, DIRECTION_EAST));
+        EXPECT(snake_segment_is_constricting_towards(&input_game, 0, 2, DIRECTION_NORTH));
 
-        EXPECT(snake_segment_is_pushable(&input_game, 0, 4, DIRECTION_NORTH));
-        EXPECT(!snake_segment_is_pushable(&input_game, 0, 4, DIRECTION_SOUTH));
+        EXPECT(snake_segment_is_constricting_towards(&input_game, 0, 3, DIRECTION_NORTH));
+        EXPECT(!snake_segment_is_constricting_towards(&input_game, 0, 3, DIRECTION_SOUTH));
 
-        EXPECT(snake_segment_is_pushable(&input_game, 0, 5, DIRECTION_NORTH));
-        EXPECT(snake_segment_is_pushable(&input_game, 0, 5, DIRECTION_WEST));
+        EXPECT(snake_segment_is_constricting_towards(&input_game, 0, 4, DIRECTION_NORTH));
+        EXPECT(!snake_segment_is_constricting_towards(&input_game, 0, 4, DIRECTION_SOUTH));
 
-        EXPECT(snake_segment_is_pushable(&input_game, 0, 6, DIRECTION_EAST));
-        EXPECT(snake_segment_is_pushable(&input_game, 0, 6, DIRECTION_WEST));
+        EXPECT(snake_segment_is_constricting_towards(&input_game, 0, 5, DIRECTION_NORTH));
+        EXPECT(snake_segment_is_constricting_towards(&input_game, 0, 5, DIRECTION_WEST));
 
-        EXPECT(snake_segment_is_pushable(&input_game, 0, 7, DIRECTION_WEST));
-        EXPECT(snake_segment_is_pushable(&input_game, 0, 7, DIRECTION_SOUTH));
+        EXPECT(!snake_segment_is_constricting_towards(&input_game, 0, 6, DIRECTION_EAST));
+        EXPECT(snake_segment_is_constricting_towards(&input_game, 0, 6, DIRECTION_WEST));
 
-        EXPECT(snake_segment_is_pushable(&input_game, 0, 8, DIRECTION_SOUTH));
-        EXPECT(snake_segment_is_pushable(&input_game, 0, 8, DIRECTION_NORTH));
+        EXPECT(!snake_segment_is_constricting_towards(&input_game, 0, 7, DIRECTION_EAST));
+        EXPECT(!snake_segment_is_constricting_towards(&input_game, 0, 7, DIRECTION_SOUTH));
 
-        EXPECT(snake_segment_is_pushable(&input_game, 0, 9, DIRECTION_SOUTH));
-        EXPECT(snake_segment_is_pushable(&input_game, 0, 9, DIRECTION_NORTH));
+        EXPECT(!snake_segment_is_constricting_towards(&input_game, 0, 8, DIRECTION_SOUTH));
+        EXPECT(snake_segment_is_constricting_towards(&input_game, 0, 8, DIRECTION_NORTH));
+
+        EXPECT(!snake_segment_is_constricting_towards(&input_game, 0, 9, DIRECTION_SOUTH));
+        EXPECT(snake_segment_is_constricting_towards(&input_game, 0, 9, DIRECTION_NORTH));
+    }
+
+    {
+        const char* input_level[] = {
+            ".......",
+            ".a..hij",
+            ".b..g..",
+            ".cdef..",
+            ".......",
+            NULL
+        };
+
+        Game input_game = {0};
+        game_from_string(input_level, &input_game);
+
+        input_game.snakes[0].constrict_state = SNAKE_CONSTRICT_STATE_RIGHT;
+
+        EXPECT(!snake_segment_is_constricting_towards(&input_game, 0, 0, DIRECTION_EAST));
+        EXPECT(snake_segment_is_constricting_towards(&input_game, 0, 0, DIRECTION_WEST));
+
+        EXPECT(!snake_segment_is_constricting_towards(&input_game, 0, 1, DIRECTION_EAST));
+        EXPECT(snake_segment_is_constricting_towards(&input_game, 0, 1, DIRECTION_WEST));
+
+        EXPECT(!snake_segment_is_constricting_towards(&input_game, 0, 2, DIRECTION_EAST));
+        EXPECT(!snake_segment_is_constricting_towards(&input_game, 0, 2, DIRECTION_NORTH));
+
+        EXPECT(!snake_segment_is_constricting_towards(&input_game, 0, 3, DIRECTION_NORTH));
+        EXPECT(snake_segment_is_constricting_towards(&input_game, 0, 3, DIRECTION_SOUTH));
+
+        EXPECT(!snake_segment_is_constricting_towards(&input_game, 0, 4, DIRECTION_NORTH));
+        EXPECT(snake_segment_is_constricting_towards(&input_game, 0, 4, DIRECTION_SOUTH));
+
+        EXPECT(!snake_segment_is_constricting_towards(&input_game, 0, 5, DIRECTION_NORTH));
+        EXPECT(!snake_segment_is_constricting_towards(&input_game, 0, 5, DIRECTION_WEST));
+
+        EXPECT(snake_segment_is_constricting_towards(&input_game, 0, 6, DIRECTION_EAST));
+        EXPECT(!snake_segment_is_constricting_towards(&input_game, 0, 6, DIRECTION_WEST));
+
+        EXPECT(snake_segment_is_constricting_towards(&input_game, 0, 7, DIRECTION_EAST));
+        EXPECT(snake_segment_is_constricting_towards(&input_game, 0, 7, DIRECTION_SOUTH));
+
+        EXPECT(snake_segment_is_constricting_towards(&input_game, 0, 8, DIRECTION_SOUTH));
+        EXPECT(!snake_segment_is_constricting_towards(&input_game, 0, 8, DIRECTION_NORTH));
+
+        EXPECT(snake_segment_is_constricting_towards(&input_game, 0, 9, DIRECTION_SOUTH));
+        EXPECT(!snake_segment_is_constricting_towards(&input_game, 0, 9, DIRECTION_NORTH));
     }
 
     {

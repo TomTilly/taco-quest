@@ -683,8 +683,8 @@ MoveResult _snake_segment_slink(Game* game, S32 snake_index, S32 segment_index, 
 // Push guarantees that if it returns true, the segment that was pushed moved and there is no
 // segment at that cell.
 MoveResult snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 segment_index, Direction direction) {
-    // TODO: More testing before we do something like this
-    if (!snake_segment_is_pushable(game, snake_index, segment_index, direction)) {
+    // if the snake is constricting towards the push, then the push has no effect.
+    if (snake_segment_is_constricting_towards(game, snake_index, segment_index, direction)) {
         return MOVE_OBJECT_FAIL;
     }
 
@@ -1242,72 +1242,56 @@ MoveResult snake_segment_constrict(Game* game, S32 snake_index, S32 segment_inde
     return MOVE_OBJECT_SUCCESS;
 }
 
-bool snake_segment_is_pushable(Game* game, S32 snake_index, S32 segment_index, Direction from) {
+bool snake_segment_is_constricting_towards(Game* game, S32 snake_index, S32 segment_index, Direction from) {
     if (snake_index < 0 || snake_index >= MAX_SNAKE_COUNT) {
-        return false;
+        return true;
     }
 
     Snake* snake = game->snakes + snake_index;
 
     if (segment_index < 0 || segment_index >= snake->length) {
-        return false;
-    }
-
-    // Corners are always pushable. This is a bit of a hack cause we assume you have to succeed in
-    // pushing the adjacent segments to even push an inner corner.
-    if (directions_are_perpendicular(snake_segment_direction_to_head(snake, segment_index),
-                                     snake_segment_direction_to_tail(snake, segment_index))
-                                     // The head and tail cannot be corners.
-                                     && segment_index != 0 && segment_index != (snake->length - 1) ) {
         return true;
     }
 
-    Direction towards_head_turn = DIRECTION_COUNT;
-    Direction towards_tail_turn = DIRECTION_COUNT;
+    //
+    // <XXX
+    //   ^
 
-    S32 prev_segment_index = segment_index - 1;
-    Direction original_direction = opposite_direction(snake_segment_direction_to_tail(snake, segment_index));
-    while (prev_segment_index >= 0) {
-        Direction current_direction = snake_segment_direction_to_head(snake, prev_segment_index);
-        if (current_direction != original_direction) {
-            towards_head_turn = current_direction;
-            break;
-        }
-        prev_segment_index--;
+    Direction to_head = snake_segment_direction_to_head(snake, segment_index);
+    Direction clockwise_to_head = rotate_clockwise(to_head);
+
+    if (clockwise_to_head == from && snake->constrict_state == SNAKE_CONSTRICT_STATE_LEFT) {
+        return true;
     }
 
-    S32 next_segment_index = segment_index + 1;
-    original_direction = opposite_direction(snake_segment_direction_to_head(snake, segment_index));
-    while (next_segment_index < snake->length) {
-        Direction current_direction = snake_segment_direction_to_tail(snake, next_segment_index);
-        if (current_direction != original_direction) {
-            towards_tail_turn = current_direction;
-            break;
-        }
-        next_segment_index++;
+    Direction counter_clockwise_to_head = rotate_counter_clockwise(to_head);
+    if (counter_clockwise_to_head == from && snake->constrict_state == SNAKE_CONSTRICT_STATE_RIGHT) {
+        return true;
     }
 
-    if (towards_head_turn == towards_tail_turn) {
-        // If the snake is straight, it is pushable.
-        if (towards_head_turn == DIRECTION_COUNT) {
+    Direction to_tail = snake_segment_direction_to_tail(snake, segment_index);
+
+    if (from == to_head) {
+        //
+        // <XX <
+        //   X
+        //
+        Direction clockwise_to_tail = rotate_clockwise(to_tail);
+        if (clockwise_to_tail == from && snake->constrict_state == SNAKE_CONSTRICT_STATE_RIGHT) {
             return true;
         }
 
-        // With 2 inner corners on either side, we cannot be pushed.
-        if (towards_head_turn == opposite_direction(from)) {
-            return false;
+        //
+        //   X
+        // <XX <
+        //
+        Direction counter_clockwise_to_tail = rotate_counter_clockwise(to_tail);
+        if (counter_clockwise_to_tail == from && snake->constrict_state == SNAKE_CONSTRICT_STATE_LEFT) {
+            return true;
         }
-    // Uncomment this to enable the head and tail to act as inner anchors as well.
-    // } else {
-    //     // If either end is the head or tail, use the other (since we know they are not equal).
-    //     if (towards_head_turn == DIRECTION_COUNT && towards_tail_turn == opposite_direction(from)) {
-    //         return false;
-    //     } else if (towards_tail_turn == DIRECTION_COUNT && towards_head_turn == opposite_direction(from)) {
-    //         return false;
-    //     }
     }
 
-    return true;
+    return false;
 }
 
 SnakeKillCheck* kill_check_entry(Game* game, SnakeKillCheck* kill_checks, S32 x, S32 y) {
@@ -1408,14 +1392,9 @@ bool _kill_checks_has_adjacent_empty(Game* game,
     return false;
 }
 
-void snake_constrict(Game* game, S32 snake_index, SnakeConstrictState constrict_state) {
+void snake_constrict(Game* game, S32 snake_index) {
     Snake* snake = game->snakes + snake_index;
-    // TODO: update this comment.
-    // First pass finds the shapes to operate on. This is so we don't operate on corners that we
-    // create during this pass and only operate on the existing ones.
-    if (constrict_state == SNAKE_CONSTRICT_STATE_NONE) {
-        return;
-    }
+    assert(snake->constrict_state != SNAKE_CONSTRICT_STATE_NONE);
 
     // Allocate an array of the size of the level wherel each cell is flood filled inside where
     // the snake is constricting.
@@ -1428,7 +1407,7 @@ void snake_constrict(Game* game, S32 snake_index, SnakeConstrictState constrict_
     // How many elements were impacted by a constrict pass on this tick. If any, advance passed them
     // otherwise we will see the chain constrict effect.
     for (S32 segment_index = 0; segment_index < snake->length; segment_index++) {
-        bool left = (constrict_state == SNAKE_CONSTRICT_STATE_LEFT);
+        bool left = (snake->constrict_state == SNAKE_CONSTRICT_STATE_LEFT);
 
         // if we haven't unfurled yet, skip.
         if (segment_index > 0 &&
@@ -1634,23 +1613,33 @@ void game_update(Game* game, SnakeAction* snake_actions) {
         }
     }
 
-    SnakeConstrictState constrict_state[MAX_SNAKE_COUNT];
-    memset(constrict_state, 0, sizeof(constrict_state[0]) * MAX_SNAKE_COUNT);
+    for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
+        Snake* snake = game->snakes + s;
+        snake->constrict_state = SNAKE_CONSTRICT_STATE_NONE;
+    }
 
     for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
-        SnakeAction snake_action = snake_actions[s];
-        if (snake_action & SNAKE_ACTION_CONSTRICT_LEFT) {
-            constrict_state[s] = SNAKE_CONSTRICT_STATE_LEFT;
-            snake_constrict(game, s, constrict_state[s]);
-        } else if (snake_action & SNAKE_ACTION_CONSTRICT_RIGHT) {
-            constrict_state[s] = SNAKE_CONSTRICT_STATE_RIGHT;
-            snake_constrict(game, s, constrict_state[s]);
+        Snake* snake = game->snakes + s;
+
+        if (snake_actions[s] & SNAKE_ACTION_CONSTRICT_LEFT) {
+            // constricting both directions cancels out
+            if (snake_actions[s] & SNAKE_ACTION_CONSTRICT_RIGHT) {
+                continue;
+            }
+            snake->constrict_state = SNAKE_CONSTRICT_STATE_LEFT;
+            snake_constrict(game, s);
+        }
+
+        if (snake_actions[s] & SNAKE_ACTION_CONSTRICT_RIGHT) {
+            snake->constrict_state = SNAKE_CONSTRICT_STATE_RIGHT;
+            snake_constrict(game, s);
         }
     }
 
     for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
+        Snake* snake = game->snakes + s;
         // Only allow movement if we aren't constricting.
-        if (constrict_state[s] == SNAKE_CONSTRICT_STATE_NONE) {
+        if (snake->constrict_state == SNAKE_CONSTRICT_STATE_NONE) {
             _snake_move(game->snakes + s, game);
         }
     }

@@ -63,6 +63,7 @@ typedef struct {
     Direction direction;
     S8 chomp_cooldown;
     SnakeLifeState life_state;
+    SnakeConstrictState constrict_state;
 } Snake;
 
 typedef struct {
