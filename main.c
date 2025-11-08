@@ -152,33 +152,67 @@ int main(S32 argc, char** argv) {
     const char* port = NULL;
     const char* ip = NULL;
     const char* window_title = NULL;
+    bool record_demo = false;
 
     SessionType session_type = SESSION_TYPE_SINGLE_PLAYER;
-    if(argc > 1) {
-        if (strcmp(argv[1], "-s") == 0) {
+    int arg_index = 1;
+    while (arg_index < argc) {
+        const char* flag = argv[arg_index];
+
+        if (strcmp(flag, "-s") == 0) {
+            if (session_type != SESSION_TYPE_SINGLE_PLAYER) {
+                puts("Expected one mode argument, but received multiple.");
+                return EXIT_FAILURE;
+            }
+
             session_type = SESSION_TYPE_SERVER;
 
-            if (argc != 3) {
-                puts("Expected port argument for server mode");
+            arg_index++;
+            if (arg_index < argc) {
+                port = argv[arg_index];
+                arg_index++;
+            }
+        } else if (strcmp(flag, "-c") == 0) {
+            if (session_type != SESSION_TYPE_SINGLE_PLAYER) {
+                puts("Expected one mode argument, but received multiple.");
                 return EXIT_FAILURE;
             }
 
-            port = argv[2];
-        } else if (strcmp(argv[1], "-c") == 0) {
             session_type = SESSION_TYPE_CLIENT;
 
-            if (argc != 4) {
-                puts("Expected ip and port arguments for client mode");
-                return EXIT_FAILURE;
+            arg_index++;
+            if (arg_index < argc) {
+                ip = argv[arg_index];
             }
 
-            ip = argv[2];
-            port = argv[3];
+            arg_index++;
+            if (arg_index < argc) {
+                port = argv[arg_index];
+            }
+
+            arg_index++;
+        } else if (strcmp(flag, "-r") == 0){
+            record_demo = true;
+            arg_index++;
         } else {
             puts("Unexpected argument passed");
             return EXIT_FAILURE;
         }
     }
+
+    if (session_type == SESSION_TYPE_SERVER) {
+        if (port == NULL) {
+            puts("Expected port argument for server mode");
+            return EXIT_FAILURE;
+        }
+    } else if (session_type == SESSION_TYPE_CLIENT) {
+        if (ip == NULL || port == NULL) {
+            puts("Expected ip and port arguments for client mode");
+            return EXIT_FAILURE;
+        }
+    }
+
+    (void)record_demo;
 
     //
     // Init game and level
