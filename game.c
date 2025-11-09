@@ -15,12 +15,6 @@ typedef struct {
     S16 segment_index;
 } SnakeCollision;
 
-typedef struct {
-    SnakeSegmentShape shape;
-    S32 x;
-    S32 y;
-} SnakeConstrictSegmentInfo;
-
 typedef enum {
     SNAKE_KILL_CHECK_UNREACHABLE,
     SNAKE_KILL_CHECK_CELL,

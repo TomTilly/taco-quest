@@ -110,34 +110,30 @@ void snake_draw(SDL_Renderer* renderer,
             } else {
                 SnakeSegmentShape shape = snake_segment_shape(snake, i);
 
-                switch(shape) {
-                case SNAKE_SEGMENT_SHAPE_VERTICAL:
+                source_rect.y = shape.flipped ? 0 : 16;
+
+                switch(shape.type) {
+                case SNAKE_SEGMENT_SHAPE_TYPE_VERTICAL:
                     source_rect.x = 32;
-                    source_rect.y = 0;
                     angle = 90.0;
                     break;
-                case SNAKE_SEGMENT_SHAPE_HORIZONTAL:
+                case SNAKE_SEGMENT_SHAPE_TYPE_HORIZONTAL:
                     source_rect.x = 32;
-                    source_rect.y = 0;
                     break;
-                case SNAKE_SEGMENT_SHAPE_NORTH_EAST_CORNER:
+                case SNAKE_SEGMENT_SHAPE_TYPE_NORTH_EAST_CORNER:
                     source_rect.x = 16;
-                    source_rect.y = 0;
                     break;
-                case SNAKE_SEGMENT_SHAPE_SOUTH_EAST_CORNER:
+                case SNAKE_SEGMENT_SHAPE_TYPE_SOUTH_EAST_CORNER:
                     source_rect.x = 16;
-                    source_rect.y = 0;
                     angle = 90.0;
                     break;
-                case SNAKE_SEGMENT_SHAPE_SOUTH_WEST_CORNER:
+                case SNAKE_SEGMENT_SHAPE_TYPE_SOUTH_WEST_CORNER:
                     source_rect.x = 16;
-                    source_rect.y = 0;
                     angle = 180.0;
                     break;
-                case SNAKE_SEGMENT_SHAPE_NORTH_WEST_CORNER:
+                case SNAKE_SEGMENT_SHAPE_TYPE_NORTH_WEST_CORNER:
                     // corner top left
                     source_rect.x = 16;
-                    source_rect.y = 0;
                     angle = 270.0;
                     break;
                 default:
@@ -146,7 +142,7 @@ void snake_draw(SDL_Renderer* renderer,
             }
         }
 
-        source_rect.y += (snake->segments[i].health - 1) * source_rect.w;
+        source_rect.y += (2 * (SNAKE_SEGMENT_MAX_HEALTH - snake->segments[i].health) * source_rect.h);
 
         U8 hue = snake->chomp_cooldown ? 128 : 255;
 
@@ -328,20 +324,27 @@ SnakeAction action_buffer_remove(ActionBuffer * buf) {
 }
 
 SnakeSegmentShape snake_segment_shape(Snake* snake, S32 segment_index) {
+    SnakeSegmentShape result = {0};
     if (segment_index >= snake->length) {
-        return SNAKE_SEGMENT_SHAPE_UNKNOWN;
+        return result;
     }
 
     if (segment_index == 0) {
-        return SNAKE_SEGMENT_SHAPE_HEAD;
+        result.type = SNAKE_SEGMENT_SHAPE_TYPE_HEAD;
+        return result;
     } else if (segment_index == (snake->length - 1)) {
         SnakeSegment* curr_segment = snake->segments + segment_index;
         SnakeSegment* prev_segment = curr_segment - 1;
 
         if (curr_segment->x == prev_segment->x) {
-            return SNAKE_SEGMENT_SHAPE_VERTICAL;
+            result.type = SNAKE_SEGMENT_SHAPE_TYPE_VERTICAL;
+            result.flipped = (snake_segment_direction_to_head(snake, segment_index) == DIRECTION_SOUTH);
+            return result;
         }
-        return SNAKE_SEGMENT_SHAPE_HORIZONTAL;
+
+        result.type = SNAKE_SEGMENT_SHAPE_TYPE_HORIZONTAL;
+        result.flipped = (snake_segment_direction_to_head(snake, segment_index) == DIRECTION_EAST);
+        return result;
     }
 
     SnakeSegment* curr_segment = snake->segments + segment_index;
@@ -366,22 +369,33 @@ SnakeSegmentShape snake_segment_shape(Snake* snake, S32 segment_index) {
                      curr_segment->x == next_segment->x);
 
     if (has_north && has_south && !has_east && !has_west) {
-        return SNAKE_SEGMENT_SHAPE_VERTICAL;
+        result.type = SNAKE_SEGMENT_SHAPE_TYPE_VERTICAL;
+        result.flipped = (snake_segment_direction_to_head(snake, segment_index) == DIRECTION_SOUTH);
+        return result;
     } else if (has_east && has_west && !has_north && !has_south) {
-        return SNAKE_SEGMENT_SHAPE_HORIZONTAL;
+        result.type = SNAKE_SEGMENT_SHAPE_TYPE_HORIZONTAL;
+        result.flipped = (snake_segment_direction_to_head(snake, segment_index) == DIRECTION_EAST);
+        return result;
     } else if (has_east && has_north && !has_west && !has_south) {
-        return SNAKE_SEGMENT_SHAPE_NORTH_EAST_CORNER;
+        result.type = SNAKE_SEGMENT_SHAPE_TYPE_NORTH_EAST_CORNER;
+        result.flipped = (snake_segment_direction_to_head(snake, segment_index) == DIRECTION_EAST);
+        return result;
     } else if (has_east && has_south && !has_west && !has_north) {
-        return SNAKE_SEGMENT_SHAPE_SOUTH_EAST_CORNER;
+        result.type = SNAKE_SEGMENT_SHAPE_TYPE_SOUTH_EAST_CORNER;
+        result.flipped = (snake_segment_direction_to_head(snake, segment_index) == DIRECTION_SOUTH);
+        return result;
     } else if (has_west && has_south && !has_east && !has_north) {
-        return SNAKE_SEGMENT_SHAPE_SOUTH_WEST_CORNER;
+        result.type = SNAKE_SEGMENT_SHAPE_TYPE_SOUTH_WEST_CORNER;
+        result.flipped = (snake_segment_direction_to_head(snake, segment_index) == DIRECTION_WEST);
+        return result;
     } else if (has_west && has_north && !has_east && !has_south) {
-        return SNAKE_SEGMENT_SHAPE_NORTH_WEST_CORNER;
+        result.type = SNAKE_SEGMENT_SHAPE_TYPE_NORTH_WEST_CORNER;
+        result.flipped = (snake_segment_direction_to_head(snake, segment_index) == DIRECTION_NORTH);
+        return result;
     }
 
     // TODO: Handle furled
-
-    return SNAKE_SEGMENT_SHAPE_UNKNOWN;
+    return result;
 }
 
 Direction _direction_between_segments(SnakeSegment* first, SnakeSegment* second) {

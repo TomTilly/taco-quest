@@ -717,7 +717,7 @@ int main(S32 argc, char** argv) {
                 };
 
                 if (((x + y) % 2) == 0) {
-                    SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, 0xFF);
+                    SDL_SetRenderDrawColor(renderer, 0x11, 0x11, 0x11, 0xFF);
                 } else {
                     SDL_SetRenderDrawColor(renderer, 0x22, 0x22, 0x22, 0xFF);
                 }
@@ -732,7 +732,7 @@ int main(S32 argc, char** argv) {
                         break;
                     }
                     case CELL_TYPE_WALL: {
-                        SDL_SetRenderDrawColor(renderer, 0xAD, 0x62, 0x00, 0xFF);
+                        SDL_SetRenderDrawColor(renderer, 0x59, 0x44, 0x2a, 0xFF);
                         SDL_RenderFillRect(renderer, &cell_rect);
                         break;
                     }
