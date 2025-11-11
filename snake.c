@@ -276,7 +276,6 @@ void action_buffer_add(ActionBuffer * buf, SnakeAction action) {
     }
 
     SnakeAction prev_action = {0};
-    buf->actions[buf->count - 1];
 
     if ( action == prev_action ) {
         return; // Tried to press the same direction again, ignore
