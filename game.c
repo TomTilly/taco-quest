@@ -607,7 +607,9 @@ MoveResult _snake_segment_slink(Game* game, S32 snake_index, S32 segment_index, 
     // Support iterating forward or backward depending on the direction.
     S32 iter = towards_head ? -1 : 1;
     S32 current_index = segment_index + iter;
-    S32 past_last_index = towards_head ? -1 : snake->length;
+    // We intentionally use 0 so that the head does not get slinked since we do not want the head
+    // being pushed around.
+    S32 past_last_index = towards_head ? 0 : snake->length;
     while (current_index != past_last_index) {
         SnakeSegment* current_segment = snake->segments + current_index;
         SnakeSegment* next_segment = snake->segments + current_index + iter;
@@ -677,8 +679,10 @@ MoveResult _snake_segment_slink(Game* game, S32 snake_index, S32 segment_index, 
 // Push guarantees that if it returns true, the segment that was pushed moved and there is no
 // segment at that cell.
 MoveResult snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 segment_index, Direction direction) {
-    // if the snake is constricting towards the push, then the push has no effect.
-    if (snake_segment_is_constricting_towards(game, snake_index, segment_index, direction)) {
+    // The snake head is not pushable, also if the snake is constricting towards the push, then the
+    // push has no effect.
+    if (segment_index == 0 ||
+        snake_segment_is_constricting_towards(game, snake_index, segment_index, direction)) {
         return MOVE_OBJECT_FAIL;
     }
 

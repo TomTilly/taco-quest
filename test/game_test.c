@@ -598,6 +598,8 @@ int main(int argc, char** argv) {
     }
 
     // New Pushing Tests
+
+    // Head is not pushable
     {
         const char* input_level[] = {
             "..a..",
@@ -608,8 +610,8 @@ int main(int argc, char** argv) {
         };
 
         const char* output_level[] = {
-            ".....",
-            "..ba.",
+            "..a..",
+            "..b..",
             "..c..",
             "..d..",
             NULL
@@ -628,8 +630,8 @@ int main(int argc, char** argv) {
         };
 
         const char* output_level[] = {
-            ".....",
-            ".ab..",
+            "..a..",
+            "..b..",
             "..c..",
             "..d..",
             NULL
@@ -936,8 +938,8 @@ int main(int argc, char** argv) {
         };
 
         const char* output_level[] = {
-            "...a...",
-            "...b...",
+            ".......",
+            "..ab...",
             "...c...",
             "...d...",
             ".......",
@@ -958,11 +960,11 @@ int main(int argc, char** argv) {
         };
 
         const char* output_level[] = {
-            ".....A.",
-            "...abB.",
-            "..edcC.",
-            "...W.D.",
-            "...W...",
+            ".......",
+            "...aA..",
+            "..cbB..",
+            "..dWC..",
+            "..eWD..",
             NULL
         };
 
@@ -980,15 +982,15 @@ int main(int argc, char** argv) {
         };
 
         const char* output_level[] = {
-            "...edaW",
-            ".HGFcbW",
-            ".IJE.AW",
-            "...DCBW",
+            "...cbaW",
+            "IHedABW",
+            "JGFEDCW",
+            "......W",
             "...WWWW",
             NULL
         };
 
-        EXPECT(snake_segment_constrict_test(input_level, output_level, 0, false));
+        EXPECT(snake_constrict_and_update_test(input_level, output_level, 0, SNAKE_CONSTRICT_STATE_RIGHT));
     }
 
     {
@@ -1231,9 +1233,9 @@ int main(int argc, char** argv) {
         };
 
         const char* output_level[] = {
-            ".....",
-            ".a...",
-            ".bc..",
+            "..a..",
+            "..b..",
+            "..c..",
             "..d..",
             "..e..",
             NULL
@@ -1253,9 +1255,9 @@ int main(int argc, char** argv) {
         };
 
         const char* output_level[] = {
-            "...W.",
-            ".a.W.",
-            ".bcW.",
+            "..aW.",
+            "..bW.",
+            "..cW.",
             "..dW.",
             "..eW.",
             NULL
@@ -1391,7 +1393,7 @@ int main(int argc, char** argv) {
             NULL
         };
 
-        EXPECT(snake_constrict_and_update_test(input_level, output_level, 0, true));
+        EXPECT(snake_constrict_and_update_test(input_level, output_level, 0, SNAKE_CONSTRICT_STATE_LEFT));
     }
 
     if (g_failed) {
