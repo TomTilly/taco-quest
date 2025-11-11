@@ -1396,6 +1396,36 @@ int main(int argc, char** argv) {
         EXPECT(snake_constrict_and_update_test(input_level, output_level, 0, SNAKE_CONSTRICT_STATE_LEFT));
     }
 
+    {
+        const char* input_level[] = {
+            ".Aa..",
+            ".Bb..",
+            ".Cc..",
+            ".Dd..",
+            NULL
+        };
+
+        Game input_game = {0};
+        game_from_string(input_level, &input_game);
+
+        Snake* first_snake = input_game.snakes + 0;
+        first_snake->constrict_state = SNAKE_CONSTRICT_STATE_LEFT;
+
+        Snake* second_snake = input_game.snakes + 1;
+        second_snake->constrict_state = SNAKE_CONSTRICT_STATE_RIGHT;
+
+        snake_constrict(&input_game, 0);
+        snake_constrict(&input_game, 1);
+
+        Game output_game = {0};
+        game_from_string(input_level, &output_game);
+
+        bool result = games_are_equal(&input_game, &output_game);
+        game_destroy(&input_game);
+        game_destroy(&output_game);
+        EXPECT(result);
+    }
+
     if (g_failed) {
         printf("unittests failed\n");
         return 1;

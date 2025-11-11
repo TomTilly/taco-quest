@@ -1258,6 +1258,14 @@ bool snake_segment_is_constricting_towards(Game* game, S32 snake_index, S32 segm
     Direction to_head = snake_segment_direction_to_head(snake, segment_index);
     Direction clockwise_to_head = rotate_clockwise(to_head);
 
+    // does this really belong here ?
+    Direction to_tail = snake_segment_direction_to_tail(snake, segment_index);
+    if (snake->constrict_state != SNAKE_CONSTRICT_STATE_NONE &&
+        to_head == opposite_direction(to_tail) &&
+        (from == to_head || from == to_tail)) {
+        return true;
+    }
+
     if (clockwise_to_head == from && snake->constrict_state == SNAKE_CONSTRICT_STATE_LEFT) {
         return true;
     }
@@ -1267,7 +1275,6 @@ bool snake_segment_is_constricting_towards(Game* game, S32 snake_index, S32 segm
         return true;
     }
 
-    Direction to_tail = snake_segment_direction_to_tail(snake, segment_index);
 
     if (from == to_head) {
         //
@@ -1625,11 +1632,16 @@ void game_update(Game* game, SnakeAction* snake_actions) {
                 continue;
             }
             snake->constrict_state = SNAKE_CONSTRICT_STATE_LEFT;
-            snake_constrict(game, s);
         }
 
         if (snake_actions[s] & SNAKE_ACTION_CONSTRICT_RIGHT) {
             snake->constrict_state = SNAKE_CONSTRICT_STATE_RIGHT;
+        }
+    }
+
+    for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
+        Snake* snake = game->snakes + s;
+        if (snake->constrict_state != SNAKE_CONSTRICT_STATE_NONE) {
             snake_constrict(game, s);
         }
     }
