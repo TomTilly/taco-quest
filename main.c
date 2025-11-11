@@ -438,7 +438,7 @@ int main(S32 argc, char** argv) {
             }
         }
 
-      		if (dev_state.enabled) {
+      	if (dev_state.enabled) {
             int mouse_x = 0;
             int mouse_y = 0;
             U32 mouse_buttons_state = SDL_GetMouseState(&mouse_x, &mouse_y);
@@ -591,7 +591,7 @@ int main(S32 argc, char** argv) {
         }
         case SESSION_TYPE_SERVER: {
             // Every frame:
-            action_buffer_add(&server_actions, snake_action, game.snakes[0].direction);
+            action_buffer_add(&server_actions, snake_action);
 
             // Server receive input from client, update, then send game state to client
             // TODO: receive multiple snake actions, handle the last one.
@@ -603,7 +603,7 @@ int main(S32 argc, char** argv) {
 
                     if (recv_snake_action_states[i].stage == PACKET_PROGRESS_STAGE_COMPLETE) {
                         SnakeAction client_snake_action = *(SnakeAction*)server_receive_packets[i].payload;
-                        action_buffer_add(&clients_actions[i], client_snake_action, game.snakes[i + 1].direction);
+                        action_buffer_add(&clients_actions[i], client_snake_action);
 
                         // Resent packet state
                         memset(&recv_snake_action_states[i], 0, sizeof(recv_snake_action_states[i]));
@@ -676,7 +676,7 @@ int main(S32 argc, char** argv) {
         }
         case SESSION_TYPE_SINGLE_PLAYER: {
             if ( snake_action != SNAKE_ACTION_NONE ) {
-                action_buffer_add(&server_actions, snake_action,game.snakes[0].direction);
+                action_buffer_add(&server_actions, snake_action);
             }
 
             if (!game_should_tick) {

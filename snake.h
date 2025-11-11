@@ -92,7 +92,7 @@ SnakeAction snake_action_from_direction(Direction direction);
 bool snake_actions_are_opposite(SnakeAction action1, SnakeAction action2);
 const char* snake_action_string(SnakeAction action);
 
-void action_buffer_add(ActionBuffer * buf, SnakeAction action, Direction snake_current_direction);
+void action_buffer_add(ActionBuffer * buf, SnakeAction action);
 SnakeAction action_buffer_remove(ActionBuffer * buf);
 
 SnakeSegmentShape snake_segment_shape(Snake* snake, S32 segment_index);

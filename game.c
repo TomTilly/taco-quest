@@ -652,8 +652,9 @@ MoveResult _snake_segment_slink(Game* game, S32 snake_index, S32 segment_index, 
 
         // Drag the element before the original segment index, clamping to 0 or length.
         S32 first_segment_to_drag = segment_index - iter;
-        if (first_segment_to_drag < 0) {
-            first_segment_to_drag = 0;
+        if (first_segment_to_drag <= 0) {
+            // We do not drag the head !
+            break;
         }
         if (first_segment_to_drag >= snake->length) {
             first_segment_to_drag = snake->length - 1;

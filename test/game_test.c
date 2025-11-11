@@ -1003,16 +1003,7 @@ int main(int argc, char** argv) {
             NULL
         };
 
-        const char* output_level[] = {
-            "......W",
-            "..gf..W",
-            "..hedaW",
-            "..i.cbW",
-            "..jWWWW",
-            NULL
-        };
-
-        EXPECT(snake_segment_push_test(input_level, output_level, 1, DIRECTION_SOUTH));
+        EXPECT(snake_segment_push_test(input_level, input_level, 1, DIRECTION_SOUTH));
     }
 
     {
@@ -1276,16 +1267,7 @@ int main(int argc, char** argv) {
             NULL
         };
 
-        const char* output_level[] = {
-            ".....",
-            ".....",
-            ".baW.",
-            ".cdW.",
-            "..eW.",
-            NULL
-        };
-
-        EXPECT(snake_segment_push_test(input_level, output_level, 1, DIRECTION_SOUTH));
+        EXPECT(snake_segment_push_test(input_level, input_level, 1, DIRECTION_SOUTH));
     }
 
     {
@@ -1416,6 +1398,35 @@ int main(int argc, char** argv) {
 
         snake_constrict(&input_game, 0);
         snake_constrict(&input_game, 1);
+
+        Game output_game = {0};
+        game_from_string(input_level, &output_game);
+
+        bool result = games_are_equal(&input_game, &output_game);
+        game_destroy(&input_game);
+        game_destroy(&output_game);
+        EXPECT(result);
+    }
+
+    {
+        const char* input_level[] = {
+            "...WW.",
+            "...Wa.",
+            ".DCWb.",
+            "..BAc.",
+            ".gfed.",
+            "......",
+            NULL
+        };
+
+        Game input_game = {0};
+        game_from_string(input_level, &input_game);
+
+        Snake* first_snake = input_game.snakes + 0;
+        first_snake->constrict_state = SNAKE_CONSTRICT_STATE_LEFT;
+
+        // snake_constrict(&input_game, 0);
+        snake_segment_constrict(&input_game, 0, 4, true);
 
         Game output_game = {0};
         game_from_string(input_level, &output_game);

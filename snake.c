@@ -33,30 +33,12 @@ void snake_spawn(Snake* snake, S16 x, S16 y, Direction direction) {
 }
 
 void snake_turn(Snake* snake, Direction direction) {
-    switch(direction) {
-    case DIRECTION_NORTH:
-        if (snake->direction != DIRECTION_SOUTH) {
-            snake->direction = direction;
-        }
-        break;
-    case DIRECTION_EAST:
-        if (snake->direction != DIRECTION_WEST) {
-            snake->direction = direction;
-        }
-        break;
-    case DIRECTION_SOUTH:
-        if (snake->direction != DIRECTION_NORTH) {
-            snake->direction = direction;
-        }
-        break;
-    case DIRECTION_WEST:
-        if (snake->direction != DIRECTION_EAST) {
-            snake->direction = direction;
-        }
-        break;
-    default:
-        break;
+    if (direction >= DIRECTION_COUNT ||
+        direction == snake_segment_direction_to_tail(snake, 0)) {
+        return;
     }
+
+    snake->direction = direction;
 }
 
 void snake_draw(SDL_Renderer* renderer,
@@ -284,7 +266,7 @@ const char* snake_action_string(SnakeAction action) {
     return "unknown";
 }
 
-void action_buffer_add(ActionBuffer * buf, SnakeAction action, Direction snake_current_direction) {
+void action_buffer_add(ActionBuffer * buf, SnakeAction action) {
     if ( buf->count == ACTION_BUF_SIZE ) {
         return;
     }
@@ -293,8 +275,7 @@ void action_buffer_add(ActionBuffer * buf, SnakeAction action, Direction snake_c
         return;
     }
 
-    SnakeAction prev_action = (buf->count == 0) ?
-    snake_action_from_direction(snake_current_direction) :
+    SnakeAction prev_action = {0};
     buf->actions[buf->count - 1];
 
     if ( action == prev_action ) {
