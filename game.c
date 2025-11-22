@@ -1438,6 +1438,13 @@ void snake_constrict(Game* game, S32 snake_index) {
     SnakeKillCheck* kill_checks = malloc(cell_count * sizeof(*kill_checks));
     bool* adjacent_checks = malloc(cell_count);
 
+    bool snake_should_attempt_to_kill = true;
+
+    if (snake->kill_damage_cooldown > 0) {
+        snake->kill_damage_cooldown--;
+        snake_should_attempt_to_kill = false;
+    }
+
     // TODO: Evaluate if we want to go back to doing a single segment constrict per tick.
 
     // How many elements were impacted by a constrict pass on this tick. If any, advance passed them
@@ -1463,8 +1470,12 @@ void snake_constrict(Game* game, S32 snake_index) {
             segment_index++;
         }
 
+        if (!snake_should_attempt_to_kill) {
+            continue;
+        }
+
         {
-            // Always check for a kill !
+            // Check for a kill !
 
             // Reset the board.
             for (S32 i = 0; i < cell_count; i++) {
@@ -1581,7 +1592,22 @@ void snake_constrict(Game* game, S32 snake_index) {
 
                 // If all of the segments are found within the constriction, kill the snake and replace with tacos.
                 if (snake_segment_count == check_snake->length) {
-                    check_snake->life_state = SNAKE_LIFE_STATE_DYING;
+                    for (S32 e = 0; e < check_snake->length; e++) {
+                        SnakeCollision snake_collision = {
+                            .snake_index = (S16)(s),
+                            .segment_index = (S16)(e)
+                        };
+
+                        _snake_chomp_segment(game, &snake_collision);
+                    }
+
+                    if (check_snake->length == 1) {
+                        check_snake->length = 0;
+                        check_snake->life_state = SNAKE_LIFE_STATE_DEAD;
+                    }
+
+                    snake->kill_damage_cooldown = SNAKE_KILL_DAMAGE_COOLDOWN;
+                    snake_should_attempt_to_kill = false;
                 }
             }
         }
@@ -1622,15 +1648,6 @@ void game_update(Game* game, SnakeAction* snake_actions) {
         Snake* snake = game->snakes + s;
         if (snake->life_state != SNAKE_LIFE_STATE_DEAD) {
             snakes_alive++;
-        }
-
-        if (snake->life_state == SNAKE_LIFE_STATE_DYING) {
-            for (S32 l = 0; l < snake->length; l++) {
-                SnakeSegment* segment_to_kill = snake->segments + l;
-                level_set_cell(&game->level, segment_to_kill->x, segment_to_kill->y, CELL_TYPE_TACO);
-            }
-            snake->length = 0;
-            snake->life_state = SNAKE_LIFE_STATE_DEAD;
         }
     }
 

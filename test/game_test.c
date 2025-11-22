@@ -163,6 +163,7 @@ bool games_are_equal(Game* a, Game* b) {
             CellType a_cell = level_get_cell(&a->level, x, y);
             CellType b_cell = level_get_cell(&b->level, x, y);
             if (a_cell != b_cell) {
+                printf("cell mismatch: %d, %d\n", x, y);
                 print_games(a, b);
                 return false;
             }
@@ -174,10 +175,12 @@ bool games_are_equal(Game* a, Game* b) {
         Snake* b_snake = b->snakes + s;
 
         if (a_snake->direction != b_snake->direction) {
+            printf("snake %d direction\n", s);
             print_games(a, b);
             return false;
         }
         if (a_snake->length != b_snake->length) {
+            printf("snake %d length\n", s);
             print_games(a, b);
             return false;
         }
@@ -187,14 +190,17 @@ bool games_are_equal(Game* a, Game* b) {
             SnakeSegment* b_segment = b_snake->segments + e;
 
             if (a_segment->x != b_segment->x) {
+                printf("snake %d segment %d x\n", s, e);
                 print_games(a, b);
                 return false;
             }
             if (a_segment->y != b_segment->y) {
+                printf("snake %d segment %d y\n", s, e);
                 print_games(a, b);
                 return false;
             }
             if (a_segment->health != b_segment->health) {
+                printf("snake %d segment %d health\n", s, e);
                 print_games(a, b);
                 return false;
             }
@@ -422,7 +428,8 @@ int main(int argc, char** argv) {
         Game output_game = {0};
         game_from_string(output_level, &output_game);
         output_game.snakes[1].direction = DIRECTION_WEST;
-        output_game.snakes[0].segments[1].health = 1;
+        output_game.snakes[0].segments[1].health = 2;
+        output_game.snakes[0].segments[2].health = 2;
 
         EXPECT(games_are_equal(&input_game, &output_game));
     }
@@ -460,6 +467,7 @@ int main(int argc, char** argv) {
         Game output_game = {0};
         game_from_string(output_level, &output_game);
         output_game.snakes[1].direction = DIRECTION_WEST;
+        output_game.snakes[0].segments[1].health = 2;
 
         EXPECT(games_are_equal(&input_game, &output_game));
     }

@@ -11,6 +11,7 @@
 #define ACTION_BUF_SIZE 2
 #define SNAKE_SEGMENT_MAX_HEALTH 3
 #define SNAKE_CHOMP_COOLDOWN 10
+#define SNAKE_KILL_DAMAGE_COOLDOWN 4
 #define CHOMP_POINT_CHECK_COUNT 3
 
 typedef U8 SnakeAction;
@@ -57,7 +58,6 @@ typedef enum {
 
 typedef enum {
     SNAKE_LIFE_STATE_ALIVE,
-    SNAKE_LIFE_STATE_DYING,
     SNAKE_LIFE_STATE_DEAD,
 } SnakeLifeState;
 
@@ -67,6 +67,7 @@ typedef struct {
     S32 capacity; // I hate STL
     Direction direction;
     S8 chomp_cooldown;
+    S8 kill_damage_cooldown;
     SnakeLifeState life_state;
     SnakeConstrictState constrict_state;
 } Snake;
