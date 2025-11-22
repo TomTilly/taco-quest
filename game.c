@@ -142,36 +142,66 @@ void _snake_chomp_segment(Game* game, SnakeCollision* snake_collision) {
 }
 
 void _snake_chomp(Snake* snake, Game* game) {
-    S32 new_snake_x = (S32)(snake->segments[0].x);
-    S32 new_snake_y = (S32)(snake->segments[0].y);
+    if (snake->chomp_cooldown > 0) {
+        return;
+    }
 
-    adjacent_cell(snake->direction,
-                  &new_snake_x,
-                  &new_snake_y);
+    //
+    // xxx
+    //  a
+    //  b
+    //  c
+    //
 
-    // Check if collided with other snake
-    // TODO: This simplifies when we have an array of snakes.
-    SnakeCollision snake_collision = {
-        .snake_index = -1,
-        .segment_index = -1
-    };
-    for (S16 s = 0; s < MAX_SNAKE_COUNT; s++) {
-        for (S16 i = 0; i < game->snakes[s].length; i++) {
-            SnakeSegment* segment = game->snakes[s].segments + i;
-            if (segment->x == new_snake_x &&
-                segment->y == new_snake_y) {
-                snake_collision.snake_index = s;
-                snake_collision.segment_index = i;
-                break;
+    S32 chomp_check_x[CHOMP_POINT_CHECK_COUNT];
+    S32 chomp_check_y[CHOMP_POINT_CHECK_COUNT];
+
+    for (S32 i = 0; i < CHOMP_POINT_CHECK_COUNT; i++) {
+        chomp_check_x[i] = (S32)(snake->segments[0].x);
+        chomp_check_y[i] = (S32)(snake->segments[0].y);
+
+        adjacent_cell(snake->direction,
+                      chomp_check_x + i,
+                      chomp_check_y + i);
+    }
+
+    adjacent_cell(rotate_clockwise(snake->direction),
+                  chomp_check_x + 0,
+                  chomp_check_y + 0);
+
+    adjacent_cell(rotate_counter_clockwise(snake->direction),
+                  chomp_check_x + 2,
+                  chomp_check_y + 2);
+
+    bool did_chomp = false;
+    for (S32 i = 0; i < CHOMP_POINT_CHECK_COUNT; i++) {
+        // Check if collided with other snake
+        // TODO: This simplifies when we have an array of snakes.
+        SnakeCollision snake_collision = {
+            .snake_index = -1,
+            .segment_index = -1
+        };
+
+        for (S16 s = 0; s < MAX_SNAKE_COUNT; s++) {
+            for (S16 e = 0; e < game->snakes[s].length; e++) {
+                SnakeSegment* segment = game->snakes[s].segments + e;
+                if (segment->x == chomp_check_x[i] &&
+                    segment->y == chomp_check_y[i]) {
+                    snake_collision.snake_index = s;
+                    snake_collision.segment_index = e;
+                    break;
+                }
             }
+        }
+
+        if (snake_collision.snake_index >= 0 && snake_collision.snake_index >= 0) {
+            _snake_chomp_segment(game, &snake_collision);
+            did_chomp = true;
         }
     }
 
-    if (snake_collision.snake_index >= 0) {
-        if (snake_collision.snake_index >= 0 && snake->chomp_cooldown <= 0) {
-            _snake_chomp_segment(game, &snake_collision);
-            snake->chomp_cooldown = SNAKE_CHOMP_COOLDOWN;
-        }
+    if (did_chomp) {
+        snake->chomp_cooldown = SNAKE_CHOMP_COOLDOWN;
     }
 }
 

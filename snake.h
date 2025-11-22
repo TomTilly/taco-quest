@@ -11,6 +11,8 @@
 #define ACTION_BUF_SIZE 2
 #define SNAKE_SEGMENT_MAX_HEALTH 3
 #define SNAKE_CHOMP_COOLDOWN 10
+#define CHOMP_POINT_CHECK_COUNT 3
+
 typedef U8 SnakeAction;
 
 // Acts as a bitfield for actions to apply to a snake.
