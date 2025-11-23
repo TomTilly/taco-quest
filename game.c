@@ -1602,6 +1602,7 @@ void snake_constrict(Game* game, S32 snake_index) {
                     }
 
                     if (check_snake->length == 1) {
+                        level_set_cell(&game->level, check_snake->segments[0].x, check_snake->segments[0].y, CELL_TYPE_TACO);
                         check_snake->length = 0;
                         check_snake->life_state = SNAKE_LIFE_STATE_DEAD;
                     }
