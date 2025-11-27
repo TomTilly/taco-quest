@@ -27,8 +27,10 @@ bool level_init(Level* level, int32_t width, int32_t height) {
 }
 
 void level_destroy(Level* level) {
-    free(level->cells);
-    memset(level, 0, sizeof(*level));
+    if (level->cells != NULL) {
+        free(level->cells);
+        memset(level, 0, sizeof(*level));
+    }
 }
 
 int32_t level_get_cell_index(Level* level, S32 x, S32 y) {
@@ -54,7 +56,7 @@ CellType level_get_cell(Level* level, S32 x, S32 y) {
         return CELL_TYPE_INVALID;
     }
 
-    if (y < 0 || y >= level->width) {
+    if (y < 0 || y >= level->height) {
         return CELL_TYPE_INVALID;
     }
 

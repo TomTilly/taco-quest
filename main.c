@@ -28,9 +28,9 @@ typedef enum {
 } SessionType;
 
 typedef enum {
-	SNAKE_SELECTION_STATE_NONE,	
-	SNAKE_SELECTION_STATE_SELECTED,	
-	SNAKE_SELECTION_STATE_PLACING,	
+    SNAKE_SELECTION_STATE_NONE,
+    SNAKE_SELECTION_STATE_SELECTED,
+    SNAKE_SELECTION_STATE_PLACING,
 } DevSnakeSelectionState;
 
 typedef struct {
@@ -93,7 +93,7 @@ void reset_game(Game* game) {
                 DIRECTION_SOUTH);
 
     snake_spawn(game->snakes + 2,
-                (S16)(level->width - 3),
+                (S16)(level->width - 2),
                 (S16)(level->height - 3),
                 DIRECTION_WEST);
 
@@ -117,9 +117,9 @@ void reset_game(Game* game) {
         "X......................X",
         "X......................X",
         "X......................X",
-        "X.................X....X",
-        "X....XXXXX........X....X",
-        "X.................X....X",
+        "X................X.....X",
+        "X....XXXXX.......X.....X",
+        "X................X.....X",
         "X......................X",
         "XXXXXXXXXXXXXXXXXXXXXXXX",
     };
@@ -138,7 +138,7 @@ void reset_game(Game* game) {
 S32 query_for_snake_at(Game* game, S32 cell_x, S32 cell_y) {
     for (S32 i = 0; i < MAX_SNAKE_COUNT; i++) {
         Snake *snake = game->snakes + i;
-        for (S32 j = 1; j < snake->length; j++) {
+        for (S32 j = 0; j < snake->length; j++) {
             SnakeSegment *segment = snake->segments + j;
             if (segment->x == cell_x && segment->y == cell_y) {
                 return i;
@@ -184,7 +184,7 @@ int main(S32 argc, char** argv) {
     // Init game and level
     //
     Game game = {0};
-    game_init(&game, LEVEL_WIDTH, LEVEL_HEIGHT);
+    game_init(&game, LEVEL_WIDTH, LEVEL_HEIGHT, 6);
 
     Level* level = &game.level;
 
@@ -323,7 +323,7 @@ int main(S32 argc, char** argv) {
         fprintf(stderr, "Failed to create texture from surface %s\n", SDL_GetError());
         return EXIT_FAILURE;
     }
-        
+
     S32 cell_size = min_display_dimension / max_level_dimension;
 
     int64_t time_since_update_us = 0;
@@ -353,7 +353,6 @@ int main(S32 argc, char** argv) {
         last_frame_timestamp = current_frame_timestamp;
 
         SnakeAction snake_action = SNAKE_ACTION_NONE;
-
 
         // Handle events, such as input or window changes.
         SDL_Event event;
@@ -409,6 +408,17 @@ int main(S32 argc, char** argv) {
                             dev_state.should_step = true;
                         }
                         break;
+                    case SDLK_t: {
+                        int mouse_x = 0;
+                        int mouse_y = 0;
+                        SDL_GetMouseState(&mouse_x, &mouse_y);
+                        S32 cell_x = mouse_x / cell_size;
+                        S32 cell_y = mouse_y / cell_size;
+                        if (game_empty_at(&game, cell_x, cell_y)) {
+                            level_set_cell(&game.level, cell_x, cell_y, CELL_TYPE_TACO);
+                        }
+                        break;
+                    }
                     default:
                         break;
                     }
@@ -417,11 +427,22 @@ int main(S32 argc, char** argv) {
             }
         }
 
-		if (dev_state.enabled) {
+        // Handle snake action keys separately.
+        {
+            const U8* keyboard_state = SDL_GetKeyboardState(NULL);
+            if (keyboard_state[SDL_SCANCODE_Q]) {
+                snake_action |= SNAKE_ACTION_CONSTRICT_LEFT;
+            }
+            if (keyboard_state[SDL_SCANCODE_E]) {
+                snake_action |= SNAKE_ACTION_CONSTRICT_RIGHT;
+            }
+        }
+
+      	if (dev_state.enabled) {
             int mouse_x = 0;
             int mouse_y = 0;
             U32 mouse_buttons_state = SDL_GetMouseState(&mouse_x, &mouse_y);
-           
+
             if (mouse_buttons_state & SDL_BUTTON(SDL_BUTTON_LEFT)) {
                 S32 cell_x = mouse_x / cell_size;
                 S32 cell_y = mouse_y / cell_size;
@@ -464,7 +485,7 @@ int main(S32 argc, char** argv) {
                            break;
                         }
 
-                        CellType cell_type = level_get_cell(&game.level, cell_x, cell_y); 
+                        CellType cell_type = level_get_cell(&game.level, cell_x, cell_y);
                         if (cell_type != CELL_TYPE_EMPTY) {
                            break;
                         }
@@ -570,7 +591,7 @@ int main(S32 argc, char** argv) {
         }
         case SESSION_TYPE_SERVER: {
             // Every frame:
-            action_buffer_add(&server_actions, snake_action, game.snakes[0].direction);
+            action_buffer_add(&server_actions, snake_action);
 
             // Server receive input from client, update, then send game state to client
             // TODO: receive multiple snake actions, handle the last one.
@@ -582,7 +603,7 @@ int main(S32 argc, char** argv) {
 
                     if (recv_snake_action_states[i].stage == PACKET_PROGRESS_STAGE_COMPLETE) {
                         SnakeAction client_snake_action = *(SnakeAction*)server_receive_packets[i].payload;
-                        action_buffer_add(&clients_actions[i], client_snake_action, game.snakes[i + 1].direction);
+                        action_buffer_add(&clients_actions[i], client_snake_action);
 
                         // Resent packet state
                         memset(&recv_snake_action_states[i], 0, sizeof(recv_snake_action_states[i]));
@@ -654,9 +675,8 @@ int main(S32 argc, char** argv) {
             break;
         }
         case SESSION_TYPE_SINGLE_PLAYER: {
-
             if ( snake_action != SNAKE_ACTION_NONE ) {
-                action_buffer_add(&server_actions, snake_action,game.snakes[0].direction);
+                action_buffer_add(&server_actions, snake_action);
             }
 
             if (!game_should_tick) {
@@ -697,7 +717,7 @@ int main(S32 argc, char** argv) {
                 };
 
                 if (((x + y) % 2) == 0) {
-                    SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, 0xFF);
+                    SDL_SetRenderDrawColor(renderer, 0x11, 0x11, 0x11, 0xFF);
                 } else {
                     SDL_SetRenderDrawColor(renderer, 0x22, 0x22, 0x22, 0xFF);
                 }
@@ -712,7 +732,7 @@ int main(S32 argc, char** argv) {
                         break;
                     }
                     case CELL_TYPE_WALL: {
-                        SDL_SetRenderDrawColor(renderer, 0xAD, 0x62, 0x00, 0xFF);
+                        SDL_SetRenderDrawColor(renderer, 0x59, 0x44, 0x2a, 0xFF);
                         SDL_RenderFillRect(renderer, &cell_rect);
                         break;
                     }
