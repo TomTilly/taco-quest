@@ -94,6 +94,8 @@ size_t snake_deserialize(void * buffer, size_t size, Snake* out);
 SnakeAction snake_action_from_direction(Direction direction);
 bool snake_actions_are_opposite(SnakeAction action1, SnakeAction action2);
 const char* snake_action_string(SnakeAction action);
+void print_snake_action(SnakeAction action);
+SnakeAction snake_action_highest_priority(SnakeAction action);
 
 void action_buffer_add(ActionBuffer * buf, SnakeAction action);
 SnakeAction action_buffer_remove(ActionBuffer * buf);

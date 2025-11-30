@@ -22,6 +22,11 @@
 #define MAX_SERVER_CLIENT_COUNT (MAX_SNAKE_COUNT - 1)
 
 typedef enum {
+    APP_STATE_LOBBY,
+    APP_STATE_GAME,
+} AppState;
+
+typedef enum {
     SESSION_TYPE_SINGLE_PLAYER,
     SESSION_TYPE_SERVER,
     SESSION_TYPE_CLIENT
@@ -34,6 +39,16 @@ typedef enum {
 } DevSnakeSelectionState;
 
 typedef struct {
+    bool face_north;
+    bool face_west;
+    bool face_south;
+    bool face_east;
+    bool chomp;
+    bool constrict_left;
+    bool constrict_right;
+} ActionKeyState;
+
+typedef struct {
     bool enabled;
     bool step_mode;
     bool should_step;
@@ -41,14 +56,21 @@ typedef struct {
     S32 snake_selection_index;
 } DevState;
 
-static int __tick;
+typedef struct {
+    Game game;
+    ActionKeyState prev_action_key_state;
+    SnakeAction tick_actions[MAX_SNAKE_COUNT];
+    ActionBuffer action_buffers[MAX_SNAKE_COUNT];
+    DevState dev_state;
+} AppStateGameServer;
 
-bool dev_mode_should_step(const DevState * dev_state)
-{
-    if (!dev_state->enabled) return true;
-    if (!dev_state->step_mode) return true;
-    return dev_state->should_step;
-}
+typedef struct {
+    Game game;
+    ActionKeyState prev_action_key_state;
+    SnakeAction tick_actions;
+} AppStateGameClient;
+
+static int __tick;
 
 uint64_t microseconds_between_timestamps(struct timespec* previous, struct timespec* current) {
     return (current->tv_sec - previous->tv_sec) * 1000000LL +
@@ -63,20 +85,6 @@ char* get_timestamp(void) {
     long ms = ts.tv_nsec / 1000000;
     snprintf(buff + length, sizeof(buff) - length, ".%03ld", ms);
     return buff;
-}
-
-void net_action_log(const char* timestamp_str,
-                    const char* type,
-                    size_t bytes_to_send,
-                    size_t bytes_sent,
-                    int seq,
-                    const char* desc) {
-    net_log("%s [tk %5d] %s: %4zu of %4zu bytes | ", timestamp_str, __tick, type, bytes_to_send, bytes_sent);
-    if ( seq != -1 ) {
-        net_log(" seq %3d (%s)\n", seq, desc);
-    } else {
-        net_log("         (%s)\n", desc);
-    }
 }
 
 void reset_game(Game* game) {
@@ -148,6 +156,330 @@ S32 query_for_snake_at(Game* game, S32 cell_x, S32 cell_y) {
     return -1;
 }
 
+bool dev_mode_should_step(const DevState * dev_state) {
+    if (!dev_state->enabled) return true;
+    if (!dev_state->step_mode) return true;
+    return dev_state->should_step;
+}
+
+void add_action_from_keystate(const U8* keyboard_state, ActionKeyState* prev_action_key_state, SnakeAction* tick_actions) {
+    ActionKeyState current_action_key_state = {0};
+    current_action_key_state.face_north = keyboard_state[SDL_SCANCODE_W];
+    current_action_key_state.face_west = keyboard_state[SDL_SCANCODE_A];
+    current_action_key_state.face_south = keyboard_state[SDL_SCANCODE_S];
+    current_action_key_state.face_east = keyboard_state[SDL_SCANCODE_D];
+    current_action_key_state.chomp = keyboard_state[SDL_SCANCODE_SPACE];
+    current_action_key_state.constrict_left = keyboard_state[SDL_SCANCODE_Q];
+    current_action_key_state.constrict_right = keyboard_state[SDL_SCANCODE_E];
+
+    // Actions are triggered on the press event.
+    if (!prev_action_key_state->face_north && current_action_key_state.face_north) {
+        *tick_actions |= SNAKE_ACTION_FACE_NORTH;
+    }
+
+    if (!prev_action_key_state->face_west && current_action_key_state.face_west) {
+        *tick_actions |= SNAKE_ACTION_FACE_WEST;
+    }
+
+    if (!prev_action_key_state->face_south && current_action_key_state.face_south) {
+        *tick_actions |= SNAKE_ACTION_FACE_SOUTH;
+    }
+
+    if (!prev_action_key_state->face_east && current_action_key_state.face_east) {
+        *tick_actions |= SNAKE_ACTION_FACE_EAST;
+    }
+
+    if (!prev_action_key_state->chomp && current_action_key_state.chomp) {
+        *tick_actions |= SNAKE_ACTION_CHOMP;
+    }
+
+    // Constricting acts different, where you can hold it down.
+    if (current_action_key_state.constrict_left) {
+        *tick_actions |= SNAKE_ACTION_CONSTRICT_LEFT;
+    }
+
+    if (current_action_key_state.constrict_right) {
+        *tick_actions |= SNAKE_ACTION_CONSTRICT_RIGHT;
+    }
+
+    *prev_action_key_state = current_action_key_state;
+}
+
+bool draw_game(Game* game, SDL_Renderer* renderer, SDL_Texture* snake_texture, S32 cell_size) {
+    // draw level
+    for(S32 y = 0; y < game->level.height; y++) {
+        for(S32 x = 0; x < game->level.width; x++) {
+            // TODO: Asserts
+            CellType cell_type = level_get_cell(&game->level, x, y);
+
+            SDL_Rect cell_rect = {
+                .x = x * cell_size,
+                .y = y * cell_size,
+                .w = cell_size,
+                .h = cell_size
+            };
+
+            if (((x + y) % 2) == 0) {
+                SDL_SetRenderDrawColor(renderer, 0x11, 0x11, 0x11, 0xFF);
+            } else {
+                SDL_SetRenderDrawColor(renderer, 0x22, 0x22, 0x22, 0xFF);
+            }
+            SDL_RenderFillRect(renderer, &cell_rect);
+
+            if (cell_type == CELL_TYPE_EMPTY) {
+                continue;
+            }
+
+            switch (cell_type) {
+                case CELL_TYPE_EMPTY: {
+                    break;
+                }
+                case CELL_TYPE_WALL: {
+                    SDL_SetRenderDrawColor(renderer, 0x59, 0x44, 0x2a, 0xFF);
+                    SDL_RenderFillRect(renderer, &cell_rect);
+                    break;
+                }
+                case CELL_TYPE_TACO: {
+                    SDL_Rect source_rect = {64, 0, 16, 16};
+                    int rc = SDL_RenderCopy(renderer,
+                                        snake_texture,
+                                        &source_rect,
+                                        &cell_rect);
+                    if (rc != 0) {
+                        fprintf(stderr, "Tom F was wrong: %s\n", SDL_GetError());
+                        return false;
+                    }
+                    break;
+                }
+                default:
+                    break;
+            }
+        }
+    }
+
+    // draw snakes
+    for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
+        snake_draw(renderer, snake_texture, game->snakes + s, s, cell_size);
+    }
+
+    return true;
+}
+
+void draw_dev_state(DevState* dev_state, Game* game, PF_Font* font, S32 window_width, S32 cell_size) {
+    if (!dev_state->enabled) {
+        return;
+    }
+
+    PF_SetForeground(font, 255, 255, 0, 255);
+    if (dev_state->step_mode ) {
+        PF_RenderString(font, 2, 2, "Dev Step Mode!");
+    } else {
+        PF_RenderString(font, 2, 2, "Dev Mode!");
+    }
+
+    if (dev_state->snake_selection_state != SNAKE_SELECTION_STATE_NONE) {
+        PF_RenderString(font, window_width / 3, 2, "Selected Snake %d", dev_state->snake_selection_index);
+    }
+
+    PF_SetForeground(font, 0, 0, 0, 255);
+    PF_FontState font_state = PF_GetState(font);
+    for (S32 i = 0; i < MAX_SNAKE_COUNT; i++) {
+        Snake *snake = game->snakes + i;
+        for (S32 j = 1; j < snake->length; j++) {
+            SnakeSegment *segment = snake->segments + j;
+            PF_RenderChar(font,
+                          (S16)((segment->x * cell_size) + (cell_size - (font_state.char_width * font_state.scale)) / 2),
+                          (S16)((segment->y * cell_size) + (cell_size - (font_state.char_height * font_state.scale)) / 2),
+                          (char)('1' + j));
+        }
+    }
+}
+
+void app_game_server_handle_keystate(AppStateGameServer* app_game_server, const U8* keyboard_state, S32 cell_size) {
+    for (S32 i = 0; i < MAX_SNAKE_COUNT; i++) {
+        app_game_server->tick_actions[i] = 0;
+    }
+
+    switch (app_game_server->game.state) {
+    case GAME_STATE_PLAYING:
+        add_action_from_keystate(keyboard_state, &app_game_server->prev_action_key_state, app_game_server->tick_actions + 0);
+
+        if (keyboard_state[SDL_SCANCODE_GRAVE]) {
+            app_game_server->dev_state.enabled = !app_game_server->dev_state.enabled;
+            if (!app_game_server->dev_state.enabled) {
+                app_game_server->dev_state = (DevState){0};
+            }
+        }
+
+        if (app_game_server->dev_state.enabled) {
+            if (keyboard_state[SDL_SCANCODE_TAB]) {
+                app_game_server->dev_state.step_mode = !app_game_server->dev_state.step_mode;
+            }
+
+            if (keyboard_state[SDL_SCANCODE_RETURN]) {
+                if (app_game_server->dev_state.step_mode) {
+                    app_game_server->dev_state.should_step = true;
+                }
+            }
+
+            if (keyboard_state[SDL_SCANCODE_T]) {
+                int mouse_x = 0;
+                int mouse_y = 0;
+                SDL_GetMouseState(&mouse_x, &mouse_y);
+                S32 cell_x = mouse_x / cell_size;
+                S32 cell_y = mouse_y / cell_size;
+                if (game_empty_at(&app_game_server->game, cell_x, cell_y)) {
+                    level_set_cell(&app_game_server->game.level, cell_x, cell_y, CELL_TYPE_TACO);
+                }
+            }
+        }
+
+        break;
+    case GAME_STATE_WAITING:
+        if (keyboard_state[SDL_SCANCODE_RETURN]) {
+            app_game_server->game.state = GAME_STATE_PLAYING;
+        }
+        break;
+    case GAME_STATE_GAME_OVER:
+        if (keyboard_state[SDL_SCANCODE_RETURN]) {
+            reset_game(&app_game_server->game);
+            app_game_server->game.state = GAME_STATE_PLAYING;
+        }
+        break;
+    }
+}
+
+void app_game_server_handle_mouse(AppStateGameServer* app_game_server, int mouse_x, int mouse_y, U32 mouse_buttons_state, S32 cell_size) {
+    if (!app_game_server->dev_state.enabled) {
+        return;
+    }
+
+    if (mouse_buttons_state & SDL_BUTTON(SDL_BUTTON_LEFT)) {
+        S32 cell_x = mouse_x / cell_size;
+        S32 cell_y = mouse_y / cell_size;
+
+        switch (app_game_server->dev_state.snake_selection_state) {
+        case SNAKE_SELECTION_STATE_NONE: {
+           S32 selected_snake_index = query_for_snake_at(&app_game_server->game, cell_x, cell_y);
+           if (selected_snake_index >= 0) {
+               app_game_server->dev_state.snake_selection_index = selected_snake_index;
+               app_game_server->dev_state.snake_selection_state = SNAKE_SELECTION_STATE_SELECTED;
+           }
+           break;
+        }
+        case SNAKE_SELECTION_STATE_SELECTED: {
+            S32 selected_snake_index = query_for_snake_at(&app_game_server->game, cell_x, cell_y);
+            if (selected_snake_index < 0) {
+                Snake* snake = app_game_server->game.snakes + app_game_server->dev_state.snake_selection_index;
+                snake->length = 1;
+                snake->segments[0].x = (S16)(cell_x);
+                snake->segments[0].y = (S16)(cell_y);
+                app_game_server->dev_state.snake_selection_state = SNAKE_SELECTION_STATE_PLACING;
+            } else if (selected_snake_index != app_game_server->dev_state.snake_selection_index) {
+                app_game_server->dev_state.snake_selection_index = selected_snake_index;
+            }
+            break;
+        }
+        case SNAKE_SELECTION_STATE_PLACING: {
+            Snake* snake = app_game_server->game.snakes + app_game_server->dev_state.snake_selection_index;
+            S32 previous_index = snake->length - 1;
+            Direction adjacent_dir = direction_between_cells(cell_x,
+                                                             cell_y,
+                                                             snake->segments[previous_index].x,
+                                                             snake->segments[previous_index].y);
+            if (adjacent_dir != DIRECTION_NONE) {
+                S32 previous_previous_index = snake->length - 2;
+                if (previous_previous_index >= 0 &&
+                    snake->segments[previous_previous_index].x == cell_x &&
+                    snake->segments[previous_previous_index].y == cell_y) {
+                   snake->length--;
+                   break;
+                }
+
+                CellType cell_type = level_get_cell(&app_game_server->game.level, cell_x, cell_y);
+                if (cell_type != CELL_TYPE_EMPTY) {
+                   break;
+                }
+                if (query_for_snake_at(&app_game_server->game, cell_x, cell_y) >= 0) {
+                   break;
+                }
+
+                // face the snake away from where we're dragging.
+                if (snake->length == 1) {
+                   snake->direction = opposite_direction(adjacent_dir);
+                }
+
+                S32 new_index = snake->length;
+
+                snake->length++;
+                snake->segments[new_index].x = (S16)(cell_x);
+                snake->segments[new_index].y = (S16)(cell_y);
+                snake->segments[new_index].health = SNAKE_SEGMENT_MAX_HEALTH;
+            }
+            break;
+        }
+        default:
+            break;
+        }
+    } else {
+        if (app_game_server->dev_state.snake_selection_state == SNAKE_SELECTION_STATE_PLACING) {
+            app_game_server->dev_state.snake_selection_state = SNAKE_SELECTION_STATE_NONE;
+        }
+    }
+}
+
+// returns whether or not a tick occurred.
+bool app_game_server_update(AppStateGameServer* app_game_server, int64_t* time_since_update_us) {
+    for (S32 i = 0; i < MAX_SNAKE_COUNT; i++) {
+        if (app_game_server->tick_actions[i] != SNAKE_ACTION_NONE) {
+            action_buffer_add(app_game_server->action_buffers + i, app_game_server->tick_actions[i]);
+        }
+    }
+
+    // The server/single player mode should only update the game state if a tick has passed.
+    if (*time_since_update_us >= GAME_SIMULATE_TIME_INTERVAL_US) {
+        *time_since_update_us -= GAME_SIMULATE_TIME_INTERVAL_US;
+        if (app_game_server->game.state == GAME_STATE_PLAYING && dev_mode_should_step(&app_game_server->dev_state)) {
+            app_game_server->dev_state.should_step = false;
+            __tick++;
+        } else {
+            return false;
+        }
+    } else {
+        return false;
+    }
+
+    SnakeAction snake_actions[MAX_SNAKE_COUNT];
+    for (S32 i = 0; i < MAX_SERVER_CLIENT_COUNT; i++) {
+        snake_actions[i] = action_buffer_remove(&app_game_server->action_buffers[i]);
+    }
+    game_update(&app_game_server->game, snake_actions);
+    return true;
+}
+
+void app_game_client_handle_keystate(AppStateGameClient* app_game_client, const U8* keyboard_state) {
+    app_game_client->tick_actions = 0;
+    if (app_game_client->game.state == GAME_STATE_PLAYING) {
+        add_action_from_keystate(keyboard_state,
+                                 &app_game_client->prev_action_key_state,
+                                 &app_game_client->tick_actions);
+    }
+}
+
+void net_action_log(const char* timestamp_str,
+                    const char* type,
+                    size_t bytes_to_send,
+                    size_t bytes_sent,
+                    int seq,
+                    const char* desc) {
+    net_log("%s [tk %5d] %s: %4zu of %4zu bytes | ", timestamp_str, __tick, type, bytes_to_send, bytes_sent);
+    if ( seq != -1 ) {
+        net_log(" seq %3d (%s)\n", seq, desc);
+    } else {
+        net_log("         (%s)\n", desc);
+    }
+}
+
 int main(S32 argc, char** argv) {
     const char* port = NULL;
     const char* ip = NULL;
@@ -183,12 +515,8 @@ int main(S32 argc, char** argv) {
     //
     // Init game and level
     //
-    Game game = {0};
-    game_init(&game, LEVEL_WIDTH, LEVEL_HEIGHT, 6);
-
-    Level* level = &game.level;
-
-    reset_game(&game);
+    AppStateGameClient client_game_state = {0};
+    AppStateGameServer server_game_state = {0};
 
     NetSocket* server_socket = NULL; // Used by server to listen for client connections.
     NetSocket* client_socket = NULL; // Used by client to send and receive.
@@ -203,13 +531,16 @@ int main(S32 argc, char** argv) {
         return EXIT_FAILURE;
     }
 
+    Game* game = NULL;
+
     switch(session_type) {
     case SESSION_TYPE_SINGLE_PLAYER:
         puts("Starting single player session.\n");
 
         window_title = "Taco Quest";
 
-        game.state = GAME_STATE_PLAYING;
+        server_game_state.game.state = GAME_STATE_PLAYING;
+        game = &server_game_state.game;
 
         break;
     case SESSION_TYPE_CLIENT: {
@@ -226,6 +557,7 @@ int main(S32 argc, char** argv) {
         }
 
         printf("Connected to %s:%s\n", ip, port);
+        game = &client_game_state.game;
         break;
     }
     case SESSION_TYPE_SERVER: {
@@ -241,9 +573,14 @@ int main(S32 argc, char** argv) {
             return EXIT_FAILURE;
         }
 
+        game = &server_game_state.game;
         break;
     }
     }
+
+    game_init(game, LEVEL_WIDTH, LEVEL_HEIGHT, 6);
+
+    reset_game(game);
 
     int rc = SDL_Init(SDL_INIT_EVERYTHING);
     if (rc < 0) {
@@ -328,9 +665,6 @@ int main(S32 argc, char** argv) {
 
     int64_t time_since_update_us = 0;
 
-    ActionBuffer server_actions = { 0 };
-    ActionBuffer clients_actions[MAX_SERVER_CLIENT_COUNT] = { 0 };
-
     size_t net_msg_buffer_size = 1024 * 1024;
     char* net_msg_buffer = (char*)malloc(net_msg_buffer_size);
 
@@ -341,8 +675,6 @@ int main(S32 argc, char** argv) {
     PacketTransmissionState recv_game_state_state = {0};
     PacketTransmissionState recv_snake_action_states[MAX_SERVER_CLIENT_COUNT] = {0};
 
-    DevState dev_state = { 0 };
-
     bool quit = false;
 
     while (!quit) {
@@ -352,8 +684,6 @@ int main(S32 argc, char** argv) {
         time_since_update_us += microseconds_between_timestamps(&last_frame_timestamp, &current_frame_timestamp);
         last_frame_timestamp = current_frame_timestamp;
 
-        SnakeAction snake_action = SNAKE_ACTION_NONE;
-
         // Handle events, such as input or window changes.
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
@@ -361,171 +691,26 @@ int main(S32 argc, char** argv) {
             case SDL_QUIT:
                 quit = true;
                 break;
-            case SDL_KEYDOWN:
-                if (game.state == GAME_STATE_PLAYING) {
-                    switch (event.key.keysym.sym) {
-                    case SDLK_w:
-                        snake_action |= SNAKE_ACTION_FACE_NORTH;
-                        break;
-                    case SDLK_a:
-                        snake_action |= SNAKE_ACTION_FACE_WEST;
-                        break;
-                    case SDLK_s:
-                        snake_action |= SNAKE_ACTION_FACE_SOUTH;
-                        break;
-                    case SDLK_d:
-                        snake_action |= SNAKE_ACTION_FACE_EAST;
-                        break;
-                    case SDLK_SPACE:
-                        snake_action |= SNAKE_ACTION_CHOMP;
-                        break;
-                    case SDLK_BACKQUOTE:
-                        dev_state.enabled = !dev_state.enabled;
-                        if (!dev_state.enabled) {
-                            dev_state = (DevState){0};
-                        }
-                        break;
-                    }
-                } else if (game.state == GAME_STATE_WAITING) {
-                    if (event.key.keysym.sym == SDLK_RETURN && session_type == SESSION_TYPE_SERVER) {
-                        game.state = GAME_STATE_PLAYING;
-                    }
-                } else if (game.state == GAME_STATE_GAME_OVER) {
-                    if (event.key.keysym.sym == SDLK_RETURN &&
-                        (session_type == SESSION_TYPE_SERVER || session_type == SESSION_TYPE_SINGLE_PLAYER)) {
-                        reset_game(&game);
-                        game.state = GAME_STATE_PLAYING;
-                    }
-                }
-
-                if (dev_state.enabled) {
-                    switch (event.key.keysym.sym) {
-                    case SDLK_TAB: // Switch to/from step mode
-                        dev_state.step_mode = !dev_state.step_mode;
-                        break;
-                    case SDLK_RETURN: // Signal to advance tick if in step mode
-                        if (dev_state.step_mode) {
-                            dev_state.should_step = true;
-                        }
-                        break;
-                    case SDLK_t: {
-                        int mouse_x = 0;
-                        int mouse_y = 0;
-                        SDL_GetMouseState(&mouse_x, &mouse_y);
-                        S32 cell_x = mouse_x / cell_size;
-                        S32 cell_y = mouse_y / cell_size;
-                        if (game_empty_at(&game, cell_x, cell_y)) {
-                            level_set_cell(&game.level, cell_x, cell_y, CELL_TYPE_TACO);
-                        }
-                        break;
-                    }
-                    default:
-                        break;
-                    }
-                }
-                break; // SDL_KEYDOWN
             }
         }
 
         // Handle snake action keys separately.
         {
             const U8* keyboard_state = SDL_GetKeyboardState(NULL);
-            if (keyboard_state[SDL_SCANCODE_Q]) {
-                snake_action |= SNAKE_ACTION_CONSTRICT_LEFT;
+
+            switch(session_type) {
+            case SESSION_TYPE_CLIENT:
+                app_game_client_handle_keystate(&client_game_state, keyboard_state);
+                break;
+            case SESSION_TYPE_SERVER:
+            case SESSION_TYPE_SINGLE_PLAYER: {
+                app_game_server_handle_keystate(&server_game_state, keyboard_state, cell_size);
+                int mouse_x = 0;
+                int mouse_y = 0;
+                U32 mouse_buttons_state = SDL_GetMouseState(&mouse_x, &mouse_y);
+                app_game_server_handle_mouse(&server_game_state, mouse_x, mouse_y, mouse_buttons_state, cell_size);
+                break;
             }
-            if (keyboard_state[SDL_SCANCODE_E]) {
-                snake_action |= SNAKE_ACTION_CONSTRICT_RIGHT;
-            }
-        }
-
-      	if (dev_state.enabled) {
-            int mouse_x = 0;
-            int mouse_y = 0;
-            U32 mouse_buttons_state = SDL_GetMouseState(&mouse_x, &mouse_y);
-
-            if (mouse_buttons_state & SDL_BUTTON(SDL_BUTTON_LEFT)) {
-                S32 cell_x = mouse_x / cell_size;
-                S32 cell_y = mouse_y / cell_size;
-
-                switch (dev_state.snake_selection_state) {
-	            case SNAKE_SELECTION_STATE_NONE: {
-                    S32 selected_snake_index = query_for_snake_at(&game, cell_x, cell_y);
-                    if (selected_snake_index >= 0) {
-                        dev_state.snake_selection_index = selected_snake_index;
-                        dev_state.snake_selection_state = SNAKE_SELECTION_STATE_SELECTED;
-                    }
-                    break;
-                }
-	            case SNAKE_SELECTION_STATE_SELECTED: {
-                    S32 selected_snake_index = query_for_snake_at(&game, cell_x, cell_y);
-                    if (selected_snake_index < 0) {
-                        Snake* snake = game.snakes + dev_state.snake_selection_index;
-                        snake->length = 1;
-                        snake->segments[0].x = (S16)(cell_x);
-                        snake->segments[0].y = (S16)(cell_y);
-                        dev_state.snake_selection_state = SNAKE_SELECTION_STATE_PLACING;
-                    } else if (selected_snake_index != dev_state.snake_selection_index) {
-                        dev_state.snake_selection_index = selected_snake_index;
-                    }
-                    break;
-                }
-	            case SNAKE_SELECTION_STATE_PLACING: {
-                    Snake* snake = game.snakes + dev_state.snake_selection_index;
-                    S32 previous_index = snake->length - 1;
-                    Direction adjacent_dir = direction_between_cells(cell_x,
-                                                                     cell_y,
-                                                                     snake->segments[previous_index].x,
-                                                                     snake->segments[previous_index].y);
-                    if (adjacent_dir != DIRECTION_NONE) {
-                        S32 previous_previous_index = snake->length - 2;
-                        if (previous_previous_index >= 0 &&
-                            snake->segments[previous_previous_index].x == cell_x &&
-                            snake->segments[previous_previous_index].y == cell_y) {
-                           snake->length--;
-                           break;
-                        }
-
-                        CellType cell_type = level_get_cell(&game.level, cell_x, cell_y);
-                        if (cell_type != CELL_TYPE_EMPTY) {
-                           break;
-                        }
-                        if (query_for_snake_at(&game, cell_x, cell_y) >= 0) {
-                           break;
-                        }
-
-                        // face the snake away from where we're dragging.
-                        if (snake->length == 1) {
-                           snake->direction = opposite_direction(adjacent_dir);
-                        }
-
-                        S32 new_index = snake->length;
-
-                        snake->length++;
-                        snake->segments[new_index].x = (S16)(cell_x);
-                        snake->segments[new_index].y = (S16)(cell_y);
-                        snake->segments[new_index].health = SNAKE_SEGMENT_MAX_HEALTH;
-                    }
-                    break;
-                }
-                default:
-                    break;
-                }
-            } else {
-                if (dev_state.snake_selection_state == SNAKE_SELECTION_STATE_PLACING) {
-                    dev_state.snake_selection_state = SNAKE_SELECTION_STATE_NONE;
-                }
-            }
-        }
-
-        // The server/single player mode should only update the game state if a tick has passed.
-        bool game_should_tick = false;
-        if (time_since_update_us >= GAME_SIMULATE_TIME_INTERVAL_US) {
-            time_since_update_us -= GAME_SIMULATE_TIME_INTERVAL_US;
-
-            if (game.state == GAME_STATE_PLAYING && dev_mode_should_step(&dev_state)) {
-                game_should_tick = true;
-                dev_state.should_step = false;
-                __tick++;
             }
         }
 
@@ -535,14 +720,14 @@ int main(S32 argc, char** argv) {
             // the server disconnects.
 
             // Send our action to the server if there is one.
-            if (snake_action != SNAKE_ACTION_NONE) {
+            if (client_game_state.tick_actions != SNAKE_ACTION_NONE) {
                 Packet packet = {
                     .header = {
                         .type = PACKET_TYPE_SNAKE_ACTION,
-                        .payload_size = sizeof(snake_action),
+                        .payload_size = sizeof(client_game_state.tick_actions),
                         .sequence = client_sequence++
                     },
-                    .payload = (U8*)&snake_action
+                    .payload = (U8*)&client_game_state.tick_actions
                 };
 
                 if (!packet_send(client_socket, &packet)) {
@@ -558,17 +743,17 @@ int main(S32 argc, char** argv) {
                 if (client_receive_packet.header.type == PACKET_TYPE_LEVEL_STATE) {
                     game_deserialize(client_receive_packet.payload,
                                      client_receive_packet.header.payload_size,
-                                     &game);
+                                     game);
 #if 0
                     size_t bytes_deserialized = 0;
 
                     bytes_deserialized += level_deserialize(client_receive_packet.payload + bytes_deserialized,
                                                             client_receive_packet.header.payload_size - bytes_deserialized,
-                                                            &game.level);
+                                                            game->level);
                     for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
                         bytes_deserialized += snake_deserialize(client_receive_packet.payload + bytes_deserialized,
                                                                 client_receive_packet.header.payload_size - bytes_deserialized,
-                                                                game.snakes + s);
+                                                                game->snakes + s);
                     }
 #endif
 
@@ -585,15 +770,10 @@ int main(S32 argc, char** argv) {
                 net_destroy_socket(client_socket);
                 client_socket = NULL;
             }
-
-            snake_action = 0;
             break;
         }
         case SESSION_TYPE_SERVER: {
-            // Every frame:
-            action_buffer_add(&server_actions, snake_action);
-
-            // Server receive input from client, update, then send game state to client
+            // Server recEive input from client, update, then send game state to client
             // TODO: receive multiple snake actions, handle the last one.
             for (S32 i = 0; i < MAX_SERVER_CLIENT_COUNT; i++) {
                 if (server_client_sockets[i] != NULL) {
@@ -603,7 +783,7 @@ int main(S32 argc, char** argv) {
 
                     if (recv_snake_action_states[i].stage == PACKET_PROGRESS_STAGE_COMPLETE) {
                         SnakeAction client_snake_action = *(SnakeAction*)server_receive_packets[i].payload;
-                        action_buffer_add(&clients_actions[i], client_snake_action);
+                        action_buffer_add(server_game_state.action_buffers + (i + 1), client_snake_action);
 
                         // Resent packet state
                         memset(&recv_snake_action_states[i], 0, sizeof(recv_snake_action_states[i]));
@@ -621,17 +801,10 @@ int main(S32 argc, char** argv) {
                 }
             }
 
-            if (!game_should_tick) {
+            bool ticked = app_game_server_update(&server_game_state, &time_since_update_us);
+            if (!ticked) {
                 break;
             }
-
-            // Every Tick:
-            SnakeAction snake_actions[MAX_SNAKE_COUNT];
-            snake_actions[0] = action_buffer_remove(&server_actions);
-            for (S32 i = 0; i < MAX_SERVER_CLIENT_COUNT; i++) {
-                snake_actions[i + 1] = action_buffer_remove(&clients_actions[i]);
-            }
-            game_update(&game, snake_actions);
 
             // Listen for client connections
             for (S32 i = 0; i < MAX_SERVER_CLIENT_COUNT; i++) {
@@ -646,13 +819,13 @@ int main(S32 argc, char** argv) {
                     }
                 } else {
                     // Serialize game state
-                    size_t msg_size = game_serialize(&game,
+                    size_t msg_size = game_serialize(game,
                                                      net_msg_buffer,
                                                      net_msg_buffer_size);
 #if 0
-                    size_t msg_size = level_serialize(&game.level, net_msg_buffer, net_msg_buffer_size);
+                    size_t msg_size = level_serialize(&game->level, net_msg_buffer, net_msg_buffer_size);
                     for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
-                        msg_size += snake_serialize(game.snakes + s, net_msg_buffer + msg_size, net_msg_buffer_size - msg_size);
+                        msg_size += snake_serialize(game->snakes + s, net_msg_buffer + msg_size, net_msg_buffer_size - msg_size);
                     }
 #endif
 
@@ -675,20 +848,7 @@ int main(S32 argc, char** argv) {
             break;
         }
         case SESSION_TYPE_SINGLE_PLAYER: {
-            if ( snake_action != SNAKE_ACTION_NONE ) {
-                action_buffer_add(&server_actions, snake_action);
-            }
-
-            if (!game_should_tick) {
-                break;
-            }
-
-            SnakeAction snake_actions[MAX_SNAKE_COUNT];
-            snake_actions[0] = action_buffer_remove(&server_actions);
-            for (S32 i = 0; i < MAX_SERVER_CLIENT_COUNT; i++) {
-                snake_actions[i + 1] = SNAKE_ACTION_NONE;
-            }
-            game_update(&game, snake_actions);
+            app_game_server_update(&server_game_state, &time_since_update_us);
             break;
         }
         }
@@ -702,113 +862,39 @@ int main(S32 argc, char** argv) {
         SDL_RenderClear(renderer);
 
         // Draw level
-        float scale = (float)(cell_size / 16); // 16 is the sprite sheet tile size.
-
-        for(S32 y = 0; y < level->height; y++) {
-            for(S32 x = 0; x < level->width; x++) {
-                // TODO: Asserts
-                CellType cell_type = level_get_cell(level, x, y);
-
-                SDL_Rect cell_rect = {
-                    .x = x * cell_size,
-                    .y = y * cell_size,
-                    .w = cell_size,
-                    .h = cell_size
-                };
-
-                if (((x + y) % 2) == 0) {
-                    SDL_SetRenderDrawColor(renderer, 0x11, 0x11, 0x11, 0xFF);
-                } else {
-                    SDL_SetRenderDrawColor(renderer, 0x22, 0x22, 0x22, 0xFF);
-                }
-                SDL_RenderFillRect(renderer, &cell_rect);
-
-                if (cell_type == CELL_TYPE_EMPTY) {
-                    continue;
-                }
-
-                switch (cell_type) {
-                    case CELL_TYPE_EMPTY: {
-                        break;
-                    }
-                    case CELL_TYPE_WALL: {
-                        SDL_SetRenderDrawColor(renderer, 0x59, 0x44, 0x2a, 0xFF);
-                        SDL_RenderFillRect(renderer, &cell_rect);
-                        break;
-                    }
-                    case CELL_TYPE_TACO: {
-                        SDL_Rect source_rect = {64, 0, 16, 16};
-                        rc = SDL_RenderCopy(renderer,
-                                                snake_texture,
-                                                &source_rect,
-                                                &cell_rect);
-                        if (rc != 0) {
-                            fprintf(stderr, "Tom F was wrong: %s\n", SDL_GetError());
-                            return EXIT_FAILURE;
-                        }
-                        break;
-                    }
-                    default:
-                        break;
-                }
-            }
+        if (!draw_game(game, renderer, snake_texture, cell_size)) {
+            return EXIT_FAILURE;
         }
 
-        for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
-            snake_draw(renderer, snake_texture, game.snakes + s, s, cell_size);
-        }
         SDL_SetTextureColorMod(snake_texture, 255, 255, 255);
 
-        PF_SetScale(font, scale * 2.0f);
+        float font_scale = (float)(cell_size / 16); // 16 is the sprite sheet tile size.
 
-        if (dev_state.enabled) {
-            PF_SetForeground(font, 255, 255, 0, 255);
-            if ( dev_state.step_mode ) {
-                PF_RenderString(font, 2, 2, "Dev Step Mode!");
-            } else {
-                PF_RenderString(font, 2, 2, "Dev Mode!");
-            }
-
-            if (dev_state.snake_selection_state != SNAKE_SELECTION_STATE_NONE) {
-                PF_RenderString(font, window_width / 3, 2, "Selected Snake %d", dev_state.snake_selection_index);
-            }
-
-            PF_SetForeground(font, 0, 0, 0, 255);
-            PF_SetScale(font, scale);
-            PF_FontState font_state = PF_GetState(font);
-            for (S32 i = 0; i < MAX_SNAKE_COUNT; i++) {
-                Snake *snake = game.snakes + i;
-                for (S32 j = 1; j < snake->length; j++) {
-                    SnakeSegment *segment = snake->segments + j;
-                    PF_RenderChar(font,
-                                  (S16)((segment->x * cell_size) + (cell_size - (font_state.char_width * font_state.scale)) / 2),
-                                  (S16)((segment->y * cell_size) + (cell_size - (font_state.char_height * font_state.scale)) / 2),
-                                  (char)('1' + j));
-                }
-            }
-
-            PF_SetScale(font, scale * 2.0f);
+        switch(session_type) {
+        case SESSION_TYPE_SERVER:
+        case SESSION_TYPE_SINGLE_PLAYER: {
+            PF_SetScale(font, font_scale);
+            draw_dev_state(&server_game_state.dev_state, game, font, window_width, cell_size);
+            break;
+        }
         }
 
+        PF_SetScale(font, font_scale * 2.0f);
         PF_SetForeground(font, 255, 255, 255, 255);
 
         switch(session_type) {
         case SESSION_TYPE_CLIENT:
-            if (game.state == GAME_STATE_WAITING) {
+            if (game->state == GAME_STATE_WAITING) {
                 PF_RenderString(font, 0, 0, "Waiting for game to start");
-            } else if (game.state == GAME_STATE_GAME_OVER) {
+            } else if (game->state == GAME_STATE_GAME_OVER) {
                 PF_RenderString(font, 0, 0, "Game Over!");
             }
             break;
         case SESSION_TYPE_SERVER:
-            if (game.state == GAME_STATE_WAITING) {
-                PF_RenderString(font, 0, 0, "Press enter to start game");
-            } else if (game.state == GAME_STATE_GAME_OVER) {
-                PF_RenderString(font, 0, 0, "Game Over!");
-            }
-            break;
         case SESSION_TYPE_SINGLE_PLAYER:
-            if (game.state == GAME_STATE_GAME_OVER) {
+            if (game->state == GAME_STATE_WAITING) {
+                PF_RenderString(font, 0, 0, "Press enter to start game");
+            } else if (game->state == GAME_STATE_GAME_OVER) {
                 PF_RenderString(font, 0, 0, "Game Over!");
             }
             break;
@@ -841,7 +927,7 @@ int main(S32 argc, char** argv) {
 
     net_shutdown();
     free(net_msg_buffer);
-    game_destroy(&game);
+    game_destroy(game);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();

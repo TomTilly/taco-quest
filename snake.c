@@ -261,32 +261,64 @@ const char* snake_action_string(SnakeAction action) {
         return "south";
     case SNAKE_ACTION_FACE_WEST:
         return "west";
+    case SNAKE_ACTION_CHOMP:
+        return "chomp";
+    case SNAKE_ACTION_CONSTRICT_LEFT:
+        return "constrict left";
+    case SNAKE_ACTION_CONSTRICT_RIGHT:
+        return "constrict right";
     default:
         break;
     }
     return "unknown";
 }
 
-void action_buffer_add(ActionBuffer * buf, SnakeAction action) {
-    if ( buf->count == ACTION_BUF_SIZE ) {
+void print_snake_action(SnakeAction action) {
+    if (action == 0) {
+        printf("%s\n", snake_action_string(action));
+    }
+
+    for (S32 i = 0; i < 8; i++) {
+        U8 action_to_check = 1 << i;
+        if (action_to_check & action) {
+            printf("%s | ", snake_action_string(action_to_check));
+        }
+    }
+    printf("\n");
+}
+
+void action_buffer_add(ActionBuffer * buf, SnakeAction actions) {
+    if (buf->count == ACTION_BUF_SIZE) {
         return;
     }
 
-    if (action == SNAKE_ACTION_NONE) {
+    if (actions == SNAKE_ACTION_NONE) {
         return;
     }
 
-    SnakeAction prev_action = {0};
+    // filter out previous actions in the buffer.
+    SnakeAction prev_actions = {0};
+    for (S32 i = 0; i < buf->count; i++) {
+        prev_actions |= buf->actions[i];
+    }
+    SnakeAction filtered_action = actions & (~prev_actions);
 
-    if ( action == prev_action ) {
+    if (filtered_action == 0) {
         return; // Tried to press the same direction again, ignore
     }
 
-    if ( snake_actions_are_opposite(action, prev_action) ) {
-        return;
-    }
+    SnakeAction prioritized_action = snake_action_highest_priority(filtered_action);
+    buf->actions[buf->count++] = prioritized_action;
+}
 
-    buf->actions[buf->count++] = action;
+SnakeAction snake_action_highest_priority(SnakeAction action) {
+    for (S32 i = 0; i < 8; i++) {
+        U8 action_to_check = 1 << i;
+        if (action_to_check & action) {
+            return (SnakeAction)(action_to_check);
+        }
+    }
+    return SNAKE_ACTION_NONE;
 }
 
 SnakeAction action_buffer_remove(ActionBuffer * buf) {
