@@ -1769,7 +1769,15 @@ size_t game_serialize(const Game* game, void* buffer, size_t buffer_size)
 {
     U8 * byte_buffer = buffer;
 
-    size_t msg_size = level_serialize(&game->level, byte_buffer, buffer_size);
+    size_t msg_size = sizeof(game->state);
+    memcpy(byte_buffer, &game->state, msg_size);
+    byte_buffer += msg_size;
+
+    msg_size = sizeof(game->wait_to_start_ms);
+    memcpy(byte_buffer, &game->wait_to_start_ms, msg_size);
+    byte_buffer += msg_size;
+
+    msg_size = level_serialize(&game->level, byte_buffer, buffer_size);
     byte_buffer += msg_size;
 
     for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
@@ -1789,7 +1797,15 @@ size_t game_deserialize(void * buffer, size_t size, Game * out)
 {
     U8 * byte_buffer = buffer;
 
-    size_t msg_size = level_deserialize(byte_buffer, size, &out->level);
+    size_t msg_size = sizeof(out->state);
+    memcpy(&out->state, byte_buffer, msg_size);
+    byte_buffer += msg_size;
+
+    msg_size = sizeof(out->wait_to_start_ms);
+    memcpy(&out->wait_to_start_ms, byte_buffer, msg_size);
+    byte_buffer += msg_size;
+
+    msg_size = level_deserialize(byte_buffer, size, &out->level);
     byte_buffer += msg_size;
 
     for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {

@@ -53,6 +53,7 @@ typedef struct {
     Snake snakes[MAX_SNAKE_COUNT];
     GameState state;
     S32 max_taco_count;
+    S32 wait_to_start_ms;
 } Game;
 
 typedef enum {
