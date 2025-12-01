@@ -50,11 +50,19 @@ typedef struct {
 } ActionKeyState;
 
 typedef struct {
+    bool toggle_enabled;
+    bool toggle_step_mode;
+    bool step_forward;
+    bool place_taco;
+} DevKeyState;
+
+typedef struct {
     bool enabled;
     bool step_mode;
     bool should_step;
     DevSnakeSelectionState snake_selection_state;
     S32 snake_selection_index;
+    DevKeyState prev_key_state;
 } DevState;
 
 typedef struct {
@@ -335,10 +343,17 @@ void draw_dev_state(DevState* dev_state, Game* game, PF_Font* font, S32 window_w
 
 bool app_game_server_handle_keystate(AppStateGameServer* app_game_server, const U8* keyboard_state, S32 cell_size) {
     switch (app_game_server->game.state) {
-    case GAME_STATE_PLAYING:
+    case GAME_STATE_PLAYING: {
         add_snake_action_from_keystate(keyboard_state, &app_game_server->prev_action_key_state, app_game_server->tick_actions + 0);
 
-        if (keyboard_state[SDL_SCANCODE_GRAVE]) {
+        DevKeyState current_dev_key_state = {0};
+        current_dev_key_state.toggle_enabled = keyboard_state[SDL_SCANCODE_GRAVE];
+        current_dev_key_state.toggle_step_mode = keyboard_state[SDL_SCANCODE_TAB];
+        current_dev_key_state.step_forward = keyboard_state[SDL_SCANCODE_RETURN];
+        current_dev_key_state.place_taco = keyboard_state[SDL_SCANCODE_T];
+
+        if (!app_game_server->dev_state.prev_key_state.toggle_enabled &&
+            current_dev_key_state.toggle_enabled) {
             app_game_server->dev_state.enabled = !app_game_server->dev_state.enabled;
             if (!app_game_server->dev_state.enabled) {
                 app_game_server->dev_state = (DevState){0};
@@ -346,17 +361,20 @@ bool app_game_server_handle_keystate(AppStateGameServer* app_game_server, const 
         }
 
         if (app_game_server->dev_state.enabled) {
-            if (keyboard_state[SDL_SCANCODE_TAB]) {
+            if (!app_game_server->dev_state.prev_key_state.toggle_step_mode &&
+                current_dev_key_state.toggle_step_mode) {
                 app_game_server->dev_state.step_mode = !app_game_server->dev_state.step_mode;
             }
 
-            if (keyboard_state[SDL_SCANCODE_RETURN]) {
+            if (!app_game_server->dev_state.prev_key_state.step_forward &&
+                current_dev_key_state.step_forward) {
                 if (app_game_server->dev_state.step_mode) {
                     app_game_server->dev_state.should_step = true;
                 }
             }
 
-            if (keyboard_state[SDL_SCANCODE_T]) {
+            if (!app_game_server->dev_state.prev_key_state.place_taco &&
+                current_dev_key_state.place_taco) {
                 int mouse_x = 0;
                 int mouse_y = 0;
                 SDL_GetMouseState(&mouse_x, &mouse_y);
@@ -367,8 +385,9 @@ bool app_game_server_handle_keystate(AppStateGameServer* app_game_server, const 
                 }
             }
         }
-
+        app_game_server->dev_state.prev_key_state = current_dev_key_state;
         break;
+    }
     case GAME_STATE_WAITING:
         break;
     case GAME_STATE_GAME_OVER:
