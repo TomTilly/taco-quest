@@ -16,7 +16,7 @@
 #include "level.h"
 #include "direction.h"
 
-#define MAX_SNAKE_COUNT 3
+#define MAX_SNAKE_COUNT 4
 
 typedef enum {
     GAME_STATE_WAITING,

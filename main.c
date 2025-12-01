@@ -116,7 +116,7 @@ char* get_timestamp(void) {
     return buff;
 }
 
-void reset_game(Game* game) {
+void reset_game(Game* game, S32 player_count) {
     Level* level = &game->level;
 
     snake_spawn(game->snakes + 0,
@@ -129,10 +129,19 @@ void reset_game(Game* game) {
                 2,
                 DIRECTION_SOUTH);
 
-    snake_spawn(game->snakes + 2,
-                (S16)(level->width - 2),
-                (S16)(level->height - 3),
-                DIRECTION_WEST);
+    if (player_count > 2) {
+        snake_spawn(game->snakes + 2,
+                    (S16)(level->width - 2),
+                    (S16)(level->height - 3),
+                    DIRECTION_WEST);
+    }
+
+    if (player_count > 3) {
+        snake_spawn(game->snakes + 3,
+                    3,
+                    (S16)(level->height - 3),
+                    DIRECTION_EAST);
+    }
 
     const char tile_map[LEVEL_HEIGHT][LEVEL_WIDTH + 1] = {
         "XXXXXXXXXXXXXXXXXXXXXXXX",
@@ -325,10 +334,6 @@ void draw_dev_state(DevState* dev_state, Game* game, PF_Font* font, S32 window_w
 }
 
 bool app_game_server_handle_keystate(AppStateGameServer* app_game_server, const U8* keyboard_state, S32 cell_size) {
-    for (S32 i = 0; i < MAX_SNAKE_COUNT; i++) {
-        app_game_server->tick_actions[i] = 0;
-    }
-
     switch (app_game_server->game.state) {
     case GAME_STATE_PLAYING:
         add_snake_action_from_keystate(keyboard_state, &app_game_server->prev_action_key_state, app_game_server->tick_actions + 0);
@@ -369,7 +374,6 @@ bool app_game_server_handle_keystate(AppStateGameServer* app_game_server, const 
     case GAME_STATE_GAME_OVER:
         if (keyboard_state[SDL_SCANCODE_RETURN]) {
             app_game_server->game.state = GAME_STATE_WAITING;
-            reset_game(&app_game_server->game);
             return true;
         }
         break;
@@ -474,7 +478,7 @@ void app_game_server_update(AppStateGameServer* app_game_server, bool should_tic
 
     if (should_tick) {
         SnakeAction snake_actions[MAX_SNAKE_COUNT];
-        for (S32 i = 0; i < MAX_SERVER_CLIENT_COUNT; i++) {
+        for (S32 i = 0; i < MAX_SNAKE_COUNT; i++) {
             snake_actions[i] = action_buffer_remove(&app_game_server->action_buffers[i]);
         }
         game_update(&app_game_server->game, snake_actions);
@@ -482,7 +486,6 @@ void app_game_server_update(AppStateGameServer* app_game_server, bool should_tic
 }
 
 void app_game_client_handle_keystate(AppStateGameClient* app_game_client, const U8* keyboard_state) {
-    app_game_client->tick_actions = 0;
     if (app_game_client->game.state == GAME_STATE_PLAYING) {
         add_snake_action_from_keystate(keyboard_state,
                                  &app_game_client->prev_action_key_state,
@@ -518,10 +521,6 @@ bool app_lobby_update(AppStateLobby* lobby_state) {
         }
     }
 
-    for (S32 i = 0; i < MAX_SNAKE_COUNT; i++) {
-        lobby_state->actions[i] = 0;
-    }
-
     return all_ready;
 }
 
@@ -553,6 +552,28 @@ size_t lobby_state_deserialize(void* buffer, size_t buffer_size, AppStateLobby* 
         buffer_ptr += sizeof(lobby_state->players[i].state);
     }
     return bytes_read;
+}
+
+void app_server_update(AppState* app_state,
+                       AppStateLobby* lobby_state,
+                       AppStateGameServer* server_game_state,
+                       bool should_tick,
+                       S64 time_since_last_frame_us) {
+    if (*app_state == APP_STATE_LOBBY) {
+        if (app_lobby_update(lobby_state)) {
+            *app_state = APP_STATE_GAME;
+            server_game_state->game.wait_to_start_ms = 3000;
+            S32 player_count = 0;
+            for (S32 p = 0; p < MAX_SNAKE_COUNT; p++) {
+                if (lobby_state->players[p].state != LOBBY_PLAYER_STATE_NONE) {
+                    player_count++;
+                }
+            }
+            reset_game(&server_game_state->game, player_count);
+        }
+    } else if (*app_state == APP_STATE_GAME) {
+        app_game_server_update(server_game_state, should_tick, time_since_last_frame_us);
+    }
 }
 
 void net_action_log(const char* timestamp_str,
@@ -668,7 +689,7 @@ int main(S32 argc, char** argv) {
     }
 
     game_init(game, LEVEL_WIDTH, LEVEL_HEIGHT, 6);
-    reset_game(game);
+    reset_game(game, 1);
 
     // Create the server player in the lobby.
     if (session_type == SESSION_TYPE_SINGLE_PLAYER || session_type == SESSION_TYPE_SERVER) {
@@ -779,6 +800,15 @@ int main(S32 argc, char** argv) {
         int64_t time_since_last_frame_us = microseconds_between_timestamps(&last_frame_timestamp, &current_frame_timestamp);
         time_since_tick_us += time_since_last_frame_us;
         last_frame_timestamp = current_frame_timestamp;
+
+        // Clear actions
+        for (S32 i = 0; i < MAX_SNAKE_COUNT; i++) {
+            lobby_state.actions[i] = 0;
+        }
+        for (S32 i = 0; i < MAX_SNAKE_COUNT; i++) {
+            server_game_state.tick_actions[i] = 0;
+        }
+        client_game_state.tick_actions = 0;
 
         // Handle events, such as input or window changes.
         SDL_Event event;
@@ -924,12 +954,18 @@ int main(S32 argc, char** argv) {
                             for (S32 p = 0; p < MAX_SNAKE_COUNT; p++) {
                                 if (lobby_state.players[p].client_index == i) {
                                     lobby_state.actions[p] = *(LobbyAction*)server_receive_packets[i].payload;
+                                    break;
                                 }
                             }
                         } else if (server_receive_packets[i].header.type == PACKET_TYPE_SNAKE_ACTION &&
                                    app_state == APP_STATE_GAME) {
                             SnakeAction client_snake_action = *(SnakeAction*)server_receive_packets[i].payload;
-                            action_buffer_add(server_game_state.action_buffers + (i + 1), client_snake_action);
+                            for (S32 p = 0; p < MAX_SNAKE_COUNT; p++) {
+                                if (lobby_state.players[p].client_index == i) {
+                                    action_buffer_add(server_game_state.action_buffers + p, client_snake_action);
+                                    break;
+                                }
+                            }
                         }
 
                         // Resent packet state
@@ -949,16 +985,7 @@ int main(S32 argc, char** argv) {
             }
 
             // TODO: Consolidate with SINGLE code path
-            if (app_state == APP_STATE_LOBBY) {
-                if (app_lobby_update(&lobby_state)) {
-                    app_state = APP_STATE_GAME;
-                    server_game_state.game.wait_to_start_ms = 3000;
-                    reset_game(&server_game_state.game);
-                }
-            } else if (app_state == APP_STATE_GAME) {
-                app_game_server_update(&server_game_state, should_tick, time_since_last_frame_us);
-            }
-
+            app_server_update(&app_state, &lobby_state, &server_game_state, should_tick, time_since_last_frame_us);
             if (!should_send_state) {
                 break;
             }
@@ -969,12 +996,12 @@ int main(S32 argc, char** argv) {
                     bool result = net_accept(server_socket, &server_client_sockets[i]);
                     if (result) {
                         if (server_client_sockets[i] != NULL) {
-                            printf("client connected!\n");
                             for (S32 p = 0; p < MAX_SNAKE_COUNT; p++) {
                                 if (lobby_state.players[p].state == LOBBY_PLAYER_STATE_NONE) {
                                     lobby_state.players[p].state = LOBBY_PLAYER_STATE_NOT_READY;
                                     lobby_state.players[p].client_index = i;
-                                    strncpy(lobby_state.players[p].name, "ClientPlayer", MAX_PLAYER_NAME_LEN);
+                                    snprintf(lobby_state.players[p].name, MAX_PLAYER_NAME_LEN, "ClientPlayer_%d", p);
+                                    printf("assigning connected client %d to player %d\n", i, p);
                                     break;
                                 }
                             }
@@ -1026,15 +1053,7 @@ int main(S32 argc, char** argv) {
             break;
         }
         case SESSION_TYPE_SINGLE_PLAYER: {
-            if (app_state == APP_STATE_LOBBY) {
-                if (app_lobby_update(&lobby_state)) {
-                    app_state = APP_STATE_GAME;
-                    server_game_state.game.wait_to_start_ms = 3000;
-                    reset_game(&server_game_state.game);
-                }
-            } else if (app_state == APP_STATE_GAME) {
-                app_game_server_update(&server_game_state, should_tick, time_since_last_frame_us);
-            }
+            app_server_update(&app_state, &lobby_state, &server_game_state, should_tick, time_since_last_frame_us);
             break;
         }
         }
