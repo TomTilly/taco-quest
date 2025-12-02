@@ -45,7 +45,6 @@ void snake_turn(Snake* snake, Direction direction) {
 void snake_draw(SDL_Renderer* renderer,
                 SDL_Texture* texture,
                 Snake* snake,
-                S32 snake_index,
                 S32 cell_size) {
     int tail_index = snake->length - 1;
     for (int i = 0; i < snake->length; i++) {
@@ -129,14 +128,27 @@ void snake_draw(SDL_Renderer* renderer,
 
         U8 hue = snake->chomp_cooldown ? 128 : 255;
 
-        if (snake_index == 0) {
-            SDL_SetTextureColorMod(texture, 0, hue, 0);
-        } else if (snake_index == 1) {
-            SDL_SetTextureColorMod(texture, hue, hue / 2, hue / 2);
-        } else if (snake_index == 2) {
-            SDL_SetTextureColorMod(texture, 0, hue, hue);
-        } else {
+        switch (snake->color) {
+        case SNAKE_COLOR_RED:
+            SDL_SetTextureColorMod(texture, hue, 0, 0);
+            break;
+        case SNAKE_COLOR_YELLOW:
             SDL_SetTextureColorMod(texture, hue, hue, 0);
+            break;
+        case SNAKE_COLOR_GREEN:
+            SDL_SetTextureColorMod(texture, 0, hue, 0);
+            break;
+        case SNAKE_COLOR_CYAN:
+            SDL_SetTextureColorMod(texture, 0, hue, hue);
+            break;
+        case SNAKE_COLOR_BLUE:
+            SDL_SetTextureColorMod(texture, 0, 0, hue);
+            break;
+        case SNAKE_COLOR_PURPLE:
+            SDL_SetTextureColorMod(texture, hue, 0, hue);
+            break;
+        default:
+            break;
         }
 
         int rc = SDL_RenderCopyEx(renderer,
@@ -170,6 +182,7 @@ size_t snake_serialize(const Snake* snake, void* buffer, size_t buffer_size) {
     total_size += segments_size;
     total_size += sizeof(U8); // direction
     total_size += sizeof(U8); // chomp cooldown
+    total_size += sizeof(SnakeColor);
 
     assert(total_size <= buffer_size && "buffer too small!");
 
@@ -186,6 +199,9 @@ size_t snake_serialize(const Snake* snake, void* buffer, size_t buffer_size) {
 
     *ptr = snake->chomp_cooldown;
     ptr += sizeof(snake->chomp_cooldown);
+
+    *ptr = snake->color;
+    ptr += sizeof(snake->color);
 
     return total_size;
 }
@@ -222,6 +238,9 @@ size_t snake_deserialize(void * buffer, size_t size, Snake* out) {
 
     out->chomp_cooldown = *ptr;
     ptr++;
+
+    out->color = *ptr;
+    ptr += sizeof(out->color);
 
     return ptr - (U8 *)buffer;
 }
@@ -321,6 +340,26 @@ SnakeAction snake_action_highest_priority(SnakeAction action) {
         }
     }
     return SNAKE_ACTION_NONE;
+}
+
+const char* snake_color_string(SnakeColor color) {
+    switch (color) {
+    case SNAKE_COLOR_RED:
+        return "red";
+    case SNAKE_COLOR_YELLOW:
+        return "yellow";
+    case SNAKE_COLOR_GREEN:
+        return "green";
+    case SNAKE_COLOR_CYAN:
+        return "cyan";
+    case SNAKE_COLOR_BLUE:
+        return "blue";
+    case SNAKE_COLOR_PURPLE:
+        return "purple";
+    default:
+        break;
+    }
+    return "unknown";
 }
 
 SnakeAction action_buffer_remove(ActionBuffer * buf) {

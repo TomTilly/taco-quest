@@ -61,6 +61,16 @@ typedef enum {
     SNAKE_LIFE_STATE_DEAD,
 } SnakeLifeState;
 
+typedef enum {
+    SNAKE_COLOR_RED,
+    SNAKE_COLOR_YELLOW,
+    SNAKE_COLOR_GREEN,
+    SNAKE_COLOR_CYAN,
+    SNAKE_COLOR_BLUE,
+    SNAKE_COLOR_PURPLE,
+    SNAKE_COLOR_COUNT,
+} SnakeColor;
+
 typedef struct {
     SnakeSegment* segments;
     S32 length;
@@ -70,6 +80,7 @@ typedef struct {
     S8 kill_damage_cooldown;
     SnakeLifeState life_state;
     SnakeConstrictState constrict_state;
+    SnakeColor color;
 } Snake;
 
 typedef struct {
@@ -85,7 +96,6 @@ void snake_turn(Snake* snake, Direction direction);
 void snake_draw(SDL_Renderer* renderer,
                 SDL_Texture* texture,
                 Snake* snake,
-                S32 snake_index,
                 S32 cell_size);
 
 size_t snake_serialize(const Snake* snake, void * buffer, size_t buffer_size);
@@ -96,6 +106,8 @@ bool snake_actions_are_opposite(SnakeAction action1, SnakeAction action2);
 const char* snake_action_string(SnakeAction action);
 void print_snake_action(SnakeAction action);
 SnakeAction snake_action_highest_priority(SnakeAction action);
+
+const char* snake_color_string(SnakeColor color);
 
 void action_buffer_add(ActionBuffer * buf, SnakeAction action);
 SnakeAction action_buffer_remove(ActionBuffer * buf);
