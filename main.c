@@ -18,6 +18,7 @@
 #define GAME_SIMULATE_TIME_INTERVAL_US MS_TO_US(175) // default = 150
 #define SERVER_ACCEPT_QUEUE_LIMIT 5
 #define MAX_PLAYER_NAME_LEN 16
+#define MAX_GAME_CONTROLLERS 4
 
 // Minus one due to the server itself not needing a client socket.
 #define MAX_SERVER_CLIENT_COUNT (MAX_SNAKE_COUNT - 1)
@@ -77,6 +78,12 @@ typedef enum {
 } LobbyPlayerState;
 
 typedef enum {
+    LOBBY_PLAYER_TYPE_LOCAL_KEYBOARD,
+    LOBBY_PLAYER_TYPE_LOCAL_CONTROLLER,
+    LOBBY_PLAYER_TYPE_NETWORK,
+} LobbyPlayerType;
+
+typedef enum {
     LOBBY_ACTION_NONE = 0,
     LOBBY_ACTION_TOGGLE_READY = 1,
     LOBBY_ACTION_CYCLE_COLOR = 2,
@@ -85,14 +92,15 @@ typedef enum {
 typedef struct {
     char name[MAX_PLAYER_NAME_LEN];
     LobbyPlayerState state;
+    LobbyPlayerType type;
     SnakeColor snake_color;
-    // -1 is self.
-    S32 client_index;
+    // -1 is self. if type is controller, refers to controller index, if type is network refers to client index.
+    S32 input_index;
 } LobbyPlayer;
 
 typedef struct {
     Game game;
-    ActionKeyState prev_action_key_state;
+    ActionKeyState prev_action_key_states[MAX_SNAKE_COUNT];
     SnakeAction tick_actions[MAX_SNAKE_COUNT];
     ActionBuffer action_buffers[MAX_SNAKE_COUNT];
     DevState dev_state;
@@ -106,7 +114,7 @@ typedef struct {
 
 typedef struct {
     LobbyPlayer players[MAX_SNAKE_COUNT];
-    LobbyActionKeyState prev_action_key_state;
+    LobbyActionKeyState prev_action_key_states[MAX_SNAKE_COUNT];
     LobbyAction actions[MAX_SNAKE_COUNT];
 } AppStateLobby;
 
@@ -154,6 +162,8 @@ void reset_game(Game* game, AppStateLobby* lobby_state) {
                 DIRECTION_SOUTH);
     if (snake_count > 1) {
         game->snakes[1].color = lobby_state->players[1].snake_color;
+    } else {
+        game->snakes[1].color = (lobby_state->players[0].snake_color + 1) % SNAKE_COLOR_COUNT;
     }
 
     if (snake_count > 2) {
@@ -380,10 +390,17 @@ void draw_dev_state(DevState* dev_state, Game* game, PF_Font* font, S32 window_w
     }
 }
 
-bool app_game_server_handle_keystate(AppStateGameServer* app_game_server, const U8* keyboard_state, S32 cell_size) {
+bool app_game_server_handle_keystate(AppStateGameServer* app_game_server,
+                                     const U8* keyboard_state,
+                                     S32 cell_size,
+                                     bool use_keyboard_for_snake_actions) {
     switch (app_game_server->game.state) {
     case GAME_STATE_PLAYING: {
-        add_snake_action_from_keystate(keyboard_state, &app_game_server->prev_action_key_state, app_game_server->tick_actions + 0);
+        if (use_keyboard_for_snake_actions) {
+            add_snake_action_from_keystate(keyboard_state,
+                                           app_game_server->prev_action_key_states + 0,
+                                           app_game_server->tick_actions + 0);
+        }
 
         DevKeyState current_dev_key_state = {0};
         current_dev_key_state.toggle_enabled = keyboard_state[SDL_SCANCODE_GRAVE];
@@ -556,14 +573,16 @@ void app_lobby_handle_keystate(AppStateLobby* lobby_state, const U8* keyboard_st
     current_action_key_state.toggle_ready = keyboard_state[SDL_SCANCODE_RETURN];
     current_action_key_state.cycle_color = keyboard_state[SDL_SCANCODE_SPACE];
 
-    if (!lobby_state->prev_action_key_state.toggle_ready && current_action_key_state.toggle_ready) {
+    if (!lobby_state->prev_action_key_states[0].toggle_ready &&
+        current_action_key_state.toggle_ready) {
         lobby_state->actions[0] |= LOBBY_ACTION_TOGGLE_READY;
     }
-    if (!lobby_state->prev_action_key_state.cycle_color && current_action_key_state.cycle_color) {
+    if (!lobby_state->prev_action_key_states[0].cycle_color &&
+        current_action_key_state.cycle_color) {
         lobby_state->actions[0] |= LOBBY_ACTION_CYCLE_COLOR;
     }
 
-    lobby_state->prev_action_key_state = current_action_key_state;
+    lobby_state->prev_action_key_states[0] = current_action_key_state;
 }
 
 bool app_lobby_update(AppStateLobby* lobby_state) {
@@ -643,6 +662,86 @@ void app_server_update(AppState* app_state,
         }
     } else if (*app_state == APP_STATE_GAME) {
         app_game_server_update(server_game_state, should_tick, time_since_last_frame_us);
+    }
+}
+
+void init_controller_for_player(SDL_GameController* game_controllers[MAX_GAME_CONTROLLERS],
+                                S32 joystick_index,
+                                AppStateLobby* lobby_state,
+                                SessionType session_type) {
+    for (S32 c = 0; c < MAX_GAME_CONTROLLERS; c++) {
+        if (game_controllers[c] != NULL) {
+            if (SDL_JoystickInstanceID(
+                    SDL_GameControllerGetJoystick(game_controllers[c])) == joystick_index) {
+                return;
+            }
+            continue;
+        }
+
+        game_controllers[c] = SDL_GameControllerOpen(joystick_index);
+
+        if (game_controllers[c] == NULL) {
+            fprintf(stderr, "Failed to open game controller %s\n", SDL_GetError());
+        } else if (session_type == SESSION_TYPE_SINGLE_PLAYER || session_type == SESSION_TYPE_SERVER) {
+            S32 next_available_lobby_player = -1;
+            for (S32 p = 0; p < MAX_SNAKE_COUNT; p++) {
+                if (lobby_state->players[p].state == LOBBY_PLAYER_STATE_NONE) {
+                    next_available_lobby_player = p;
+                    break;
+                }
+            }
+            if (next_available_lobby_player >= 0) {
+                lobby_state->players[next_available_lobby_player].state = LOBBY_PLAYER_STATE_NOT_READY;
+                lobby_state->players[next_available_lobby_player].type = LOBBY_PLAYER_TYPE_LOCAL_CONTROLLER;
+                lobby_state->players[next_available_lobby_player].snake_color = SNAKE_COLOR_YELLOW;
+                lobby_state->players[next_available_lobby_player].input_index = c;
+                strncpy(lobby_state->players[1].name, "ServerCTPlayer", MAX_PLAYER_NAME_LEN);
+            } else {
+                fprintf(stderr, "No more space in lobby for another controller\n");
+                SDL_GameControllerClose(game_controllers[c]);
+                game_controllers[c] = NULL;
+            }
+        } else if (session_type == SESSION_TYPE_CLIENT) {
+            printf("using controller instead of keyboard\n");
+            lobby_state->players[0].type = LOBBY_PLAYER_TYPE_LOCAL_CONTROLLER;
+            lobby_state->players[0].input_index = c;
+        }
+        break;
+    }
+}
+
+void close_controller_for_player(SDL_GameController* game_controllers[MAX_GAME_CONTROLLERS],
+                                 S32 joystick_index,
+                                 AppStateLobby* lobby_state,
+                                 SessionType session_type) {
+    for (S32 c = 0; c < MAX_GAME_CONTROLLERS; c++) {
+        if (game_controllers[c] == NULL) {
+            continue;
+        }
+
+        if (SDL_JoystickInstanceID(
+                SDL_GameControllerGetJoystick(game_controllers[c])) != joystick_index) {
+            continue;
+        }
+
+        // Clean up the lobby player entry.
+        if (session_type == SESSION_TYPE_SINGLE_PLAYER || session_type == SESSION_TYPE_SERVER) {
+            for (S32 p = 0; p < MAX_SNAKE_COUNT; p++) {
+                if (lobby_state->players[p].type == LOBBY_PLAYER_TYPE_LOCAL_CONTROLLER &&
+                    lobby_state->players[p].input_index == c) {
+                    if (p == 0) {
+                        lobby_state->players[p].type = LOBBY_PLAYER_TYPE_LOCAL_KEYBOARD;
+                        lobby_state->players[p].input_index = -1;
+                    } else {
+                        lobby_state->players[p].state = LOBBY_PLAYER_STATE_NONE;
+                    }
+                    break;
+                }
+            }
+        }
+
+        SDL_GameControllerClose(game_controllers[c]);
+        game_controllers[c] = NULL;
     }
 }
 
@@ -761,9 +860,10 @@ int main(S32 argc, char** argv) {
     // Create the server player in the lobby.
     if (session_type == SESSION_TYPE_SINGLE_PLAYER || session_type == SESSION_TYPE_SERVER) {
         lobby_state.players[0].state = LOBBY_PLAYER_STATE_NOT_READY;
+        lobby_state.players[0].type = LOBBY_PLAYER_TYPE_LOCAL_KEYBOARD;
         lobby_state.players[0].snake_color = SNAKE_COLOR_RED;
-        lobby_state.players[0].client_index = -1;
-        strncpy(lobby_state.players[0].name, "ServerPlayer", MAX_PLAYER_NAME_LEN);
+        lobby_state.players[0].input_index = -1;
+        strncpy(lobby_state.players[0].name, "ServerKBPlayer", MAX_PLAYER_NAME_LEN);
     }
 
     game_init(game, LEVEL_WIDTH, LEVEL_HEIGHT, 6);
@@ -848,6 +948,9 @@ int main(S32 argc, char** argv) {
         return EXIT_FAILURE;
     }
 
+    SDL_GameController* game_controllers[MAX_GAME_CONTROLLERS];
+    memset(game_controllers, 0, sizeof(game_controllers[0]) * MAX_GAME_CONTROLLERS);
+
     S32 cell_size = min_display_dimension / max_level_dimension;
 
     int64_t time_since_tick_us = 0;
@@ -888,6 +991,25 @@ int main(S32 argc, char** argv) {
             case SDL_QUIT:
                 quit = true;
                 break;
+            case SDL_CONTROLLERDEVICEADDED:
+                if (app_state == APP_STATE_LOBBY) {
+                    init_controller_for_player(game_controllers,
+                                               event.cdevice.which,
+                                               &lobby_state,
+                                               session_type);
+                }
+                // TODO: support connecting a controller during game ?
+                break;
+            case SDL_CONTROLLERDEVICEREMOVED:
+                if (app_state == APP_STATE_LOBBY) {
+                    close_controller_for_player(game_controllers,
+                                               event.cdevice.which,
+                                               &lobby_state,
+                                               session_type);
+                }
+                break;
+            default:
+                break;
             }
         }
 
@@ -896,15 +1018,22 @@ int main(S32 argc, char** argv) {
             const U8* keyboard_state = SDL_GetKeyboardState(NULL);
 
             if (app_state == APP_STATE_LOBBY) {
-                app_lobby_handle_keystate(&lobby_state, keyboard_state);
+                if (lobby_state.players[0].type == LOBBY_PLAYER_TYPE_LOCAL_KEYBOARD) {
+                    app_lobby_handle_keystate(&lobby_state, keyboard_state);
+                }
             } else if (app_state == APP_STATE_GAME) {
                 switch(session_type) {
                 case SESSION_TYPE_CLIENT:
-                    app_game_client_handle_keystate(&client_game_state, keyboard_state);
+                    if (lobby_state.players[0].type == LOBBY_PLAYER_TYPE_LOCAL_KEYBOARD) {
+                        app_game_client_handle_keystate(&client_game_state, keyboard_state);
+                    }
                     break;
                 case SESSION_TYPE_SERVER:
                 case SESSION_TYPE_SINGLE_PLAYER: {
-                    if (app_game_server_handle_keystate(&server_game_state, keyboard_state, cell_size)) {
+                    if (app_game_server_handle_keystate(&server_game_state,
+                                                        keyboard_state,
+                                                        cell_size,
+                                                        lobby_state.players[0].type == LOBBY_PLAYER_TYPE_LOCAL_KEYBOARD)) {
                         for (S32 p = 0; p < MAX_SNAKE_COUNT; p++) {
                             if (lobby_state.players[p].state == LOBBY_PLAYER_STATE_READY) {
                                 lobby_state.players[p].state = LOBBY_PLAYER_STATE_NOT_READY;
@@ -919,6 +1048,105 @@ int main(S32 argc, char** argv) {
                     break;
                 }
                 }
+            }
+        }
+
+        // Handle game pad input if any
+        for (S32 c = 0; c < MAX_GAME_CONTROLLERS; c++) {
+            if (game_controllers[c] == NULL) {
+                continue;
+            }
+
+            S32 player_index = -1;
+            for (S32 p = 0; p < MAX_SNAKE_COUNT; p++) {
+                if (lobby_state.players[p].type == LOBBY_PLAYER_TYPE_LOCAL_CONTROLLER &&
+                    lobby_state.players[p].input_index == c) {
+                    player_index = p;
+                    break;
+                }
+            }
+
+            if (player_index < 0) {
+                continue;
+            }
+
+            if (app_state == APP_STATE_LOBBY) {
+                LobbyActionKeyState current_action_key_state = {0};
+                current_action_key_state.toggle_ready =
+                    SDL_GameControllerGetButton(game_controllers[c], SDL_CONTROLLER_BUTTON_A);
+                current_action_key_state.cycle_color =
+                    SDL_GameControllerGetButton(game_controllers[c], SDL_CONTROLLER_BUTTON_X);
+
+                if (!lobby_state.prev_action_key_states[player_index].toggle_ready &&
+                    current_action_key_state.toggle_ready) {
+                    lobby_state.actions[player_index] |= LOBBY_ACTION_TOGGLE_READY;
+                }
+
+                if (!lobby_state.prev_action_key_states[player_index].cycle_color &&
+                    current_action_key_state.cycle_color) {
+                    lobby_state.actions[player_index] |= LOBBY_ACTION_CYCLE_COLOR;
+                }
+
+                lobby_state.prev_action_key_states[player_index] = current_action_key_state;
+            } else if (app_state == APP_STATE_GAME) {
+                ActionKeyState current_action_key_state = {0};
+                current_action_key_state.face_north =
+                    SDL_GameControllerGetButton(game_controllers[c], SDL_CONTROLLER_BUTTON_DPAD_UP);
+                current_action_key_state.face_west =
+                    SDL_GameControllerGetButton(game_controllers[c], SDL_CONTROLLER_BUTTON_DPAD_LEFT);
+                current_action_key_state.face_south =
+                    SDL_GameControllerGetButton(game_controllers[c], SDL_CONTROLLER_BUTTON_DPAD_DOWN);
+                current_action_key_state.face_east =
+                    SDL_GameControllerGetButton(game_controllers[c], SDL_CONTROLLER_BUTTON_DPAD_RIGHT);
+                current_action_key_state.chomp =
+                    SDL_GameControllerGetButton(game_controllers[c], SDL_CONTROLLER_BUTTON_A);
+                current_action_key_state.constrict_left =
+                    SDL_GameControllerGetButton(game_controllers[c], SDL_CONTROLLER_BUTTON_X);
+                current_action_key_state.constrict_right =
+                    SDL_GameControllerGetButton(game_controllers[c], SDL_CONTROLLER_BUTTON_B);
+
+                SnakeAction* tick_actions = NULL;
+                ActionKeyState* prev_action_key_states = NULL;
+                if (session_type == SESSION_TYPE_SINGLE_PLAYER || session_type == SESSION_TYPE_SERVER) {
+                    tick_actions = server_game_state.tick_actions + player_index;
+                    prev_action_key_states = server_game_state.prev_action_key_states + player_index;
+                } else if (session_type == SESSION_TYPE_CLIENT) {
+                    tick_actions = &client_game_state.tick_actions;
+                    prev_action_key_states = &client_game_state.prev_action_key_state;
+                } else {
+                    break;
+                }
+
+                if (!prev_action_key_states->face_north && current_action_key_state.face_north) {
+                    *tick_actions |= SNAKE_ACTION_FACE_NORTH;
+                }
+
+                if (!prev_action_key_states->face_west && current_action_key_state.face_west) {
+                    *tick_actions |= SNAKE_ACTION_FACE_WEST;
+                }
+
+                if (!prev_action_key_states->face_south && current_action_key_state.face_south) {
+                    *tick_actions |= SNAKE_ACTION_FACE_SOUTH;
+                }
+
+                if (!prev_action_key_states->face_east && current_action_key_state.face_east) {
+                    *tick_actions |= SNAKE_ACTION_FACE_EAST;
+                }
+
+                if (!prev_action_key_states->chomp && current_action_key_state.chomp) {
+                    *tick_actions |= SNAKE_ACTION_CHOMP;
+                }
+
+                // Constricting acts different, where you can hold it down.
+                if (current_action_key_state.constrict_left) {
+                    *tick_actions |= SNAKE_ACTION_CONSTRICT_LEFT;
+                }
+
+                if (current_action_key_state.constrict_right) {
+                    *tick_actions |= SNAKE_ACTION_CONSTRICT_RIGHT;
+                }
+
+                *prev_action_key_states = current_action_key_state;
             }
         }
 
@@ -1023,7 +1251,8 @@ int main(S32 argc, char** argv) {
                         if (server_receive_packets[i].header.type == PACKET_TYPE_LOBBY_ACTION &&
                             app_state == APP_STATE_LOBBY) {
                             for (S32 p = 0; p < MAX_SNAKE_COUNT; p++) {
-                                if (lobby_state.players[p].client_index == i) {
+                                if (lobby_state.players[p].type == LOBBY_PLAYER_TYPE_NETWORK &&
+                                    lobby_state.players[p].input_index == i) {
                                     lobby_state.actions[p] = *(LobbyAction*)server_receive_packets[i].payload;
                                     break;
                                 }
@@ -1032,7 +1261,8 @@ int main(S32 argc, char** argv) {
                                    app_state == APP_STATE_GAME) {
                             SnakeAction client_snake_action = *(SnakeAction*)server_receive_packets[i].payload;
                             for (S32 p = 0; p < MAX_SNAKE_COUNT; p++) {
-                                if (lobby_state.players[p].client_index == i) {
+                                if (lobby_state.players[p].type == LOBBY_PLAYER_TYPE_NETWORK &&
+                                    lobby_state.players[p].input_index == i) {
                                     action_buffer_add(server_game_state.action_buffers + p, client_snake_action);
                                     break;
                                 }
@@ -1070,7 +1300,8 @@ int main(S32 argc, char** argv) {
                             for (S32 p = 0; p < MAX_SNAKE_COUNT; p++) {
                                 if (lobby_state.players[p].state == LOBBY_PLAYER_STATE_NONE) {
                                     lobby_state.players[p].state = LOBBY_PLAYER_STATE_NOT_READY;
-                                    lobby_state.players[p].client_index = i;
+                                    lobby_state.players[p].type = LOBBY_PLAYER_TYPE_NETWORK;
+                                    lobby_state.players[p].input_index = i;
                                     lobby_state.players[p].snake_color =
                                         find_next_unique_snake_color(lobby_state.players[0].snake_color, &lobby_state);
 
@@ -1220,6 +1451,13 @@ int main(S32 argc, char** argv) {
         break;
     case SESSION_TYPE_SINGLE_PLAYER:
         break;
+    }
+
+    for (S32 c = 0; c < MAX_GAME_CONTROLLERS; c++) {
+        if (game_controllers[c] != NULL) {
+            SDL_GameControllerClose(game_controllers[c]);
+            game_controllers[c] = NULL;
+        }
     }
 
     net_shutdown();
