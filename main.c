@@ -638,7 +638,14 @@ bool app_lobby_update(AppStateLobby* lobby_state) {
     return all_ready;
 }
 
-size_t lobby_state_serialize(AppStateLobby* lobby_state, void* buffer, size_t buffer_size) {
+size_t lobby_state_serialize(AppStateLobby* lobby_state,
+                             bool enable_chomping,
+                             bool enable_constricting,
+                             S32 segment_health,
+                             S32 start_snake_length,
+                             S32 taco_count,
+                             void* buffer,
+                             size_t buffer_size) {
     size_t bytes_written = 0;
     assert(buffer_size >= (MAX_SNAKE_COUNT * (MAX_PLAYER_NAME_LEN + sizeof(lobby_state->players[0].state))));
     U8* buffer_ptr = buffer;
@@ -655,10 +662,38 @@ size_t lobby_state_serialize(AppStateLobby* lobby_state, void* buffer, size_t bu
         bytes_written += sizeof(lobby_state->players[i].snake_color);
         buffer_ptr += sizeof(lobby_state->players[i].snake_color);
     }
+
+    memcpy(buffer_ptr, &enable_chomping, sizeof(enable_chomping));
+    bytes_written += sizeof(enable_chomping);
+    buffer_ptr += sizeof(enable_chomping);
+
+    memcpy(buffer_ptr, &enable_constricting, sizeof(enable_constricting));
+    bytes_written += sizeof(enable_constricting);
+    buffer_ptr += sizeof(enable_constricting);
+
+    memcpy(buffer_ptr, &segment_health, sizeof(segment_health));
+    bytes_written += sizeof(segment_health);
+    buffer_ptr += sizeof(segment_health);
+
+    memcpy(buffer_ptr, &start_snake_length, sizeof(start_snake_length));
+    bytes_written += sizeof(start_snake_length);
+    buffer_ptr += sizeof(start_snake_length);
+
+    memcpy(buffer_ptr, &taco_count, sizeof(taco_count));
+    bytes_written += sizeof(taco_count);
+    buffer_ptr += sizeof(taco_count);
+
     return bytes_written;
 }
 
-size_t lobby_state_deserialize(void* buffer, size_t buffer_size, AppStateLobby* lobby_state) {
+size_t lobby_state_deserialize(void* buffer,
+                               size_t buffer_size,
+                               AppStateLobby* lobby_state,
+                               bool* enable_chomping,
+                               bool* enable_constricting,
+                               S32* segment_health,
+                               S32* start_snake_length,
+                               S32* taco_count) {
     assert(buffer_size >= (MAX_SNAKE_COUNT * (MAX_PLAYER_NAME_LEN + sizeof(lobby_state->players[0].state))));
     U8* buffer_ptr = buffer;
     size_t bytes_read = 0;
@@ -675,6 +710,27 @@ size_t lobby_state_deserialize(void* buffer, size_t buffer_size, AppStateLobby* 
         bytes_read += sizeof(lobby_state->players[i].snake_color);
         buffer_ptr += sizeof(lobby_state->players[i].snake_color);
     }
+
+    memcpy(enable_chomping, buffer_ptr, sizeof(*enable_chomping));
+    bytes_read += sizeof(*enable_chomping);
+    buffer_ptr += sizeof(*enable_chomping);
+
+    memcpy(enable_constricting, buffer_ptr, sizeof(*enable_constricting));
+    bytes_read += sizeof(*enable_constricting);
+    buffer_ptr += sizeof(*enable_constricting);
+
+    memcpy(segment_health, buffer_ptr, sizeof(*segment_health));
+    bytes_read += sizeof(*segment_health);
+    buffer_ptr += sizeof(*segment_health);
+
+    memcpy(start_snake_length, buffer_ptr, sizeof(*start_snake_length));
+    bytes_read += sizeof(*start_snake_length);
+    buffer_ptr += sizeof(*start_snake_length);
+
+    memcpy(taco_count, buffer_ptr, sizeof(*taco_count));
+    bytes_read += sizeof(*taco_count);
+    buffer_ptr += sizeof(*taco_count);
+
     return bytes_read;
 }
 
@@ -1102,6 +1158,7 @@ int main(S32 argc, char** argv) {
     };
 
     S32 cell_size = min_display_dimension / max_level_dimension;
+    printf("cell_size: %d\n", cell_size);
 
     int64_t time_since_tick_us = 0;
 
@@ -1385,7 +1442,12 @@ int main(S32 argc, char** argv) {
                     }
                     lobby_state_deserialize(client_receive_packet.payload,
                                             client_receive_packet.header.payload_size,
-                                            &lobby_state);
+                                            &lobby_state,
+                                            &ui_enable_chomping_checkbox.value,
+                                            &ui_enable_constricting_checkbox.value,
+                                            &ui_segment_health_slider.value,
+                                            &ui_snake_length_slider.value,
+                                            &ui_taco_count_slider.value);
 
                 } else if (client_receive_packet.header.type == PACKET_TYPE_LEVEL_STATE) {
                     if (app_state == APP_STATE_LOBBY) {
@@ -1443,7 +1505,9 @@ int main(S32 argc, char** argv) {
                             }
                         }
                     } else if (server_receive_packets[i].header.type == PACKET_TYPE_CLIENT_NAME) {
-                        printf("received client name: %s\n", server_receive_packets[i].payload);
+                        printf("received client name: %.*s\n",
+                               server_receive_packets[i].header.payload_size,
+                               server_receive_packets[i].payload);
                         for (S32 p = 0; p < MAX_SNAKE_COUNT; p++) {
                             if (lobby_state.players[p].type == LOBBY_PLAYER_TYPE_NETWORK &&
                                 lobby_state.players[p].input_index == i) {
@@ -1516,6 +1580,11 @@ int main(S32 argc, char** argv) {
                 } else if (app_state == APP_STATE_LOBBY) {
                     // Serialize game state
                     size_t msg_size = lobby_state_serialize(&lobby_state,
+                                                            ui_enable_chomping_checkbox.value,
+                                                            ui_enable_constricting_checkbox.value,
+                                                            ui_segment_health_slider.value,
+                                                            ui_snake_length_slider.value,
+                                                            ui_taco_count_slider.value,
                                                             net_msg_buffer,
                                                             net_msg_buffer_size);
 
@@ -1597,13 +1666,25 @@ int main(S32 argc, char** argv) {
             PF_RenderString(font, 480, 38, "Start Len: %d", ui_snake_length_slider.value);
             PF_RenderString(font, 720, 38, "Tacos: %d", ui_taco_count_slider.value);
 
-            ui_checkbox(&ui, &ui_mouse_state, &ui_enable_chomping_checkbox, renderer);
-            ui_checkbox(&ui, &ui_mouse_state, &ui_enable_constricting_checkbox, renderer);
-            ui_slider(&ui, &ui_mouse_state, &ui_segment_health_slider, renderer);
-            ui_slider(&ui, &ui_mouse_state, &ui_snake_length_slider, renderer);
-            ui_slider(&ui, &ui_mouse_state, &ui_taco_count_slider, renderer);
+            {
+                UIMouseState* mouse_state = &ui_mouse_state;
+                UIMouseState empty = {0};
 
-            S32 players_start_y = 3 * cell_size - 12;
+                // The client cannot modify the lobby ui, its readonly, so just always pass in an
+                // empty state.
+                if (session_type == SESSION_TYPE_CLIENT) {
+                    mouse_state = &empty;
+                }
+
+                ui_checkbox(&ui, mouse_state, &ui_enable_chomping_checkbox, renderer);
+                ui_checkbox(&ui, mouse_state, &ui_enable_constricting_checkbox, renderer);
+                ui_slider(&ui, mouse_state, &ui_segment_health_slider, renderer);
+                ui_slider(&ui, mouse_state, &ui_snake_length_slider, renderer);
+                ui_slider(&ui, mouse_state, &ui_taco_count_slider, renderer);
+            }
+
+            S32 lobby_cell_size = 40;
+            S32 players_start_y = 3 * lobby_cell_size - 12;
             S32 players_offset = 30;
 
             PF_RenderString(font, 3, players_start_y, "Players");
@@ -1614,7 +1695,7 @@ int main(S32 argc, char** argv) {
                     S32 name_pixel_width = (S32)(((name_len * font_state.char_width) + ((name_len - 1) * font_state.letter_spacing)) * font_state.scale);
                     PF_RenderString(font,
                                     130 - (name_pixel_width / 2),
-                                    players_start_y + players_offset + cell_size * 2 * i,
+                                    players_start_y + players_offset + lobby_cell_size * 2 * i,
                                     "%s",
                                     lobby_state.players[i].name);
 
@@ -1622,13 +1703,13 @@ int main(S32 argc, char** argv) {
                         PF_SetForeground(font, 0, 255, 0, 255);
                         PF_RenderString(font,
                                         260,
-                                        players_start_y + players_offset + (cell_size * 2 * i) + cell_size - 5,
+                                        players_start_y + players_offset + (lobby_cell_size * 2 * i) + lobby_cell_size - 5,
                                         "Ready");
                     } else {
                         PF_SetForeground(font, 255, 0, 0, 255);
                         PF_RenderString(font,
                                         260,
-                                        players_start_y + players_offset + (cell_size * 2 * i) + cell_size - 5,
+                                        players_start_y + players_offset + (lobby_cell_size * 2 * i) + lobby_cell_size - 5,
                                         "Not Ready");
                     }
 
@@ -1649,7 +1730,7 @@ int main(S32 argc, char** argv) {
                     snake.segments[3].x = 1;
                     snake.segments[3].y = (S16)(4 + (i * 2));
                     snake.segments[3].health = 3;
-                    snake_draw(renderer, snake_texture, &snake, cell_size, 3);
+                    snake_draw(renderer, snake_texture, &snake, lobby_cell_size, 3);
                     snake_destroy(&snake);
                 }
             }
