@@ -678,6 +678,31 @@ size_t lobby_state_deserialize(void* buffer, size_t buffer_size, AppStateLobby* 
     return bytes_read;
 }
 
+S32 lobby_find_network_player(AppStateLobby* lobby_state, S32 socket_index) {
+    S32 result = -1;
+    for (S32 p = 0; p < MAX_SNAKE_COUNT; p++) {
+        if (lobby_state->players[p].state != LOBBY_PLAYER_STATE_NONE &&
+            lobby_state->players[p].type == LOBBY_PLAYER_TYPE_NETWORK &&
+            lobby_state->players[p].input_index == socket_index) {
+            result = p;
+            break;
+        }
+    }
+    return result;
+}
+
+void lobby_remove_player(AppStateLobby* lobby_state, S32 player_index) {
+    assert(player_index >= 0 && player_index < MAX_SNAKE_COUNT);
+    lobby_state->players[player_index].state = LOBBY_PLAYER_STATE_NONE;
+    for (S32 p = player_index + 1; p < MAX_SNAKE_COUNT; p++) {
+        if (lobby_state->players[p].state != LOBBY_PLAYER_STATE_NONE) {
+            lobby_state->players[player_index] = lobby_state->players[p];
+            lobby_state->players[p].state = LOBBY_PLAYER_STATE_NONE;
+            break;
+        }
+    }
+}
+
 void app_server_update(AppState* app_state,
                        AppStateLobby* lobby_state,
                        AppStateGameServer* server_game_state,
@@ -735,9 +760,12 @@ void init_controller_for_player(SDL_GameController* game_controllers[MAX_GAME_CO
             if (next_available_lobby_player >= 0) {
                 lobby_state->players[next_available_lobby_player].state = LOBBY_PLAYER_STATE_NOT_READY;
                 lobby_state->players[next_available_lobby_player].type = LOBBY_PLAYER_TYPE_LOCAL_CONTROLLER;
-                lobby_state->players[next_available_lobby_player].snake_color = SNAKE_COLOR_YELLOW;
+                lobby_state->players[next_available_lobby_player].snake_color =
+                    find_next_unique_snake_color(lobby_state->players[0].snake_color, lobby_state);
                 lobby_state->players[next_available_lobby_player].input_index = c;
-                strncpy(lobby_state->players[1].name, "ServerCTPlayer", MAX_PLAYER_NAME_LEN);
+                strncpy(lobby_state->players[next_available_lobby_player].name,
+                        "ServerCTPlayer",
+                        MAX_PLAYER_NAME_LEN);
             } else {
                 fprintf(stderr, "No more space in lobby for another controller\n");
                 SDL_GameControllerClose(game_controllers[c]);
@@ -771,11 +799,12 @@ void close_controller_for_player(SDL_GameController* game_controllers[MAX_GAME_C
             for (S32 p = 0; p < MAX_SNAKE_COUNT; p++) {
                 if (lobby_state->players[p].type == LOBBY_PLAYER_TYPE_LOCAL_CONTROLLER &&
                     lobby_state->players[p].input_index == c) {
+
                     if (p == 0) {
                         lobby_state->players[p].type = LOBBY_PLAYER_TYPE_LOCAL_KEYBOARD;
                         lobby_state->players[p].input_index = -1;
                     } else {
-                        lobby_state->players[p].state = LOBBY_PLAYER_STATE_NONE;
+                        lobby_remove_player(lobby_state, p);
                     }
                     break;
                 }
@@ -801,32 +830,55 @@ void net_action_log(const char* timestamp_str,
     }
 }
 
+void handle_client_disconnect(NetSocket** server_client_sockets,
+                              AppStateLobby* lobby_state,
+                              S32 socket_index) {
+    S32 lobby_player_index = lobby_find_network_player(lobby_state, socket_index);
+    if (lobby_player_index >= 0) {
+        lobby_remove_player(lobby_state, lobby_player_index);
+    }
+
+    net_destroy_socket(server_client_sockets[socket_index]);
+    server_client_sockets[socket_index] = NULL;
+}
+
 int main(S32 argc, char** argv) {
     const char* port = NULL;
     const char* ip = NULL;
     const char* window_title = NULL;
+    const char* player_name = NULL;
 
     SessionType session_type = SESSION_TYPE_SINGLE_PLAYER;
-    if(argc > 1) {
-        if (strcmp(argv[1], "-s") == 0) {
+    for (S32 i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-s") == 0) {
             session_type = SESSION_TYPE_SERVER;
 
-            if (argc != 3) {
+            if (argc <= (i + 1)) {
                 puts("Expected port argument for server mode");
                 return EXIT_FAILURE;
             }
 
-            port = argv[2];
-        } else if (strcmp(argv[1], "-c") == 0) {
+            port = argv[i + 1];
+            i++;
+        } else if (strcmp(argv[i], "-c") == 0) {
             session_type = SESSION_TYPE_CLIENT;
 
-            if (argc != 4) {
+            if (argc <= (i + 2)) {
                 puts("Expected ip and port arguments for client mode");
                 return EXIT_FAILURE;
             }
 
-            ip = argv[2];
-            port = argv[3];
+            ip = argv[i + 1];
+            port = argv[i + 2];
+            i += 2;
+        } else if (strcmp(argv[i], "-n") == 0) {
+            if (argc <= (i + 1)) {
+                puts("Expected player name argument");
+                return EXIT_FAILURE;
+            }
+
+            player_name = argv[i + 1];
+            i++;
         } else {
             puts("Unexpected argument passed");
             return EXIT_FAILURE;
@@ -845,6 +897,8 @@ int main(S32 argc, char** argv) {
     NetSocket* client_socket = NULL; // Used by client to send and receive.
 
     NetSocket* server_client_sockets[MAX_SERVER_CLIENT_COUNT] = { 0 };
+    U16 server_sequence = 0;
+    U16 client_sequence = 0;
 
     // TODO: Only do this when doing networking
     const char* net_log_file_name = session_type == SESSION_TYPE_SERVER ?
@@ -879,6 +933,22 @@ int main(S32 argc, char** argv) {
 
         printf("Connected to %s:%s\n", ip, port);
         game = &client_game_state.game;
+
+        if (player_name) {
+            Packet packet = {
+                .header = {
+                    .type = PACKET_TYPE_CLIENT_NAME,
+                    .payload_size = (U16)(strnlen(player_name, MAX_PLAYER_NAME_LEN)),
+                    .sequence = client_sequence++
+                },
+                .payload = (U8*)player_name
+            };
+
+            printf("sending player name: %s\n", player_name);
+            if (!packet_send(client_socket, &packet)) {
+                fprintf(stderr, "failed to send entire header for snake action\n");
+            }
+        }
         break;
     }
     case SESSION_TYPE_SERVER: {
@@ -905,7 +975,11 @@ int main(S32 argc, char** argv) {
         lobby_state.players[0].type = LOBBY_PLAYER_TYPE_LOCAL_KEYBOARD;
         lobby_state.players[0].snake_color = SNAKE_COLOR_RED;
         lobby_state.players[0].input_index = -1;
-        strncpy(lobby_state.players[0].name, "ServerKBPlayer", MAX_PLAYER_NAME_LEN);
+        if (player_name) {
+            strncpy(lobby_state.players[0].name, player_name, MAX_PLAYER_NAME_LEN);
+        } else {
+            strncpy(lobby_state.players[0].name, "ServerKBPlayer", MAX_PLAYER_NAME_LEN);
+        }
     }
 
     game_init(game, LEVEL_WIDTH, LEVEL_HEIGHT, 6);
@@ -1034,8 +1108,6 @@ int main(S32 argc, char** argv) {
     size_t net_msg_buffer_size = 1024 * 1024;
     char* net_msg_buffer = (char*)malloc(net_msg_buffer_size);
 
-    U16 server_sequence = 0;
-    U16 client_sequence = 0;
     Packet client_receive_packet = {0};
     Packet server_receive_packets[MAX_SERVER_CLIENT_COUNT] = {0};
     PacketTransmissionState recv_game_state_state = {0};
@@ -1342,46 +1414,64 @@ int main(S32 argc, char** argv) {
             // Server recEive input from client, update, then send game state to client
             // TODO: receive multiple snake actions, handle the last one.
             for (S32 i = 0; i < MAX_SERVER_CLIENT_COUNT; i++) {
-                if (server_client_sockets[i] != NULL) {
-                    packet_receive(server_client_sockets[i],
-                                   &server_receive_packets[i],
-                                   &recv_snake_action_states[i]);
+                if (server_client_sockets[i] == NULL) {
+                    continue;
+                }
 
-                    if (recv_snake_action_states[i].stage == PACKET_PROGRESS_STAGE_COMPLETE) {
-                        if (server_receive_packets[i].header.type == PACKET_TYPE_LOBBY_ACTION &&
-                            app_state == APP_STATE_LOBBY) {
-                            for (S32 p = 0; p < MAX_SNAKE_COUNT; p++) {
-                                if (lobby_state.players[p].type == LOBBY_PLAYER_TYPE_NETWORK &&
-                                    lobby_state.players[p].input_index == i) {
-                                    lobby_state.actions[p] = *(LobbyAction*)server_receive_packets[i].payload;
-                                    break;
-                                }
-                            }
-                        } else if (server_receive_packets[i].header.type == PACKET_TYPE_SNAKE_ACTION &&
-                                   app_state == APP_STATE_GAME) {
-                            SnakeAction client_snake_action = *(SnakeAction*)server_receive_packets[i].payload;
-                            for (S32 p = 0; p < MAX_SNAKE_COUNT; p++) {
-                                if (lobby_state.players[p].type == LOBBY_PLAYER_TYPE_NETWORK &&
-                                    lobby_state.players[p].input_index == i) {
-                                    action_buffer_add(server_game_state.action_buffers + p, client_snake_action);
-                                    break;
-                                }
+                packet_receive(server_client_sockets[i],
+                               &server_receive_packets[i],
+                               &recv_snake_action_states[i]);
+
+                if (recv_snake_action_states[i].stage == PACKET_PROGRESS_STAGE_COMPLETE) {
+                    if (server_receive_packets[i].header.type == PACKET_TYPE_LOBBY_ACTION &&
+                        app_state == APP_STATE_LOBBY) {
+                        for (S32 p = 0; p < MAX_SNAKE_COUNT; p++) {
+                            if (lobby_state.players[p].type == LOBBY_PLAYER_TYPE_NETWORK &&
+                                lobby_state.players[p].input_index == i) {
+                                lobby_state.actions[p] = *(LobbyAction*)server_receive_packets[i].payload;
+                                break;
                             }
                         }
-
-                        // Resent packet state
-                        memset(&recv_snake_action_states[i], 0, sizeof(recv_snake_action_states[i]));
-                        free(server_receive_packets[i].payload);
-                        memset(&server_receive_packets[i], 0, sizeof(server_receive_packets[i]));
-                    } else if ( recv_snake_action_states[i].stage == PACKET_PROGRESS_STAGE_ERROR ) {
-                        if ( server_receive_packets[i].payload != NULL ) {
-                            free(server_receive_packets[i].payload);
+                    } else if (server_receive_packets[i].header.type == PACKET_TYPE_SNAKE_ACTION &&
+                               app_state == APP_STATE_GAME) {
+                        SnakeAction client_snake_action = *(SnakeAction*)server_receive_packets[i].payload;
+                        for (S32 p = 0; p < MAX_SNAKE_COUNT; p++) {
+                            if (lobby_state.players[p].type == LOBBY_PLAYER_TYPE_NETWORK &&
+                                lobby_state.players[p].input_index == i) {
+                                action_buffer_add(server_game_state.action_buffers + p, client_snake_action);
+                                break;
+                            }
                         }
-                        memset(&server_receive_packets[i], 0, sizeof(server_receive_packets[i]));
-                        fputs(net_get_error(), stderr);
-                        net_destroy_socket(server_client_sockets[i]);
-                        server_client_sockets[i] = NULL;
+                    } else if (server_receive_packets[i].header.type == PACKET_TYPE_CLIENT_NAME) {
+                        printf("received client name: %s\n", server_receive_packets[i].payload);
+                        for (S32 p = 0; p < MAX_SNAKE_COUNT; p++) {
+                            if (lobby_state.players[p].type == LOBBY_PLAYER_TYPE_NETWORK &&
+                                lobby_state.players[p].input_index == i) {
+                                size_t name_len = server_receive_packets[i].header.payload_size;
+                                if (name_len >= MAX_PLAYER_NAME_LEN) {
+                                    name_len = MAX_PLAYER_NAME_LEN - 1;
+                                }
+                                strncpy(lobby_state.players[p].name,
+                                        (char*)(server_receive_packets[i].payload),
+                                        name_len);
+                                lobby_state.players[p].name[name_len] = 0;
+                                break;
+                            }
+                        }
                     }
+
+                    // Resent packet state
+                    memset(&recv_snake_action_states[i], 0, sizeof(recv_snake_action_states[i]));
+                    free(server_receive_packets[i].payload);
+                    memset(&server_receive_packets[i], 0, sizeof(server_receive_packets[i]));
+                } else if ( recv_snake_action_states[i].stage == PACKET_PROGRESS_STAGE_ERROR ) {
+                    if ( server_receive_packets[i].payload != NULL ) {
+                        free(server_receive_packets[i].payload);
+                    }
+                    memset(&server_receive_packets[i], 0, sizeof(server_receive_packets[i]));
+                    memset(&recv_snake_action_states[i], 0, sizeof(recv_snake_action_states[i]));
+                    fputs(net_get_error(), stderr);
+                    handle_client_disconnect(server_client_sockets, &lobby_state, i);
                 }
             }
 
@@ -1414,7 +1504,7 @@ int main(S32 argc, char** argv) {
                                     lobby_state.players[p].snake_color =
                                         find_next_unique_snake_color(lobby_state.players[0].snake_color, &lobby_state);
 
-                                    snprintf(lobby_state.players[p].name, MAX_PLAYER_NAME_LEN, "ClientPlayer_%d", p);
+                                    snprintf(lobby_state.players[p].name, MAX_PLAYER_NAME_LEN, "NetPlayer_%d", p);
                                     printf("assigning connected client %d to player %d\n", i, p);
                                     break;
                                 }
@@ -1441,6 +1531,7 @@ int main(S32 argc, char** argv) {
 
                     if (!packet_send(server_client_sockets[i], &packet)) {
                         printf("failed to send lobby state for tick: %d\n", __tick);
+                        handle_client_disconnect(server_client_sockets, &lobby_state, i);
                     }
                 } else if (app_state == APP_STATE_GAME) {
                     // Serialize game state
@@ -1460,6 +1551,7 @@ int main(S32 argc, char** argv) {
 
                     if (!packet_send(server_client_sockets[i], &packet)) {
                         printf("failed to send game state for tick: %d\n", __tick);
+                        handle_client_disconnect(server_client_sockets, &lobby_state, i);
                     }
                 }
             }
@@ -1493,9 +1585,10 @@ int main(S32 argc, char** argv) {
 
         // Draw level
         if (app_state == APP_STATE_LOBBY) {
-
             PF_SetForeground(font, 255, 255, 255, 255);
             PF_SetScale(font, font_scale);
+
+            PF_FontState font_state = PF_GetState(font);
 
             PF_RenderString(font, 3, 6, "Settings");
             PF_RenderString(font, 42, 38, "Chomping");
@@ -1503,6 +1596,7 @@ int main(S32 argc, char** argv) {
             PF_RenderString(font, 240, 38, "Segment HP: %d", ui_segment_health_slider.value);
             PF_RenderString(font, 480, 38, "Start Len: %d", ui_snake_length_slider.value);
             PF_RenderString(font, 720, 38, "Tacos: %d", ui_taco_count_slider.value);
+
             ui_checkbox(&ui, &ui_mouse_state, &ui_enable_chomping_checkbox, renderer);
             ui_checkbox(&ui, &ui_mouse_state, &ui_enable_constricting_checkbox, renderer);
             ui_slider(&ui, &ui_mouse_state, &ui_segment_health_slider, renderer);
@@ -1516,8 +1610,10 @@ int main(S32 argc, char** argv) {
             for (S32 i = 0; i < MAX_SNAKE_COUNT; i++) {
                 if (lobby_state.players[i].state != LOBBY_PLAYER_STATE_NONE) {
                     PF_SetForeground(font, 255, 255, 255, 255);
+                    S32 name_len = (S32)(strnlen(lobby_state.players[i].name, MAX_PLAYER_NAME_LEN));
+                    S32 name_pixel_width = (S32)(((name_len * font_state.char_width) + ((name_len - 1) * font_state.letter_spacing)) * font_state.scale);
                     PF_RenderString(font,
-                                    30,
+                                    130 - (name_pixel_width / 2),
                                     players_start_y + players_offset + cell_size * 2 * i,
                                     "%s",
                                     lobby_state.players[i].name);
@@ -1525,20 +1621,20 @@ int main(S32 argc, char** argv) {
                     if (lobby_state.players[i].state == LOBBY_PLAYER_STATE_READY) {
                         PF_SetForeground(font, 0, 255, 0, 255);
                         PF_RenderString(font,
-                                        270,
-                                        players_start_y + players_offset + (cell_size * 2 * i) + cell_size - 10,
+                                        260,
+                                        players_start_y + players_offset + (cell_size * 2 * i) + cell_size - 5,
                                         "Ready");
                     } else {
                         PF_SetForeground(font, 255, 0, 0, 255);
                         PF_RenderString(font,
-                                        270,
-                                        players_start_y + players_offset + (cell_size * 2 * i) + cell_size - 10,
+                                        260,
+                                        players_start_y + players_offset + (cell_size * 2 * i) + cell_size - 5,
                                         "Not Ready");
                     }
 
                     Snake snake = {0};
                     snake_init(&snake, 5);
-                    snake.length = 3;
+                    snake.length = 4;
                     snake.direction = DIRECTION_EAST;
                     snake.color = lobby_state.players[i].snake_color;
                     snake.segments[0].x = 4;
@@ -1550,6 +1646,9 @@ int main(S32 argc, char** argv) {
                     snake.segments[2].x = 2;
                     snake.segments[2].y = (S16)(4 + (i * 2));
                     snake.segments[2].health = 3;
+                    snake.segments[3].x = 1;
+                    snake.segments[3].y = (S16)(4 + (i * 2));
+                    snake.segments[3].health = 3;
                     snake_draw(renderer, snake_texture, &snake, cell_size, 3);
                     snake_destroy(&snake);
                 }

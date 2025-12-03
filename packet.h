@@ -13,8 +13,8 @@ enum {
     PACKET_TYPE_ACKNOWLEDGE,
     PACKET_TYPE_LOBBY_STATE,
     PACKET_TYPE_LOBBY_ACTION,
+    PACKET_TYPE_CLIENT_NAME,
 };
-
 
 typedef U8 PacketProgressStage;
 enum {
