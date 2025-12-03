@@ -9,7 +9,6 @@
 
 #define INITIAL_SNAKE_LEN 5
 #define ACTION_BUF_SIZE 2
-#define SNAKE_SEGMENT_MAX_HEALTH 3
 #define SNAKE_CHOMP_COOLDOWN 10
 #define SNAKE_KILL_DAMAGE_COOLDOWN 4
 #define CHOMP_POINT_CHECK_COUNT 3
@@ -91,12 +90,18 @@ typedef struct {
 bool snake_init(Snake* snake, S32 capacity);
 void snake_destroy(Snake* snake);
 
-void snake_spawn(Snake* snake, S16 x, S16 y, Direction direction);
+void snake_spawn(Snake* snake,
+                 S16 x,
+                 S16 y,
+                 Direction direction,
+                 S32 length,
+                 S8 segment_health);
 void snake_turn(Snake* snake, Direction direction);
 void snake_draw(SDL_Renderer* renderer,
                 SDL_Texture* texture,
                 Snake* snake,
-                S32 cell_size);
+                S32 cell_size,
+                S32 max_segment_health);
 
 size_t snake_serialize(const Snake* snake, void * buffer, size_t buffer_size);
 size_t snake_deserialize(void * buffer, size_t size, Snake* out);

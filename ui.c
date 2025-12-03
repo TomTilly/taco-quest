@@ -174,7 +174,7 @@ void ui_slider(UserInterface* ui,
         slider->active = true;
     }
 
-    S32 slider_range = (slider->max - slider->min) + 1;
+    S32 slider_range = slider->max - slider->min;
 
     if (slider->active) {
         if (!mouse_state->clicked) {
@@ -189,12 +189,12 @@ void ui_slider(UserInterface* ui,
             }
 
             float slider_scale = (float)(mouse_x) / (float)(slider->pixel_width);
-            slider->value = (S32)(slider_scale * (float)(slider_range));
+            slider->value = slider->min + (S32)(slider_scale * (float)(slider_range));
         }
     }
 
     // Slider
-    float slider_scale = (S32)(slider->value) / (float)(slider_range);
+    float slider_scale = (S32)(slider->value - slider->min) / (float)(slider_range);
     float slider_pixel = (float)(slider->pixel_width) * slider_scale;
     S32 slider_x = slider->x + (S32)(slider_pixel);
     SDL_Rect slider_rect = {

@@ -13,23 +13,28 @@ bool snake_init(Snake* snake, int32_t capacity) {
     return true;
 }
 
-SnakeSegment snake_init_segment(S16 x, S16 y) {
+SnakeSegment snake_init_segment(S16 x, S16 y, S8 segment_health) {
     return (SnakeSegment){
         .x = x,
         .y = y,
-        .health = SNAKE_SEGMENT_MAX_HEALTH
+        .health = segment_health
     };
 }
 
-void snake_spawn(Snake* snake, S16 x, S16 y, Direction direction) {
-    snake->length = INITIAL_SNAKE_LEN;
+void snake_spawn(Snake* snake,
+                 S16 x,
+                 S16 y,
+                 Direction direction,
+                 S32 length,
+                 S8 segment_health) {
+    snake->length = length;
     snake->direction = direction;
     snake->chomp_cooldown = 0;
     snake->kill_damage_cooldown = 0;
     snake->life_state = SNAKE_LIFE_STATE_ALIVE;
 
     for (int i = 0; i < snake->length; i++) {
-        snake->segments[i] = snake_init_segment(x, y);
+        snake->segments[i] = snake_init_segment(x, y, segment_health);
     }
 }
 
@@ -45,7 +50,8 @@ void snake_turn(Snake* snake, Direction direction) {
 void snake_draw(SDL_Renderer* renderer,
                 SDL_Texture* texture,
                 Snake* snake,
-                S32 cell_size) {
+                S32 cell_size,
+                S32 max_segment_health) {
     int tail_index = snake->length - 1;
     for (int i = 0; i < snake->length; i++) {
         SDL_Rect dest_rect = {
@@ -124,7 +130,12 @@ void snake_draw(SDL_Renderer* renderer,
             }
         }
 
-        source_rect.y += (2 * (SNAKE_SEGMENT_MAX_HEALTH - snake->segments[i].health) * source_rect.h);
+        S32 health_frame = 0;
+        if (snake->segments[i].health < max_segment_health) {
+            health_frame = 2 - (S32)(((float)(snake->segments[i].health) / (float)(max_segment_health)) * 2.0);
+        }
+
+        source_rect.y += (2 * health_frame * source_rect.h);
 
         U8 hue = snake->chomp_cooldown ? 128 : 255;
 

@@ -260,7 +260,7 @@ void _snake_move(Snake* snake, Game* game) {
             snake->segments[i] = snake->segments[i - 1];
         }
         // The new segment has max health.
-        snake->segments[1].health = SNAKE_SEGMENT_MAX_HEALTH;
+        snake->segments[1].health = snake->segments[0].health;
         // The head is moved into the position where the taco was.
         snake->segments[0].x = (S16)(new_snake_x);
         snake->segments[0].y = (S16)(new_snake_y);

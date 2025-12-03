@@ -136,7 +136,12 @@ char* get_timestamp(void) {
     return buff;
 }
 
-void reset_game(Game* game, AppStateLobby* lobby_state) {
+void reset_game(Game* game,
+                AppStateLobby* lobby_state,
+                S32 starting_snake_length,
+                S32 segement_health,
+                S32 taco_count) {
+    game->max_taco_count = taco_count;
     Level* level = &game->level;
 
     S32 snake_count = 0;
@@ -154,13 +159,17 @@ void reset_game(Game* game, AppStateLobby* lobby_state) {
     snake_spawn(game->snakes + 0,
                 3,
                 2,
-                DIRECTION_EAST);
+                DIRECTION_EAST,
+                starting_snake_length,
+                (S8)(segement_health));
     game->snakes[0].color = lobby_state->players[0].snake_color;
 
     snake_spawn(game->snakes + 1,
                 (S16)(level->width - 3),
                 2,
-                DIRECTION_SOUTH);
+                DIRECTION_SOUTH,
+                starting_snake_length,
+                (S8)(segement_health));
     if (snake_count > 1) {
         game->snakes[1].color = lobby_state->players[1].snake_color;
     } else {
@@ -171,7 +180,9 @@ void reset_game(Game* game, AppStateLobby* lobby_state) {
         snake_spawn(game->snakes + 2,
                     (S16)(level->width - 2),
                     (S16)(level->height - 3),
-                    DIRECTION_WEST);
+                    DIRECTION_WEST,
+                    starting_snake_length,
+                    (S8)(segement_health));
         game->snakes[2].color = lobby_state->players[2].snake_color;
     }
 
@@ -179,7 +190,9 @@ void reset_game(Game* game, AppStateLobby* lobby_state) {
         snake_spawn(game->snakes + 3,
                     3,
                     (S16)(level->height - 3),
-                    DIRECTION_EAST);
+                    DIRECTION_EAST,
+                    starting_snake_length,
+                    (S8)(segement_health));
         game->snakes[3].color = lobby_state->players[3].snake_color;
     }
 
@@ -301,7 +314,11 @@ void add_snake_action_from_keystate(const U8* keyboard_state, ActionKeyState* pr
     *prev_action_key_state = current_action_key_state;
 }
 
-bool draw_game(Game* game, SDL_Renderer* renderer, SDL_Texture* snake_texture, S32 cell_size) {
+bool draw_game(Game* game,
+               SDL_Renderer* renderer,
+               SDL_Texture* snake_texture,
+               S32 cell_size,
+               S32 max_segment_health) {
     // draw level
     for(S32 y = 0; y < game->level.height; y++) {
         for(S32 x = 0; x < game->level.width; x++) {
@@ -355,7 +372,7 @@ bool draw_game(Game* game, SDL_Renderer* renderer, SDL_Texture* snake_texture, S
 
     // draw snakes
     for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
-        snake_draw(renderer, snake_texture, game->snakes + s, cell_size);
+        snake_draw(renderer, snake_texture, game->snakes + s, cell_size, max_segment_health);
     }
 
     return true;
@@ -523,7 +540,7 @@ void app_game_server_handle_mouse(AppStateGameServer* app_game_server, int mouse
                 snake->length++;
                 snake->segments[new_index].x = (S16)(cell_x);
                 snake->segments[new_index].y = (S16)(cell_y);
-                snake->segments[new_index].health = SNAKE_SEGMENT_MAX_HEALTH;
+                snake->segments[new_index].health = snake->segments[0].health;
             }
             break;
         }
@@ -538,7 +555,11 @@ void app_game_server_handle_mouse(AppStateGameServer* app_game_server, int mouse
 }
 
 // returns whether or not a tick occurred.
-void app_game_server_update(AppStateGameServer* app_game_server, bool should_tick, S64 time_since_update_us) {
+void app_game_server_update(AppStateGameServer* app_game_server,
+                            bool should_tick,
+                            S64 time_since_update_us,
+                            bool enable_chomping,
+                            bool enable_constricting) {
     for (S32 i = 0; i < MAX_SNAKE_COUNT; i++) {
         if (app_game_server->tick_actions[i] != SNAKE_ACTION_NONE) {
             action_buffer_add(app_game_server->action_buffers + i, app_game_server->tick_actions[i]);
@@ -556,6 +577,12 @@ void app_game_server_update(AppStateGameServer* app_game_server, bool should_tic
         SnakeAction snake_actions[MAX_SNAKE_COUNT];
         for (S32 i = 0; i < MAX_SNAKE_COUNT; i++) {
             snake_actions[i] = action_buffer_remove(&app_game_server->action_buffers[i]);
+            if (!enable_chomping) {
+                snake_actions[i] &= ~SNAKE_ACTION_CHOMP;
+            }
+            if (!enable_constricting) {
+                snake_actions[i] &= ~(SNAKE_ACTION_CONSTRICT_LEFT | SNAKE_ACTION_CONSTRICT_RIGHT);
+            }
         }
         game_update(&app_game_server->game, snake_actions);
     }
@@ -654,15 +681,28 @@ void app_server_update(AppState* app_state,
                        AppStateLobby* lobby_state,
                        AppStateGameServer* server_game_state,
                        bool should_tick,
-                       S64 time_since_last_frame_us) {
+                       S64 time_since_last_frame_us,
+                       S32 starting_snake_length,
+                       S32 segment_health,
+                       S32 max_taco_count,
+                       bool enable_chomping,
+                       bool enable_constricting) {
     if (*app_state == APP_STATE_LOBBY) {
         if (app_lobby_update(lobby_state)) {
             *app_state = APP_STATE_GAME;
             server_game_state->game.wait_to_start_ms = 3000;
-            reset_game(&server_game_state->game, lobby_state);
+            reset_game(&server_game_state->game,
+                       lobby_state,
+                       starting_snake_length,
+                       segment_health,
+                       max_taco_count);
         }
     } else if (*app_state == APP_STATE_GAME) {
-        app_game_server_update(server_game_state, should_tick, time_since_last_frame_us);
+        app_game_server_update(server_game_state,
+                               should_tick,
+                               time_since_last_frame_us,
+                               enable_chomping,
+                               enable_constricting);
     }
 }
 
@@ -868,7 +908,7 @@ int main(S32 argc, char** argv) {
     }
 
     game_init(game, LEVEL_WIDTH, LEVEL_HEIGHT, 6);
-    reset_game(game, &lobby_state);
+    reset_game(game, &lobby_state, 5, 6, 3);
 
     int rc = SDL_Init(SDL_INIT_EVERYTHING);
     if (rc < 0) {
@@ -956,16 +996,35 @@ int main(S32 argc, char** argv) {
     ui_create(&ui, font);
 
     UIMouseState ui_mouse_state = {0};
-    UICheckBox ui_test_checkbox = {100, 100};
-    UISlider ui_test_slider = {.x = 100, .y = 150, .pixel_width = 200, .value = 3, .min = 1, .max = 10, .active = false};
-    UIDropDown ui_test_drop_down = {100, 200};
-    ui_test_drop_down.options = malloc(4 * sizeof(char*));
-    ui_test_drop_down.option_count = 4;
 
-    ui_test_drop_down.options[0] = _strdup("tacos");
-    ui_test_drop_down.options[1] = _strdup("burritos");
-    ui_test_drop_down.options[2] = _strdup("quesadillas");
-    ui_test_drop_down.options[3] = _strdup("churros");
+    UICheckBox ui_enable_chomping_checkbox = {15, 35, true};
+    UICheckBox ui_enable_constricting_checkbox = {15, 60, true};
+    UISlider ui_segment_health_slider = {
+        .x = 260,
+        .y = 60,
+        .pixel_width = 150,
+        .value = 3,
+        .min = 1,
+        .max = 10
+    };
+
+    UISlider ui_snake_length_slider = {
+        .x = 500,
+        .y = 60,
+        .pixel_width = 150,
+        .value = 5,
+        .min = 1,
+        .max = 100
+    };
+
+    UISlider ui_taco_count_slider = {
+        .x = 740,
+        .y = 60,
+        .pixel_width = 150,
+        .value = 5,
+        .min = 1,
+        .max = 100
+    };
 
     S32 cell_size = min_display_dimension / max_level_dimension;
 
@@ -1326,7 +1385,16 @@ int main(S32 argc, char** argv) {
             }
 
             // TODO: Consolidate with SINGLE code path
-            app_server_update(&app_state, &lobby_state, &server_game_state, should_tick, time_since_last_frame_us);
+            app_server_update(&app_state,
+                              &lobby_state,
+                              &server_game_state,
+                              should_tick,
+                              time_since_last_frame_us,
+                              ui_snake_length_slider.value,
+                              ui_segment_health_slider.value,
+                              ui_taco_count_slider.value,
+                              ui_enable_chomping_checkbox.value,
+                              ui_enable_constricting_checkbox.value);
             if (!should_send_state) {
                 break;
             }
@@ -1398,7 +1466,16 @@ int main(S32 argc, char** argv) {
             break;
         }
         case SESSION_TYPE_SINGLE_PLAYER: {
-            app_server_update(&app_state, &lobby_state, &server_game_state, should_tick, time_since_last_frame_us);
+            app_server_update(&app_state,
+                              &lobby_state,
+                              &server_game_state,
+                              should_tick,
+                              time_since_last_frame_us,
+                              ui_snake_length_slider.value,
+                              ui_segment_health_slider.value,
+                              ui_taco_count_slider.value,
+                              ui_enable_chomping_checkbox.value,
+                              ui_enable_constricting_checkbox.value);
             break;
         }
         }
@@ -1415,15 +1492,30 @@ int main(S32 argc, char** argv) {
 
         // Draw level
         if (app_state == APP_STATE_LOBBY) {
+
             PF_SetForeground(font, 255, 255, 255, 255);
             PF_SetScale(font, font_scale);
-            PF_RenderString(font, 0, 0, "Lobby");
             PF_FontState font_state = PF_GetState(font);
             S32 font_height = (S32)(font_state.char_height * font_state.scale);
+
+            PF_RenderString(font, 3, 6, "Settings");
+            PF_RenderString(font, 42, 38, "Chomping");
+            PF_RenderString(font, 42, 64, "Constricting");
+            PF_RenderString(font, 240, 38, "Segment HP: %d", ui_segment_health_slider.value);
+            PF_RenderString(font, 480, 38, "Start Len: %d", ui_snake_length_slider.value);
+            PF_RenderString(font, 720, 38, "Tacos: %d", ui_taco_count_slider.value);
+            ui_checkbox(&ui, &ui_mouse_state, &ui_enable_chomping_checkbox, renderer);
+            ui_checkbox(&ui, &ui_mouse_state, &ui_enable_constricting_checkbox, renderer);
+            ui_slider(&ui, &ui_mouse_state, &ui_segment_health_slider, renderer);
+            ui_slider(&ui, &ui_mouse_state, &ui_snake_length_slider, renderer);
+            ui_slider(&ui, &ui_mouse_state, &ui_taco_count_slider, renderer);
+
+            S32 players_start_y = 6 * font_height;
+            PF_RenderString(font, 3, players_start_y, "Players");
             for (S32 i = 0; i < MAX_SNAKE_COUNT; i++) {
                 if (lobby_state.players[i].state != LOBBY_PLAYER_STATE_NONE) {
-                    PF_RenderString(font, (S32)(font_state.char_width * font_state.scale), font_height * (i + 2),
-                                    "Player %d: %s Color: %s Ready: %s",
+                    PF_RenderString(font, (S32)(font_state.char_width * font_state.scale), players_start_y + font_height * (i + 2),
+                                    "%d: %s Color: %s Ready: %s",
                                     i + 1,
                                     lobby_state.players[i].name,
                                     snake_color_string(lobby_state.players[i].snake_color),
@@ -1431,11 +1523,8 @@ int main(S32 argc, char** argv) {
                 }
             }
 
-            ui_checkbox(&ui, &ui_mouse_state, &ui_test_checkbox, renderer);
-            ui_slider(&ui, &ui_mouse_state, &ui_test_slider, renderer);
-            ui_dropdown(&ui, &ui_mouse_state, &ui_test_drop_down, renderer);
         } else if (app_state == APP_STATE_GAME) {
-            if (!draw_game(game, renderer, snake_texture, cell_size)) {
+            if (!draw_game(game, renderer, snake_texture, cell_size, ui_segment_health_slider.value)) {
                 return EXIT_FAILURE;
             }
 
