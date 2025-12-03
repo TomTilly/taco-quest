@@ -13,6 +13,7 @@
 #include "network.h"
 #include "packet.h"
 #include "pixelfont.h"
+#include "ui.h"
 
 #define MS_TO_US(ms) ((ms) * 1000)
 #define GAME_SIMULATE_TIME_INTERVAL_US MS_TO_US(175) // default = 150
@@ -951,6 +952,21 @@ int main(S32 argc, char** argv) {
     SDL_GameController* game_controllers[MAX_GAME_CONTROLLERS];
     memset(game_controllers, 0, sizeof(game_controllers[0]) * MAX_GAME_CONTROLLERS);
 
+    UserInterface ui = {0};
+    ui_create(&ui, font);
+
+    UIMouseState ui_mouse_state = {0};
+    UICheckBox ui_test_checkbox = {100, 100};
+    UISlider ui_test_slider = {.x = 100, .y = 150, .pixel_width = 200, .value = 3, .min = 1, .max = 10, .active = false};
+    UIDropDown ui_test_drop_down = {100, 200};
+    ui_test_drop_down.options = malloc(4 * sizeof(char*));
+    ui_test_drop_down.option_count = 4;
+
+    ui_test_drop_down.options[0] = _strdup("tacos");
+    ui_test_drop_down.options[1] = _strdup("burritos");
+    ui_test_drop_down.options[2] = _strdup("quesadillas");
+    ui_test_drop_down.options[3] = _strdup("churros");
+
     S32 cell_size = min_display_dimension / max_level_dimension;
 
     int64_t time_since_tick_us = 0;
@@ -974,6 +990,8 @@ int main(S32 argc, char** argv) {
         int64_t time_since_last_frame_us = microseconds_between_timestamps(&last_frame_timestamp, &current_frame_timestamp);
         time_since_tick_us += time_since_last_frame_us;
         last_frame_timestamp = current_frame_timestamp;
+
+        ui_mouse_state.prev_clicked = ui_mouse_state.clicked;
 
         // Clear actions
         for (S32 i = 0; i < MAX_SNAKE_COUNT; i++) {
@@ -1006,6 +1024,28 @@ int main(S32 argc, char** argv) {
                                                event.cdevice.which,
                                                &lobby_state,
                                                session_type);
+                }
+                break;
+            case SDL_MOUSEMOTION:
+                ui_mouse_state.x = event.button.x;
+                ui_mouse_state.y = event.button.y;
+                break;
+            case SDL_MOUSEBUTTONDOWN:
+                switch (event.button.button) {
+                case SDL_BUTTON_LEFT:
+                    ui_mouse_state.clicked = true;
+                    break;
+                default:
+                    break;
+                }
+                break;
+            case SDL_MOUSEBUTTONUP:
+                switch (event.button.button) {
+                case SDL_BUTTON_LEFT:
+                    ui_mouse_state.clicked = false;
+                    break;
+                default:
+                    break;
                 }
                 break;
             default:
@@ -1390,6 +1430,10 @@ int main(S32 argc, char** argv) {
                                     lobby_state.players[i].state == LOBBY_PLAYER_STATE_READY ? "Yes" : "No");
                 }
             }
+
+            ui_checkbox(&ui, &ui_mouse_state, &ui_test_checkbox, renderer);
+            ui_slider(&ui, &ui_mouse_state, &ui_test_slider, renderer);
+            ui_dropdown(&ui, &ui_mouse_state, &ui_test_drop_down, renderer);
         } else if (app_state == APP_STATE_GAME) {
             if (!draw_game(game, renderer, snake_texture, cell_size)) {
                 return EXIT_FAILURE;
@@ -1462,6 +1506,7 @@ int main(S32 argc, char** argv) {
 
     net_shutdown();
     free(net_msg_buffer);
+    PF_DestroyFont(font);
     game_destroy(game);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
