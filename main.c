@@ -239,7 +239,8 @@ SnakeColor find_next_unique_snake_color(SnakeColor starting_color, AppStateLobby
     while(result != starting_color) {
         bool matches_another = false;
         for (S32 p = 0; p < MAX_SNAKE_COUNT; p++) {
-            if (lobby_state->players[p].snake_color == result) {
+            if (lobby_state->players[p].state != LOBBY_PLAYER_STATE_NONE &&
+                lobby_state->players[p].snake_color == result) {
                 matches_another = true;
             }
         }
@@ -1495,8 +1496,6 @@ int main(S32 argc, char** argv) {
 
             PF_SetForeground(font, 255, 255, 255, 255);
             PF_SetScale(font, font_scale);
-            PF_FontState font_state = PF_GetState(font);
-            S32 font_height = (S32)(font_state.char_height * font_state.scale);
 
             PF_RenderString(font, 3, 6, "Settings");
             PF_RenderString(font, 42, 38, "Chomping");
@@ -1510,18 +1509,52 @@ int main(S32 argc, char** argv) {
             ui_slider(&ui, &ui_mouse_state, &ui_snake_length_slider, renderer);
             ui_slider(&ui, &ui_mouse_state, &ui_taco_count_slider, renderer);
 
-            S32 players_start_y = 6 * font_height;
+            S32 players_start_y = 3 * cell_size - 12;
+            S32 players_offset = 30;
+
             PF_RenderString(font, 3, players_start_y, "Players");
             for (S32 i = 0; i < MAX_SNAKE_COUNT; i++) {
                 if (lobby_state.players[i].state != LOBBY_PLAYER_STATE_NONE) {
-                    PF_RenderString(font, (S32)(font_state.char_width * font_state.scale), players_start_y + font_height * (i + 2),
-                                    "%d: %s Color: %s Ready: %s",
-                                    i + 1,
-                                    lobby_state.players[i].name,
-                                    snake_color_string(lobby_state.players[i].snake_color),
-                                    lobby_state.players[i].state == LOBBY_PLAYER_STATE_READY ? "Yes" : "No");
+                    PF_SetForeground(font, 255, 255, 255, 255);
+                    PF_RenderString(font,
+                                    30,
+                                    players_start_y + players_offset + cell_size * 2 * i,
+                                    "%s",
+                                    lobby_state.players[i].name);
+
+                    if (lobby_state.players[i].state == LOBBY_PLAYER_STATE_READY) {
+                        PF_SetForeground(font, 0, 255, 0, 255);
+                        PF_RenderString(font,
+                                        270,
+                                        players_start_y + players_offset + (cell_size * 2 * i) + cell_size - 10,
+                                        "Ready");
+                    } else {
+                        PF_SetForeground(font, 255, 0, 0, 255);
+                        PF_RenderString(font,
+                                        270,
+                                        players_start_y + players_offset + (cell_size * 2 * i) + cell_size - 10,
+                                        "Not Ready");
+                    }
+
+                    Snake snake = {0};
+                    snake_init(&snake, 5);
+                    snake.length = 3;
+                    snake.direction = DIRECTION_EAST;
+                    snake.color = lobby_state.players[i].snake_color;
+                    snake.segments[0].x = 4;
+                    snake.segments[0].y = (S16)(4 + (i * 2));
+                    snake.segments[0].health = 3;
+                    snake.segments[1].x = 3;
+                    snake.segments[1].y = (S16)(4 + (i * 2));
+                    snake.segments[1].health = 3;
+                    snake.segments[2].x = 2;
+                    snake.segments[2].y = (S16)(4 + (i * 2));
+                    snake.segments[2].health = 3;
+                    snake_draw(renderer, snake_texture, &snake, cell_size, 3);
+                    snake_destroy(&snake);
                 }
             }
+
 
         } else if (app_state == APP_STATE_GAME) {
             if (!draw_game(game, renderer, snake_texture, cell_size, ui_segment_health_slider.value)) {
