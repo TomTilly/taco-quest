@@ -52,6 +52,8 @@ typedef struct {
     Level level;
     Snake snakes[MAX_SNAKE_COUNT];
     GameState state;
+    bool head_invincible;
+    bool zero_taco_respawn;
     S32 max_taco_count;
     S32 wait_to_start_ms;
 } Game;

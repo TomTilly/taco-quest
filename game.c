@@ -125,7 +125,7 @@ void _print_game(Game* game) {
 
 void _snake_chomp_segment(Game* game, SnakeCollision* snake_collision) {
     // The head is invincible ! Constricting is the only way to kill.
-    if (snake_collision->segment_index == 0) {
+    if (game->head_invincible && snake_collision->segment_index == 0) {
         return;
     }
 
@@ -138,6 +138,9 @@ void _snake_chomp_segment(Game* game, SnakeCollision* snake_collision) {
             level_set_cell(&game->level, segment->x, segment->y, CELL_TYPE_TACO);
         }
         snake->length = snake_collision->segment_index;
+        if (snake->length == 0) {
+            snake->life_state = SNAKE_LIFE_STATE_DEAD;
+        }
     }
 }
 
@@ -1704,8 +1707,10 @@ void game_update(Game* game, SnakeAction* snake_actions) {
     }
 
     S32 taco_count = game_count_tacos(game);
-    for (size_t i = taco_count; i < (size_t)game->max_taco_count; i++) {
-        game_spawn_taco(game);
+    if ((game->zero_taco_respawn && taco_count == 0) || !game->zero_taco_respawn) {
+        for (size_t i = taco_count; i < (size_t)game->max_taco_count; i++) {
+            game_spawn_taco(game);
+        }
     }
 
     if (snakes_alive == 1) {

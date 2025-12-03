@@ -641,6 +641,8 @@ bool app_lobby_update(AppStateLobby* lobby_state) {
 size_t lobby_state_serialize(AppStateLobby* lobby_state,
                              bool enable_chomping,
                              bool enable_constricting,
+                             bool head_invincible,
+                             bool zero_taco_respawn,
                              S32 segment_health,
                              S32 start_snake_length,
                              S32 taco_count,
@@ -671,6 +673,14 @@ size_t lobby_state_serialize(AppStateLobby* lobby_state,
     bytes_written += sizeof(enable_constricting);
     buffer_ptr += sizeof(enable_constricting);
 
+    memcpy(buffer_ptr, &head_invincible, sizeof(head_invincible));
+    bytes_written += sizeof(head_invincible);
+    buffer_ptr += sizeof(head_invincible);
+
+    memcpy(buffer_ptr, &zero_taco_respawn, sizeof(zero_taco_respawn));
+    bytes_written += sizeof(zero_taco_respawn);
+    buffer_ptr += sizeof(zero_taco_respawn);
+
     memcpy(buffer_ptr, &segment_health, sizeof(segment_health));
     bytes_written += sizeof(segment_health);
     buffer_ptr += sizeof(segment_health);
@@ -691,6 +701,8 @@ size_t lobby_state_deserialize(void* buffer,
                                AppStateLobby* lobby_state,
                                bool* enable_chomping,
                                bool* enable_constricting,
+                               bool* head_invincible,
+                               bool* zero_taco_respawn,
                                S32* segment_health,
                                S32* start_snake_length,
                                S32* taco_count) {
@@ -718,6 +730,14 @@ size_t lobby_state_deserialize(void* buffer,
     memcpy(enable_constricting, buffer_ptr, sizeof(*enable_constricting));
     bytes_read += sizeof(*enable_constricting);
     buffer_ptr += sizeof(*enable_constricting);
+
+    memcpy(head_invincible, buffer_ptr, sizeof(*head_invincible));
+    bytes_read += sizeof(*head_invincible);
+    buffer_ptr += sizeof(*head_invincible);
+
+    memcpy(zero_taco_respawn, buffer_ptr, sizeof(*zero_taco_respawn));
+    bytes_read += sizeof(*zero_taco_respawn);
+    buffer_ptr += sizeof(*zero_taco_respawn);
 
     memcpy(segment_health, buffer_ptr, sizeof(*segment_health));
     bytes_read += sizeof(*segment_health);
@@ -1130,6 +1150,8 @@ int main(S32 argc, char** argv) {
 
     UICheckBox ui_enable_chomping_checkbox = {15, 35, true};
     UICheckBox ui_enable_constricting_checkbox = {15, 60, true};
+    UICheckBox ui_head_invincible_checkbox = {15, 85, true};
+    UICheckBox ui_zero_tacos_respawn_checkbox = {15, 110, false};
     UISlider ui_segment_health_slider = {
         .x = 260,
         .y = 60,
@@ -1158,7 +1180,6 @@ int main(S32 argc, char** argv) {
     };
 
     S32 cell_size = min_display_dimension / max_level_dimension;
-    printf("cell_size: %d\n", cell_size);
 
     int64_t time_since_tick_us = 0;
 
@@ -1445,6 +1466,8 @@ int main(S32 argc, char** argv) {
                                             &lobby_state,
                                             &ui_enable_chomping_checkbox.value,
                                             &ui_enable_constricting_checkbox.value,
+                                            &ui_head_invincible_checkbox.value,
+                                            &ui_zero_tacos_respawn_checkbox.value,
                                             &ui_segment_health_slider.value,
                                             &ui_snake_length_slider.value,
                                             &ui_taco_count_slider.value);
@@ -1582,6 +1605,8 @@ int main(S32 argc, char** argv) {
                     size_t msg_size = lobby_state_serialize(&lobby_state,
                                                             ui_enable_chomping_checkbox.value,
                                                             ui_enable_constricting_checkbox.value,
+                                                            ui_head_invincible_checkbox.value,
+                                                            ui_zero_tacos_respawn_checkbox.value,
                                                             ui_segment_health_slider.value,
                                                             ui_snake_length_slider.value,
                                                             ui_taco_count_slider.value,
@@ -1662,6 +1687,8 @@ int main(S32 argc, char** argv) {
             PF_RenderString(font, 3, 6, "Settings");
             PF_RenderString(font, 42, 38, "Chomping");
             PF_RenderString(font, 42, 64, "Constricting");
+            PF_RenderString(font, 42, 90, "Head Invincible");
+            PF_RenderString(font, 42, 116, "Zero Tacos Respawn");
             PF_RenderString(font, 240, 38, "Segment HP: %d", ui_segment_health_slider.value);
             PF_RenderString(font, 480, 38, "Start Len: %d", ui_snake_length_slider.value);
             PF_RenderString(font, 720, 38, "Tacos: %d", ui_taco_count_slider.value);
@@ -1678,13 +1705,18 @@ int main(S32 argc, char** argv) {
 
                 ui_checkbox(&ui, mouse_state, &ui_enable_chomping_checkbox, renderer);
                 ui_checkbox(&ui, mouse_state, &ui_enable_constricting_checkbox, renderer);
+                ui_checkbox(&ui, mouse_state, &ui_head_invincible_checkbox, renderer);
+                ui_checkbox(&ui, mouse_state, &ui_zero_tacos_respawn_checkbox, renderer);
                 ui_slider(&ui, mouse_state, &ui_segment_health_slider, renderer);
                 ui_slider(&ui, mouse_state, &ui_snake_length_slider, renderer);
                 ui_slider(&ui, mouse_state, &ui_taco_count_slider, renderer);
+
+                server_game_state.game.head_invincible = ui_head_invincible_checkbox.value;
+                server_game_state.game.zero_taco_respawn = ui_zero_tacos_respawn_checkbox.value;
             }
 
             S32 lobby_cell_size = 40;
-            S32 players_start_y = 3 * lobby_cell_size - 12;
+            S32 players_start_y = 4 * lobby_cell_size - 12;
             S32 players_offset = 30;
 
             PF_RenderString(font, 3, players_start_y, "Players");
@@ -1719,16 +1751,16 @@ int main(S32 argc, char** argv) {
                     snake.direction = DIRECTION_EAST;
                     snake.color = lobby_state.players[i].snake_color;
                     snake.segments[0].x = 4;
-                    snake.segments[0].y = (S16)(4 + (i * 2));
+                    snake.segments[0].y = (S16)(5 + (i * 2));
                     snake.segments[0].health = 3;
                     snake.segments[1].x = 3;
-                    snake.segments[1].y = (S16)(4 + (i * 2));
+                    snake.segments[1].y = (S16)(5 + (i * 2));
                     snake.segments[1].health = 3;
                     snake.segments[2].x = 2;
-                    snake.segments[2].y = (S16)(4 + (i * 2));
+                    snake.segments[2].y = (S16)(5 + (i * 2));
                     snake.segments[2].health = 3;
                     snake.segments[3].x = 1;
-                    snake.segments[3].y = (S16)(4 + (i * 2));
+                    snake.segments[3].y = (S16)(5 + (i * 2));
                     snake.segments[3].health = 3;
                     snake_draw(renderer, snake_texture, &snake, lobby_cell_size, 3);
                     snake_destroy(&snake);
