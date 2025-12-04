@@ -16,7 +16,6 @@
 #include "ui.h"
 
 #define MS_TO_US(ms) ((ms) * 1000)
-#define GAME_SIMULATE_TIME_INTERVAL_US MS_TO_US(175) // default = 150
 #define SERVER_ACCEPT_QUEUE_LIMIT 5
 #define MAX_PLAYER_NAME_LEN 16
 #define MAX_GAME_CONTROLLERS 4
@@ -646,6 +645,7 @@ size_t lobby_state_serialize(AppStateLobby* lobby_state,
                              S32 segment_health,
                              S32 start_snake_length,
                              S32 taco_count,
+                             S32 tick_ms,
                              void* buffer,
                              size_t buffer_size) {
     size_t bytes_written = 0;
@@ -693,6 +693,10 @@ size_t lobby_state_serialize(AppStateLobby* lobby_state,
     bytes_written += sizeof(taco_count);
     buffer_ptr += sizeof(taco_count);
 
+    memcpy(buffer_ptr, &tick_ms, sizeof(tick_ms));
+    bytes_written += sizeof(tick_ms);
+    buffer_ptr += sizeof(tick_ms);
+
     return bytes_written;
 }
 
@@ -705,7 +709,8 @@ size_t lobby_state_deserialize(void* buffer,
                                bool* zero_taco_respawn,
                                S32* segment_health,
                                S32* start_snake_length,
-                               S32* taco_count) {
+                               S32* taco_count,
+                               S32* tick_ms) {
     assert(buffer_size >= (MAX_SNAKE_COUNT * (MAX_PLAYER_NAME_LEN + sizeof(lobby_state->players[0].state))));
     U8* buffer_ptr = buffer;
     size_t bytes_read = 0;
@@ -750,6 +755,10 @@ size_t lobby_state_deserialize(void* buffer,
     memcpy(taco_count, buffer_ptr, sizeof(*taco_count));
     bytes_read += sizeof(*taco_count);
     buffer_ptr += sizeof(*taco_count);
+
+    memcpy(tick_ms, buffer_ptr, sizeof(*tick_ms));
+    bytes_read += sizeof(*tick_ms);
+    buffer_ptr += sizeof(*tick_ms);
 
     return bytes_read;
 }
@@ -1179,6 +1188,15 @@ int main(S32 argc, char** argv) {
         .max = 100
     };
 
+    UISlider ui_tick_ms_slider = {
+        .x = 500,
+        .y = 110,
+        .pixel_width = 150,
+        .value = 175,
+        .min = 10,
+        .max = 1000
+    };
+
     S32 cell_size = min_display_dimension / max_level_dimension;
 
     int64_t time_since_tick_us = 0;
@@ -1403,8 +1421,8 @@ int main(S32 argc, char** argv) {
         // The server/single player mode should only update the game state if a tick has passed.
         bool should_tick = false;
         bool should_send_state = false;
-        if (time_since_tick_us >= GAME_SIMULATE_TIME_INTERVAL_US) {
-            time_since_tick_us -= GAME_SIMULATE_TIME_INTERVAL_US;
+        if (time_since_tick_us >= MS_TO_US(ui_tick_ms_slider.value)) {
+            time_since_tick_us -= MS_TO_US(ui_tick_ms_slider.value);
             should_send_state = true;
             if (server_game_state.game.state == GAME_STATE_PLAYING &&
                 dev_mode_should_step(&server_game_state.dev_state)) {
@@ -1470,7 +1488,8 @@ int main(S32 argc, char** argv) {
                                             &ui_zero_tacos_respawn_checkbox.value,
                                             &ui_segment_health_slider.value,
                                             &ui_snake_length_slider.value,
-                                            &ui_taco_count_slider.value);
+                                            &ui_taco_count_slider.value,
+                                            &ui_tick_ms_slider.value);
 
                 } else if (client_receive_packet.header.type == PACKET_TYPE_LEVEL_STATE) {
                     if (app_state == APP_STATE_LOBBY) {
@@ -1610,6 +1629,7 @@ int main(S32 argc, char** argv) {
                                                             ui_segment_health_slider.value,
                                                             ui_snake_length_slider.value,
                                                             ui_taco_count_slider.value,
+                                                            ui_tick_ms_slider.value,
                                                             net_msg_buffer,
                                                             net_msg_buffer_size);
 
@@ -1692,6 +1712,7 @@ int main(S32 argc, char** argv) {
             PF_RenderString(font, 240, 38, "Segment HP: %d", ui_segment_health_slider.value);
             PF_RenderString(font, 480, 38, "Start Len: %d", ui_snake_length_slider.value);
             PF_RenderString(font, 720, 38, "Tacos: %d", ui_taco_count_slider.value);
+            PF_RenderString(font, 480, 90, "Tick MS: %d", ui_tick_ms_slider.value);
 
             {
                 UIMouseState* mouse_state = &ui_mouse_state;
@@ -1710,6 +1731,7 @@ int main(S32 argc, char** argv) {
                 ui_slider(&ui, mouse_state, &ui_segment_health_slider, renderer);
                 ui_slider(&ui, mouse_state, &ui_snake_length_slider, renderer);
                 ui_slider(&ui, mouse_state, &ui_taco_count_slider, renderer);
+                ui_slider(&ui, mouse_state, &ui_tick_ms_slider, renderer);
 
                 server_game_state.game.head_invincible = ui_head_invincible_checkbox.value;
                 server_game_state.game.zero_taco_respawn = ui_zero_tacos_respawn_checkbox.value;

@@ -23,11 +23,6 @@ typedef struct {
     S32 y;
 } UIMouseState;
 
-typedef struct{
-    S32 x;
-    S32 y;
-} UIElement;
-
 #define UI_CHECKBOX_SIZE 20
 #define UI_CHECKBOX_OUTLINE_SIZE 2
 #define UI_CHECKBOX_FILL_GAP 5
