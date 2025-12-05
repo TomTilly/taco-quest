@@ -3,14 +3,6 @@
 #include <assert.h>
 #include <string.h>
 
-S32 ui_checkbox_bottom(UICheckBox* checkbox) {
-    return checkbox->y + UI_CHECKBOX_SIZE;
-}
-
-S32 ui_checkbox_right(UICheckBox* checkbox) {
-    return checkbox->x + UI_CHECKBOX_SIZE;
-}
-
 S32 ui_slider_width(UISlider* slider) { return slider->pixel_width + (2 * UI_SLIDER_H_PADDING) + 2; }
 
 S32 ui_slider_height(UISlider* slider, S32 font_height) {
@@ -63,9 +55,10 @@ void ui_create(UserInterface* ui, PF_Font* font) {
 }
 
 void ui_checkbox(UserInterface* ui,
+                 SDL_Renderer* renderer,
                  UIMouseState* mouse_state,
                  UICheckBox* checkbox,
-                 SDL_Renderer* renderer) {
+                 bool* value) {
     bool mouse_is_over = mouse_state->x >= checkbox->x &&
                          mouse_state->x <= (checkbox->x + UI_CHECKBOX_SIZE) &&
                          mouse_state->y >= checkbox->y &&
@@ -78,7 +71,7 @@ void ui_checkbox(UserInterface* ui,
 
     // Update element if clicked.
     if (!mouse_state->prev_clicked && mouse_state->clicked && mouse_is_over) {
-        checkbox->value = !checkbox->value;
+        *value = !*value;
     }
 
     // Outline
@@ -103,7 +96,7 @@ void ui_checkbox(UserInterface* ui,
                            active_background_color.alpha);
     SDL_RenderFillRect(renderer, &background_rect);
 
-    if (checkbox->value) {
+    if (*value) {
         // Checkmark
         SDL_Rect checked_rect = {
             outline_rect.x + UI_CHECKBOX_FILL_GAP,
@@ -120,9 +113,10 @@ void ui_checkbox(UserInterface* ui,
 }
 
 void ui_slider(UserInterface* ui,
+               SDL_Renderer* renderer,
                UIMouseState* mouse_state,
                UISlider* slider,
-               SDL_Renderer* renderer) {
+               S32* value) {
     PF_FontState font_state = PF_GetState(ui->font);
 
     S32 width = ui_slider_width(slider);
@@ -189,12 +183,12 @@ void ui_slider(UserInterface* ui,
             }
 
             float slider_scale = (float)(mouse_x) / (float)(slider->pixel_width);
-            slider->value = slider->min + (S32)(slider_scale * (float)(slider_range));
+            *value = slider->min + (S32)(slider_scale * (float)(slider_range));
         }
     }
 
     // Slider
-    float slider_scale = (S32)(slider->value - slider->min) / (float)(slider_range);
+    float slider_scale = (S32)(*value - slider->min) / (float)(slider_range);
     float slider_pixel = (float)(slider->pixel_width) * slider_scale;
     S32 slider_x = slider->x + (S32)(slider_pixel);
     SDL_Rect slider_rect = {
@@ -211,9 +205,9 @@ void ui_slider(UserInterface* ui,
 }
 
 void ui_dropdown(UserInterface* ui,
+                 SDL_Renderer* renderer,
                  UIMouseState* mouse_state,
-                 UIDropDown* drop_down,
-                 SDL_Renderer* renderer) {
+                 UIDropDown* drop_down) {
     assert(drop_down->selected >= 0 && drop_down->selected < drop_down->option_count);
 
     PF_FontState font_state = PF_GetState(ui->font);

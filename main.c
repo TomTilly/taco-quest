@@ -98,6 +98,17 @@ typedef struct {
     S32 input_index;
 } LobbyPlayer;
 
+typedef struct{
+    bool enable_chomping;
+    bool enable_constricting;
+    bool head_invincible;
+    bool zero_tacos_respawn;
+    S32 segment_health;
+    S32 starting_length;
+    S32 taco_count;
+    S32 tick_ms;
+} LobbyGameSettings;
+
 typedef struct {
     Game game;
     ActionKeyState prev_action_key_states[MAX_SNAKE_COUNT];
@@ -116,6 +127,7 @@ typedef struct {
     LobbyPlayer players[MAX_SNAKE_COUNT];
     LobbyActionKeyState prev_action_key_states[MAX_SNAKE_COUNT];
     LobbyAction actions[MAX_SNAKE_COUNT];
+    LobbyGameSettings game_settings;
 } AppStateLobby;
 
 static int __tick;
@@ -136,11 +148,9 @@ char* get_timestamp(void) {
 }
 
 void reset_game(Game* game,
-                AppStateLobby* lobby_state,
-                S32 starting_snake_length,
-                S32 segement_health,
-                S32 taco_count) {
-    game->max_taco_count = taco_count;
+                AppStateLobby* lobby_state) {
+    game->max_taco_count = lobby_state->game_settings.taco_count;
+
     Level* level = &game->level;
 
     S32 snake_count = 0;
@@ -159,16 +169,18 @@ void reset_game(Game* game,
                 3,
                 2,
                 DIRECTION_EAST,
-                starting_snake_length,
-                (S8)(segement_health));
+                lobby_state->game_settings.starting_length,
+                (S8)(lobby_state->game_settings.segment_health));
+
     game->snakes[0].color = lobby_state->players[0].snake_color;
 
     snake_spawn(game->snakes + 1,
                 (S16)(level->width - 3),
                 2,
                 DIRECTION_SOUTH,
-                starting_snake_length,
-                (S8)(segement_health));
+                lobby_state->game_settings.starting_length,
+                (S8)(lobby_state->game_settings.segment_health));
+
     if (snake_count > 1) {
         game->snakes[1].color = lobby_state->players[1].snake_color;
     } else {
@@ -180,8 +192,8 @@ void reset_game(Game* game,
                     (S16)(level->width - 2),
                     (S16)(level->height - 3),
                     DIRECTION_WEST,
-                    starting_snake_length,
-                    (S8)(segement_health));
+                    lobby_state->game_settings.starting_length,
+                    (S8)(lobby_state->game_settings.segment_health));
         game->snakes[2].color = lobby_state->players[2].snake_color;
     }
 
@@ -190,8 +202,8 @@ void reset_game(Game* game,
                     3,
                     (S16)(level->height - 3),
                     DIRECTION_EAST,
-                    starting_snake_length,
-                    (S8)(segement_health));
+                    lobby_state->game_settings.starting_length,
+                    (S8)(lobby_state->game_settings.segment_health));
         game->snakes[3].color = lobby_state->players[3].snake_color;
     }
 
@@ -638,18 +650,12 @@ bool app_lobby_update(AppStateLobby* lobby_state) {
 }
 
 size_t lobby_state_serialize(AppStateLobby* lobby_state,
-                             bool enable_chomping,
-                             bool enable_constricting,
-                             bool head_invincible,
-                             bool zero_taco_respawn,
-                             S32 segment_health,
-                             S32 start_snake_length,
-                             S32 taco_count,
-                             S32 tick_ms,
                              void* buffer,
                              size_t buffer_size) {
     size_t bytes_written = 0;
-    assert(buffer_size >= (MAX_SNAKE_COUNT * (MAX_PLAYER_NAME_LEN + sizeof(lobby_state->players[0].state))));
+    assert(buffer_size >= (MAX_SNAKE_COUNT *
+                           (MAX_PLAYER_NAME_LEN + sizeof(lobby_state->players[0].state)) +
+                           sizeof(lobby_state->game_settings)));
     U8* buffer_ptr = buffer;
     for (S32 i = 0; i < MAX_SNAKE_COUNT; i++) {
         memcpy(buffer_ptr, lobby_state->players[i].name, MAX_PLAYER_NAME_LEN);
@@ -665,53 +671,19 @@ size_t lobby_state_serialize(AppStateLobby* lobby_state,
         buffer_ptr += sizeof(lobby_state->players[i].snake_color);
     }
 
-    memcpy(buffer_ptr, &enable_chomping, sizeof(enable_chomping));
-    bytes_written += sizeof(enable_chomping);
-    buffer_ptr += sizeof(enable_chomping);
-
-    memcpy(buffer_ptr, &enable_constricting, sizeof(enable_constricting));
-    bytes_written += sizeof(enable_constricting);
-    buffer_ptr += sizeof(enable_constricting);
-
-    memcpy(buffer_ptr, &head_invincible, sizeof(head_invincible));
-    bytes_written += sizeof(head_invincible);
-    buffer_ptr += sizeof(head_invincible);
-
-    memcpy(buffer_ptr, &zero_taco_respawn, sizeof(zero_taco_respawn));
-    bytes_written += sizeof(zero_taco_respawn);
-    buffer_ptr += sizeof(zero_taco_respawn);
-
-    memcpy(buffer_ptr, &segment_health, sizeof(segment_health));
-    bytes_written += sizeof(segment_health);
-    buffer_ptr += sizeof(segment_health);
-
-    memcpy(buffer_ptr, &start_snake_length, sizeof(start_snake_length));
-    bytes_written += sizeof(start_snake_length);
-    buffer_ptr += sizeof(start_snake_length);
-
-    memcpy(buffer_ptr, &taco_count, sizeof(taco_count));
-    bytes_written += sizeof(taco_count);
-    buffer_ptr += sizeof(taco_count);
-
-    memcpy(buffer_ptr, &tick_ms, sizeof(tick_ms));
-    bytes_written += sizeof(tick_ms);
-    buffer_ptr += sizeof(tick_ms);
+    memcpy(buffer_ptr, &lobby_state->game_settings, sizeof(lobby_state->game_settings));
+    bytes_written += sizeof(lobby_state->game_settings);
+    buffer_ptr += sizeof(lobby_state->game_settings);
 
     return bytes_written;
 }
 
 size_t lobby_state_deserialize(void* buffer,
                                size_t buffer_size,
-                               AppStateLobby* lobby_state,
-                               bool* enable_chomping,
-                               bool* enable_constricting,
-                               bool* head_invincible,
-                               bool* zero_taco_respawn,
-                               S32* segment_health,
-                               S32* start_snake_length,
-                               S32* taco_count,
-                               S32* tick_ms) {
-    assert(buffer_size >= (MAX_SNAKE_COUNT * (MAX_PLAYER_NAME_LEN + sizeof(lobby_state->players[0].state))));
+                               AppStateLobby* lobby_state) {
+    assert(buffer_size >= (MAX_SNAKE_COUNT *
+                           (MAX_PLAYER_NAME_LEN + sizeof(lobby_state->players[0].state)) +
+                           sizeof(lobby_state->game_settings)));
     U8* buffer_ptr = buffer;
     size_t bytes_read = 0;
     for (S32 i = 0; i < MAX_SNAKE_COUNT; i++) {
@@ -728,37 +700,9 @@ size_t lobby_state_deserialize(void* buffer,
         buffer_ptr += sizeof(lobby_state->players[i].snake_color);
     }
 
-    memcpy(enable_chomping, buffer_ptr, sizeof(*enable_chomping));
-    bytes_read += sizeof(*enable_chomping);
-    buffer_ptr += sizeof(*enable_chomping);
-
-    memcpy(enable_constricting, buffer_ptr, sizeof(*enable_constricting));
-    bytes_read += sizeof(*enable_constricting);
-    buffer_ptr += sizeof(*enable_constricting);
-
-    memcpy(head_invincible, buffer_ptr, sizeof(*head_invincible));
-    bytes_read += sizeof(*head_invincible);
-    buffer_ptr += sizeof(*head_invincible);
-
-    memcpy(zero_taco_respawn, buffer_ptr, sizeof(*zero_taco_respawn));
-    bytes_read += sizeof(*zero_taco_respawn);
-    buffer_ptr += sizeof(*zero_taco_respawn);
-
-    memcpy(segment_health, buffer_ptr, sizeof(*segment_health));
-    bytes_read += sizeof(*segment_health);
-    buffer_ptr += sizeof(*segment_health);
-
-    memcpy(start_snake_length, buffer_ptr, sizeof(*start_snake_length));
-    bytes_read += sizeof(*start_snake_length);
-    buffer_ptr += sizeof(*start_snake_length);
-
-    memcpy(taco_count, buffer_ptr, sizeof(*taco_count));
-    bytes_read += sizeof(*taco_count);
-    buffer_ptr += sizeof(*taco_count);
-
-    memcpy(tick_ms, buffer_ptr, sizeof(*tick_ms));
-    bytes_read += sizeof(*tick_ms);
-    buffer_ptr += sizeof(*tick_ms);
+    memcpy(&lobby_state->game_settings, buffer_ptr, sizeof(lobby_state->game_settings));
+    bytes_read += sizeof(lobby_state->game_settings);
+    buffer_ptr += sizeof(lobby_state->game_settings);
 
     return bytes_read;
 }
@@ -792,28 +736,20 @@ void app_server_update(AppState* app_state,
                        AppStateLobby* lobby_state,
                        AppStateGameServer* server_game_state,
                        bool should_tick,
-                       S64 time_since_last_frame_us,
-                       S32 starting_snake_length,
-                       S32 segment_health,
-                       S32 max_taco_count,
-                       bool enable_chomping,
-                       bool enable_constricting) {
+                       S64 time_since_last_frame_us) {
     if (*app_state == APP_STATE_LOBBY) {
         if (app_lobby_update(lobby_state)) {
             *app_state = APP_STATE_GAME;
             server_game_state->game.wait_to_start_ms = 3000;
             reset_game(&server_game_state->game,
-                       lobby_state,
-                       starting_snake_length,
-                       segment_health,
-                       max_taco_count);
+                       lobby_state);
         }
     } else if (*app_state == APP_STATE_GAME) {
         app_game_server_update(server_game_state,
                                should_tick,
                                time_since_last_frame_us,
-                               enable_chomping,
-                               enable_constricting);
+                               lobby_state->game_settings.enable_chomping,
+                               lobby_state->game_settings.enable_constricting);
     }
 }
 
@@ -978,6 +914,15 @@ int main(S32 argc, char** argv) {
     AppStateGameServer server_game_state = {0};
     AppStateLobby lobby_state = {0};
 
+    lobby_state.game_settings.enable_chomping = true;
+    lobby_state.game_settings.enable_constricting = true;
+    lobby_state.game_settings.head_invincible = true;
+    lobby_state.game_settings.zero_tacos_respawn = false;
+    lobby_state.game_settings.segment_health = 3;
+    lobby_state.game_settings.starting_length = 5;
+    lobby_state.game_settings.taco_count = 5;
+    lobby_state.game_settings.tick_ms = 175;
+
     NetSocket* server_socket = NULL; // Used by server to listen for client connections.
     NetSocket* client_socket = NULL; // Used by client to send and receive.
 
@@ -1068,7 +1013,7 @@ int main(S32 argc, char** argv) {
     }
 
     game_init(game, LEVEL_WIDTH, LEVEL_HEIGHT, 6);
-    reset_game(game, &lobby_state, 5, 6, 3);
+    reset_game(game, &lobby_state);
 
     int rc = SDL_Init(SDL_INIT_EVERYTHING);
     if (rc < 0) {
@@ -1157,15 +1102,14 @@ int main(S32 argc, char** argv) {
 
     UIMouseState ui_mouse_state = {0};
 
-    UICheckBox ui_enable_chomping_checkbox = {15, 35, true};
-    UICheckBox ui_enable_constricting_checkbox = {15, 60, true};
-    UICheckBox ui_head_invincible_checkbox = {15, 85, true};
-    UICheckBox ui_zero_tacos_respawn_checkbox = {15, 110, false};
+    UICheckBox ui_enable_chomping_checkbox = {15, 35};
+    UICheckBox ui_enable_constricting_checkbox = {15, 60};
+    UICheckBox ui_head_invincible_checkbox = {15, 85};
+    UICheckBox ui_zero_tacos_respawn_checkbox = {15, 110};
     UISlider ui_segment_health_slider = {
         .x = 260,
         .y = 60,
         .pixel_width = 150,
-        .value = 3,
         .min = 1,
         .max = 10
     };
@@ -1174,7 +1118,6 @@ int main(S32 argc, char** argv) {
         .x = 500,
         .y = 60,
         .pixel_width = 150,
-        .value = 5,
         .min = 1,
         .max = 100
     };
@@ -1183,7 +1126,6 @@ int main(S32 argc, char** argv) {
         .x = 740,
         .y = 60,
         .pixel_width = 150,
-        .value = 5,
         .min = 1,
         .max = 100
     };
@@ -1192,9 +1134,8 @@ int main(S32 argc, char** argv) {
         .x = 500,
         .y = 110,
         .pixel_width = 150,
-        .value = 175,
         .min = 10,
-        .max = 1000
+        .max = 500
     };
 
     S32 cell_size = min_display_dimension / max_level_dimension;
@@ -1421,8 +1362,8 @@ int main(S32 argc, char** argv) {
         // The server/single player mode should only update the game state if a tick has passed.
         bool should_tick = false;
         bool should_send_state = false;
-        if (time_since_tick_us >= MS_TO_US(ui_tick_ms_slider.value)) {
-            time_since_tick_us -= MS_TO_US(ui_tick_ms_slider.value);
+        if (time_since_tick_us >= MS_TO_US(lobby_state.game_settings.tick_ms)) {
+            time_since_tick_us -= MS_TO_US(lobby_state.game_settings.tick_ms);
             should_send_state = true;
             if (server_game_state.game.state == GAME_STATE_PLAYING &&
                 dev_mode_should_step(&server_game_state.dev_state)) {
@@ -1481,15 +1422,7 @@ int main(S32 argc, char** argv) {
                     }
                     lobby_state_deserialize(client_receive_packet.payload,
                                             client_receive_packet.header.payload_size,
-                                            &lobby_state,
-                                            &ui_enable_chomping_checkbox.value,
-                                            &ui_enable_constricting_checkbox.value,
-                                            &ui_head_invincible_checkbox.value,
-                                            &ui_zero_tacos_respawn_checkbox.value,
-                                            &ui_segment_health_slider.value,
-                                            &ui_snake_length_slider.value,
-                                            &ui_taco_count_slider.value,
-                                            &ui_tick_ms_slider.value);
+                                            &lobby_state);
 
                 } else if (client_receive_packet.header.type == PACKET_TYPE_LEVEL_STATE) {
                     if (app_state == APP_STATE_LOBBY) {
@@ -1586,12 +1519,7 @@ int main(S32 argc, char** argv) {
                               &lobby_state,
                               &server_game_state,
                               should_tick,
-                              time_since_last_frame_us,
-                              ui_snake_length_slider.value,
-                              ui_segment_health_slider.value,
-                              ui_taco_count_slider.value,
-                              ui_enable_chomping_checkbox.value,
-                              ui_enable_constricting_checkbox.value);
+                              time_since_last_frame_us);
             if (!should_send_state) {
                 break;
             }
@@ -1622,14 +1550,6 @@ int main(S32 argc, char** argv) {
                 } else if (app_state == APP_STATE_LOBBY) {
                     // Serialize game state
                     size_t msg_size = lobby_state_serialize(&lobby_state,
-                                                            ui_enable_chomping_checkbox.value,
-                                                            ui_enable_constricting_checkbox.value,
-                                                            ui_head_invincible_checkbox.value,
-                                                            ui_zero_tacos_respawn_checkbox.value,
-                                                            ui_segment_health_slider.value,
-                                                            ui_snake_length_slider.value,
-                                                            ui_taco_count_slider.value,
-                                                            ui_tick_ms_slider.value,
                                                             net_msg_buffer,
                                                             net_msg_buffer_size);
 
@@ -1677,12 +1597,7 @@ int main(S32 argc, char** argv) {
                               &lobby_state,
                               &server_game_state,
                               should_tick,
-                              time_since_last_frame_us,
-                              ui_snake_length_slider.value,
-                              ui_segment_health_slider.value,
-                              ui_taco_count_slider.value,
-                              ui_enable_chomping_checkbox.value,
-                              ui_enable_constricting_checkbox.value);
+                              time_since_last_frame_us);
             break;
         }
         }
@@ -1709,10 +1624,10 @@ int main(S32 argc, char** argv) {
             PF_RenderString(font, 42, 64, "Constricting");
             PF_RenderString(font, 42, 90, "Head Invincible");
             PF_RenderString(font, 42, 116, "Zero Tacos Respawn");
-            PF_RenderString(font, 240, 38, "Segment HP: %d", ui_segment_health_slider.value);
-            PF_RenderString(font, 480, 38, "Start Len: %d", ui_snake_length_slider.value);
-            PF_RenderString(font, 720, 38, "Tacos: %d", ui_taco_count_slider.value);
-            PF_RenderString(font, 480, 90, "Tick MS: %d", ui_tick_ms_slider.value);
+            PF_RenderString(font, 240, 38, "Segment HP: %d", lobby_state.game_settings.segment_health);
+            PF_RenderString(font, 480, 38, "Start Len: %d", lobby_state.game_settings.starting_length);
+            PF_RenderString(font, 720, 38, "Tacos: %d", lobby_state.game_settings.taco_count);
+            PF_RenderString(font, 480, 90, "Tick MS: %d", lobby_state.game_settings.tick_ms);
 
             {
                 UIMouseState* mouse_state = &ui_mouse_state;
@@ -1724,17 +1639,49 @@ int main(S32 argc, char** argv) {
                     mouse_state = &empty;
                 }
 
-                ui_checkbox(&ui, mouse_state, &ui_enable_chomping_checkbox, renderer);
-                ui_checkbox(&ui, mouse_state, &ui_enable_constricting_checkbox, renderer);
-                ui_checkbox(&ui, mouse_state, &ui_head_invincible_checkbox, renderer);
-                ui_checkbox(&ui, mouse_state, &ui_zero_tacos_respawn_checkbox, renderer);
-                ui_slider(&ui, mouse_state, &ui_segment_health_slider, renderer);
-                ui_slider(&ui, mouse_state, &ui_snake_length_slider, renderer);
-                ui_slider(&ui, mouse_state, &ui_taco_count_slider, renderer);
-                ui_slider(&ui, mouse_state, &ui_tick_ms_slider, renderer);
+                ui_checkbox(&ui,
+                            renderer,
+                            mouse_state,
+                            &ui_enable_chomping_checkbox,
+                            &lobby_state.game_settings.enable_chomping);
+                ui_checkbox(&ui,
+                            renderer,
+                            mouse_state,
+                            &ui_enable_constricting_checkbox,
+                            &lobby_state.game_settings.enable_constricting);
+                ui_checkbox(&ui,
+                            renderer,
+                            mouse_state,
+                            &ui_head_invincible_checkbox,
+                            &lobby_state.game_settings.head_invincible);
+                ui_checkbox(&ui,
+                            renderer,
+                            mouse_state,
+                            &ui_zero_tacos_respawn_checkbox,
+                            &lobby_state.game_settings.zero_tacos_respawn);
+                ui_slider(&ui,
+                          renderer,
+                          mouse_state,
+                          &ui_segment_health_slider,
+                          &lobby_state.game_settings.segment_health);
+                ui_slider(&ui,
+                          renderer,
+                          mouse_state,
+                          &ui_snake_length_slider,
+                          &lobby_state.game_settings.starting_length);
+                ui_slider(&ui,
+                          renderer,
+                          mouse_state,
+                          &ui_taco_count_slider,
+                          &lobby_state.game_settings.taco_count);
+                ui_slider(&ui,
+                          renderer,
+                          mouse_state,
+                          &ui_tick_ms_slider,
+                          &lobby_state.game_settings.tick_ms);
 
-                server_game_state.game.head_invincible = ui_head_invincible_checkbox.value;
-                server_game_state.game.zero_taco_respawn = ui_zero_tacos_respawn_checkbox.value;
+                server_game_state.game.head_invincible = lobby_state.game_settings.head_invincible;
+                server_game_state.game.zero_taco_respawn = lobby_state.game_settings.zero_tacos_respawn;
             }
 
             S32 lobby_cell_size = 40;
@@ -1791,7 +1738,7 @@ int main(S32 argc, char** argv) {
 
 
         } else if (app_state == APP_STATE_GAME) {
-            if (!draw_game(game, renderer, snake_texture, cell_size, ui_segment_health_slider.value)) {
+            if (!draw_game(game, renderer, snake_texture, cell_size, lobby_state.game_settings.segment_health)) {
                 return EXIT_FAILURE;
             }
 

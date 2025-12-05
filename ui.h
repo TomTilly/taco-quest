@@ -12,10 +12,6 @@
 
 #define UI_MAX_TEXT_LEN 128
 
-// TODO: Where should this live ?
-#define ASCII_BACKSPACE 8
-#define ASCII_ENTER 10
-
 typedef struct {
     bool prev_clicked;
     bool clicked;
@@ -30,11 +26,7 @@ typedef struct {
 typedef struct {
     S32 x;
     S32 y;
-    bool value;
 } UICheckBox;
-
-S32 ui_checkbox_bottom(UICheckBox* checkbox);
-S32 ui_checkbox_right(UICheckBox* checkbox);
 
 #define UI_SLIDER_OUTLINE_SIZE 2
 #define UI_SLIDER_CONTROL_WIDTH 6
@@ -45,7 +37,6 @@ typedef struct  {
     S32 x;
     S32 y;
     S32 pixel_width;
-    S32 value;
     S32 min;
     S32 max;
     bool active;
@@ -88,14 +79,16 @@ typedef struct {
 
 void ui_create(UserInterface* ui, PF_Font* font);
 void ui_checkbox(UserInterface* ui,
+                 SDL_Renderer* renderer,
                  UIMouseState* mouse_state,
                  UICheckBox* checkbox,
-                 SDL_Renderer* renderer);
+                 bool* value);
 void ui_slider(UserInterface* ui,
+               SDL_Renderer* renderer,
                UIMouseState* mouse_state,
                UISlider* slider,
-               SDL_Renderer* renderer);
+               S32* value);
 void ui_dropdown(UserInterface* ui,
+                 SDL_Renderer* renderer,
                  UIMouseState* mouse_state,
-                 UIDropDown* drop_down,
-                 SDL_Renderer* renderer);
+                 UIDropDown* drop_down);
