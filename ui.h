@@ -13,8 +13,10 @@
 #define UI_MAX_TEXT_LEN 128
 
 typedef struct {
-    bool prev_clicked;
-    bool clicked;
+    bool prev_left_clicked;
+    bool left_clicked;
+    bool prev_right_clicked;
+    bool right_clicked;
     S32 x;
     S32 y;
 } UIMouseState;

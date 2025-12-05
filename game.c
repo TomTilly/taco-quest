@@ -425,6 +425,14 @@ bool game_empty_at(Game* game, S32 x, S32 y) {
     return queried_object.type == QUERIED_OBJECT_TYPE_NONE;
 }
 
+S32 game_query_for_snake_at(Game* game, S32 x, S32 y) {
+    QueriedObject queried_object = game_query(game, x, y);
+    if (queried_object.type == QUERIED_OBJECT_TYPE_SNAKE) {
+        return queried_object.snake.index;
+    }
+    return -1;
+}
+
 MoveResult game_empty_push_result(Game* game, S32 x, S32 y) {
     bool check = game_empty_at(game, x, y);
     if (check) {

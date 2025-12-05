@@ -70,7 +70,7 @@ void ui_checkbox(UserInterface* ui,
     }
 
     // Update element if clicked.
-    if (!mouse_state->prev_clicked && mouse_state->clicked && mouse_is_over) {
+    if (!mouse_state->prev_left_clicked && mouse_state->left_clicked && mouse_is_over) {
         *value = !*value;
     }
 
@@ -164,14 +164,14 @@ void ui_slider(UserInterface* ui,
                            ui->outline_color.alpha);
     SDL_RenderFillRect(renderer, &line_rect);
 
-    if (!mouse_state->prev_clicked && mouse_state->clicked && mouse_is_over) {
+    if (!mouse_state->prev_left_clicked && mouse_state->left_clicked && mouse_is_over) {
         slider->active = true;
     }
 
     S32 slider_range = slider->max - slider->min;
 
     if (slider->active) {
-        if (!mouse_state->clicked) {
+        if (!mouse_state->left_clicked) {
             slider->active = false;
         } else {
             S32 mouse_x = mouse_state->x - (slider->x + UI_SLIDER_H_PADDING);
@@ -248,7 +248,7 @@ void ui_dropdown(UserInterface* ui,
     SDL_RenderFillRect(renderer, &background_rect);
 
     // If click occurs, set whether active based on mouse position.
-    if (mouse_state->prev_clicked && !mouse_state->clicked) {
+    if (mouse_state->prev_left_clicked && !mouse_state->left_clicked) {
         if (drop_down->dropped) {
             // Figure out which option we're over and select it.
             S32 left = drop_down->x;
