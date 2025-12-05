@@ -4,7 +4,7 @@
 #include <assert.h>
 #include <stdio.h>
 
-#include <SDL2/SDL_scancode.h>
+#include <SDL3/SDL_scancode.h>
 
 bool snake_init(Snake* snake, int32_t capacity) {
     snake->segments = calloc(capacity, sizeof(snake->segments[0]));
@@ -56,30 +56,30 @@ void snake_draw(SDL_Renderer* renderer,
                 S32 max_segment_health) {
     int tail_index = snake->length - 1;
     for (int i = 0; i < snake->length; i++) {
-        SDL_Rect dest_rect = {
-            .x = snake->segments[i].x * cell_size,
-            .y = snake->segments[i].y * cell_size,
-            .w = cell_size,
-            .h = cell_size
+        SDL_FRect dest_rect = {
+            .x = (float)(snake->segments[i].x * cell_size),
+            .y = (float)(snake->segments[i].y * cell_size),
+            .w = (float)(cell_size),
+            .h = (float)(cell_size)
         };
 
         double angle = 0.0;
 
-        SDL_Rect source_rect = {0};
+        SDL_FRect source_rect = {0};
 
         source_rect.w = 16;
         source_rect.h = 16;
 
         if (i == 0) {
-            source_rect.x = 48;
-            source_rect.y = 0;
+            source_rect.x = 48.0f;
+            source_rect.y = 0.0f;
             angle = 90.0 * snake->direction;
         } else {
             // detect straight vs corner vs tail
             if (i == tail_index) {
                 // tail
-                source_rect.x = 0;
-                source_rect.y = 0;
+                source_rect.x = 0.0f;
+                source_rect.y = 0.0f;
 
                 int last_segment_x = snake->segments[i - 1].x;
                 int last_segment_y = snake->segments[i - 1].y;
@@ -100,30 +100,30 @@ void snake_draw(SDL_Renderer* renderer,
             } else {
                 SnakeSegmentShape shape = snake_segment_shape(snake, i);
 
-                source_rect.y = shape.flipped ? 0 : 16;
+                source_rect.y = shape.flipped ? 0.0f : 16.0f;
 
                 switch(shape.type) {
                 case SNAKE_SEGMENT_SHAPE_TYPE_VERTICAL:
-                    source_rect.x = 32;
+                    source_rect.x = 32.0f;
                     angle = 90.0;
                     break;
                 case SNAKE_SEGMENT_SHAPE_TYPE_HORIZONTAL:
-                    source_rect.x = 32;
+                    source_rect.x = 32.0f;
                     break;
                 case SNAKE_SEGMENT_SHAPE_TYPE_NORTH_EAST_CORNER:
-                    source_rect.x = 16;
+                    source_rect.x = 16.0f;
                     break;
                 case SNAKE_SEGMENT_SHAPE_TYPE_SOUTH_EAST_CORNER:
-                    source_rect.x = 16;
+                    source_rect.x = 16.0f;
                     angle = 90.0;
                     break;
                 case SNAKE_SEGMENT_SHAPE_TYPE_SOUTH_WEST_CORNER:
-                    source_rect.x = 16;
+                    source_rect.x = 16.0f;
                     angle = 180.0;
                     break;
                 case SNAKE_SEGMENT_SHAPE_TYPE_NORTH_WEST_CORNER:
                     // corner top left
-                    source_rect.x = 16;
+                    source_rect.x = 16.0f;
                     angle = 270.0;
                     break;
                 default:
@@ -137,7 +137,7 @@ void snake_draw(SDL_Renderer* renderer,
             health_frame = 2 - (S32)(((float)(snake->segments[i].health) / (float)(max_segment_health)) * 2.0);
         }
 
-        source_rect.y += (2 * health_frame * source_rect.h);
+        source_rect.y += (float)(2 * health_frame * source_rect.h);
 
         U8 hue = snake->chomp_cooldown ? 128 : 255;
 
@@ -164,14 +164,14 @@ void snake_draw(SDL_Renderer* renderer,
             break;
         }
 
-        int rc = SDL_RenderCopyEx(renderer,
-                                  texture,
-                                  &source_rect,
-                                  &dest_rect,
-                                  angle,
-                                  NULL,
-                                  SDL_FLIP_NONE);
-        if (rc != 0) {
+        bool result = SDL_RenderTextureRotated(renderer,
+                                          texture,
+                                          &source_rect,
+                                          &dest_rect,
+                                          angle,
+                                          NULL,
+                                          SDL_FLIP_NONE);
+        if (!result) {
             fprintf(stderr, "Tom F was wrong: %s\n", SDL_GetError());
             return;
         }
@@ -355,7 +355,7 @@ SnakeAction snake_action_highest_priority(SnakeAction action) {
     return SNAKE_ACTION_NONE;
 }
 
-void snake_action_handle_keystate(const U8* keyboard_state,
+void snake_action_handle_keystate(const bool* keyboard_state,
                                   SnakeActionKeyState* prev_snake_actions_key_state,
                                   SnakeAction* snake_actions) {
     SnakeActionKeyState current_snake_actions_key_state = {0};

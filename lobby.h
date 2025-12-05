@@ -56,7 +56,7 @@ typedef struct {
 } AppStateLobby;
 
 bool app_lobby_update(AppStateLobby* lobby_state);
-void app_lobby_handle_keystate(AppStateLobby* lobby_state, const U8* keyboard_state);
+void app_lobby_handle_keystate(AppStateLobby* lobby_state, const bool* keyboard_state);
 
 size_t lobby_state_serialize(AppStateLobby* lobby_state,
                              void* buffer,
