@@ -4,6 +4,8 @@
 #include <assert.h>
 #include <stdio.h>
 
+#include <SDL2/SDL_scancode.h>
+
 bool snake_init(Snake* snake, int32_t capacity) {
     snake->segments = calloc(capacity, sizeof(snake->segments[0]));
     if (snake->segments == NULL) {
@@ -351,6 +353,51 @@ SnakeAction snake_action_highest_priority(SnakeAction action) {
         }
     }
     return SNAKE_ACTION_NONE;
+}
+
+void snake_action_handle_keystate(const U8* keyboard_state,
+                                  SnakeActionKeyState* prev_snake_actions_key_state,
+                                  SnakeAction* snake_actions) {
+    SnakeActionKeyState current_snake_actions_key_state = {0};
+    current_snake_actions_key_state.face_north = keyboard_state[SDL_SCANCODE_W];
+    current_snake_actions_key_state.face_west = keyboard_state[SDL_SCANCODE_A];
+    current_snake_actions_key_state.face_south = keyboard_state[SDL_SCANCODE_S];
+    current_snake_actions_key_state.face_east = keyboard_state[SDL_SCANCODE_D];
+    current_snake_actions_key_state.chomp = keyboard_state[SDL_SCANCODE_SPACE];
+    current_snake_actions_key_state.constrict_left = keyboard_state[SDL_SCANCODE_Q];
+    current_snake_actions_key_state.constrict_right = keyboard_state[SDL_SCANCODE_E];
+
+    // Actions are triggered on the press event.
+    if (!prev_snake_actions_key_state->face_north && current_snake_actions_key_state.face_north) {
+        *snake_actions |= SNAKE_ACTION_FACE_NORTH;
+    }
+
+    if (!prev_snake_actions_key_state->face_west && current_snake_actions_key_state.face_west) {
+        *snake_actions |= SNAKE_ACTION_FACE_WEST;
+    }
+
+    if (!prev_snake_actions_key_state->face_south && current_snake_actions_key_state.face_south) {
+        *snake_actions |= SNAKE_ACTION_FACE_SOUTH;
+    }
+
+    if (!prev_snake_actions_key_state->face_east && current_snake_actions_key_state.face_east) {
+        *snake_actions |= SNAKE_ACTION_FACE_EAST;
+    }
+
+    if (!prev_snake_actions_key_state->chomp && current_snake_actions_key_state.chomp) {
+        *snake_actions |= SNAKE_ACTION_CHOMP;
+    }
+
+    // Constricting acts different, where you can hold it down.
+    if (current_snake_actions_key_state.constrict_left) {
+        *snake_actions |= SNAKE_ACTION_CONSTRICT_LEFT;
+    }
+
+    if (current_snake_actions_key_state.constrict_right) {
+        *snake_actions |= SNAKE_ACTION_CONSTRICT_RIGHT;
+    }
+
+    *prev_snake_actions_key_state = current_snake_actions_key_state;
 }
 
 const char* snake_color_string(SnakeColor color) {

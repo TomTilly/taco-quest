@@ -34,16 +34,16 @@ void app_lobby_handle_keystate(AppStateLobby* lobby_state, const U8* keyboard_st
     current_action_key_state.toggle_ready = keyboard_state[SDL_SCANCODE_RETURN];
     current_action_key_state.cycle_color = keyboard_state[SDL_SCANCODE_SPACE];
 
-    if (!lobby_state->prev_action_key_states[0].toggle_ready &&
+    if (!lobby_state->prev_actions_key_states[0].toggle_ready &&
         current_action_key_state.toggle_ready) {
         lobby_state->actions[0] |= LOBBY_ACTION_TOGGLE_READY;
     }
-    if (!lobby_state->prev_action_key_states[0].cycle_color &&
+    if (!lobby_state->prev_actions_key_states[0].cycle_color &&
         current_action_key_state.cycle_color) {
         lobby_state->actions[0] |= LOBBY_ACTION_CYCLE_COLOR;
     }
 
-    lobby_state->prev_action_key_states[0] = current_action_key_state;
+    lobby_state->prev_actions_key_states[0] = current_action_key_state;
 }
 
 size_t lobby_state_serialize(AppStateLobby* lobby_state,

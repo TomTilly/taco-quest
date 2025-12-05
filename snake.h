@@ -39,6 +39,16 @@ typedef enum {
 } SnakeSegmentShapeType;
 
 typedef struct {
+    bool face_north;
+    bool face_west;
+    bool face_south;
+    bool face_east;
+    bool chomp;
+    bool constrict_left;
+    bool constrict_right;
+} SnakeActionKeyState;
+
+typedef struct {
     SnakeSegmentShapeType type;
     bool flipped;
 } SnakeSegmentShape;
@@ -111,6 +121,9 @@ bool snake_actions_are_opposite(SnakeAction action1, SnakeAction action2);
 const char* snake_action_string(SnakeAction action);
 void print_snake_action(SnakeAction action);
 SnakeAction snake_action_highest_priority(SnakeAction action);
+void snake_action_handle_keystate(const U8* keyboard_state,
+                                  SnakeActionKeyState* prev_action_key_state,
+                                  SnakeAction* actions);
 
 const char* snake_color_string(SnakeColor color);
 

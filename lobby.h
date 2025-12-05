@@ -50,7 +50,7 @@ typedef struct{
 
 typedef struct {
     LobbyPlayer players[MAX_SNAKE_COUNT];
-    LobbyActionKeyState prev_action_key_states[MAX_SNAKE_COUNT];
+    LobbyActionKeyState prev_actions_key_states[MAX_SNAKE_COUNT];
     LobbyAction actions[MAX_SNAKE_COUNT];
     LobbyGameSettings game_settings;
 } AppStateLobby;
