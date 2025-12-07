@@ -1333,15 +1333,11 @@ int main(S32 argc, char** argv) {
 
             SDL_SetTextureColorMod(snake_texture, 255, 255, 255);
 
-            switch(session_type) {
-            case SESSION_TYPE_SERVER:
-            case SESSION_TYPE_SINGLE_PLAYER: {
+            if (session_type == SESSION_TYPE_SERVER || session_type == SESSION_TYPE_SINGLE_PLAYER) {
                 PF_SetScale(font, font_scale);
                 dev_mode_draw(&server_game_state.dev_mode, game, font, window_width, cell_size);
-                break;
             }
-            }
-
+            
             PF_SetScale(font, font_scale * 2.0f);
             PF_SetForeground(font, 255, 255, 255, 255);
 
