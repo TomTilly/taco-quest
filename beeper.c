@@ -141,7 +141,7 @@ void PlayMusic(const char * string, ...)
     int bmp = 120;
     int oct = 4;
     int len = 4;
-    int background = 1;
+    // int background = 1;
 
     static const int note_offsets[7] = { 9, 11, 0, 2, 4, 5, 7 };
 
@@ -293,8 +293,8 @@ void PlayMusic(const char * string, ...)
                     case 'L': mode = mode_legato; break;
                     case 'N': mode = mode_normal; break;
                     case 'S': mode = mode_staccato; break;
-                    case 'B': background = 1; break;
-                    case 'F': background = 0; break;
+                    // case 'B': background = 1; break;
+                    // case 'F': background = 0; break;
                     default:
                         PlayError("bad music option", (int)(str - string));
                         return;
