@@ -12,6 +12,7 @@
 
 #include "dev_mode.h"
 #include "lobby.h"
+#include "map.h"
 #include "network.h"
 #include "packet.h"
 #include "pixelfont.h"
@@ -167,9 +168,31 @@ void reset_game(Game* game,
 bool draw_game(Game* game,
                SDL_Renderer* renderer,
                SDL_Texture* snake_texture,
+               SDL_Texture* tileset_texture,
                S32 cell_size,
                S32 max_segment_health) {
-    // draw level
+    // Draw level
+    for (Uint8 l = 0; l < game->map.num_layers; l++) {
+        for (Uint16 y = 0; y < game->map.height; y++) {
+            for (Uint16 x = 0; x < game->map.width; x++) {
+                GID gid = GetMapTile(&game->map, x, y, l);
+                if (gid == 0) {
+                    continue;
+                }
+
+                SDL_FRect dest_rect = {
+                    (float)(x * cell_size),
+                    (float)(y * cell_size),
+                    (float)(cell_size),
+                    (float)(cell_size)
+                };
+
+                RenderTile2(renderer, gid, tileset_texture, 16, &dest_rect);
+            }
+        }
+    }
+
+    // draw items
     for(S32 y = 0; y < game->level.height; y++) {
         for(S32 x = 0; x < game->level.width; x++) {
             // TODO: Asserts
@@ -182,24 +205,12 @@ bool draw_game(Game* game,
                 .h = (float)(cell_size)
             };
 
-            if (((x + y) % 2) == 0) {
-                SDL_SetRenderDrawColor(renderer, 0x11, 0x11, 0x11, 0xFF);
-            } else {
-                SDL_SetRenderDrawColor(renderer, 0x22, 0x22, 0x22, 0xFF);
-            }
-            SDL_RenderFillRect(renderer, &cell_rect);
-
             if (cell_type == CELL_TYPE_EMPTY) {
                 continue;
             }
 
             switch (cell_type) {
                 case CELL_TYPE_EMPTY: {
-                    break;
-                }
-                case CELL_TYPE_WALL: {
-                    SDL_SetRenderDrawColor(renderer, 0x59, 0x44, 0x2a, 0xFF);
-                    SDL_RenderFillRect(renderer, &cell_rect);
                     break;
                 }
                 case CELL_TYPE_TACO: {
@@ -774,6 +785,31 @@ int main(S32 argc, char** argv) {
         fprintf(stderr, "Failed to set texture scale mode %s\n", SDL_GetError());
         return EXIT_FAILURE;
     }
+    SDL_DestroySurface(snake_surface);
+
+    // TODO: consolidate with above logic.
+    const char* tileset_bitmap_filepath = "assets/snake_testing_tileset.bmp";
+    SDL_Surface* tileset_surface = SDL_LoadBMP(tileset_bitmap_filepath);
+    if (snake_surface == NULL) {
+        fprintf(stderr, "Failed to load bitmap %s: %s\n", snake_bitmap_filepath, SDL_GetError());
+        return EXIT_FAILURE;
+    }
+    SDL_Texture* tileset_texture = SDL_CreateTextureFromSurface(renderer, tileset_surface);
+    if (tileset_surface == NULL) {
+        fprintf(stderr, "Failed to create texture from surface %s\n", SDL_GetError());
+        return EXIT_FAILURE;
+    }
+
+    if(!SDL_SetTextureScaleMode(tileset_texture, SDL_SCALEMODE_NEAREST)) {
+        fprintf(stderr, "Failed to set texture scale mode %s\n", SDL_GetError());
+        return EXIT_FAILURE;
+    }
+    SDL_DestroySurface(tileset_surface);
+
+    if (!LoadMap(&game->map, "assets/test_map_1.temap")) {
+        fprintf(stderr, "Failed to load map.\n");
+        return EXIT_FAILURE;
+    }
 
     SDL_Gamepad* game_pads[MAX_GAME_CONTROLLERS];
     memset(game_pads, 0, sizeof(game_pads[0]) * MAX_GAME_CONTROLLERS);
@@ -1332,10 +1368,13 @@ int main(S32 argc, char** argv) {
                     snake_destroy(&snake);
                 }
             }
-
-
         } else if (app_state == APP_STATE_GAME) {
-            if (!draw_game(game, renderer, snake_texture, cell_size, lobby_state.game_settings.segment_health)) {
+            if (!draw_game(game,
+                           renderer,
+                           snake_texture,
+                           tileset_texture,
+                           cell_size,
+                           lobby_state.game_settings.segment_health)) {
                 return EXIT_FAILURE;
             }
 
@@ -1408,6 +1447,8 @@ int main(S32 argc, char** argv) {
     free(net_msg_buffer);
     PF_DestroyFont(font);
     game_destroy(game);
+    SDL_DestroyTexture(snake_texture);
+    SDL_DestroyTexture(tileset_texture);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();

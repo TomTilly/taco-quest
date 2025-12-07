@@ -12,10 +12,12 @@
 #pragma warning(disable : 4201)
 #endif
 
-#include "snake.h"
-#include "level.h"
 #include "direction.h"
+#include "level.h"
+#include "map.h"
+#include "snake.h"
 
+#define MAP_SOLID_LAYER 1
 #define MAX_SNAKE_COUNT 4
 
 typedef enum {
@@ -28,6 +30,7 @@ typedef enum {
     QUERIED_OBJECT_TYPE_NONE,
     QUERIED_OBJECT_TYPE_CELL,
     QUERIED_OBJECT_TYPE_SNAKE,
+    QUERIED_OBJECT_TYPE_WALL,
 } QueriedObjectType;
 
 typedef struct {
@@ -49,6 +52,7 @@ typedef struct {
 } PushState;
 
 typedef struct {
+    Map map;
     Level level;
     Snake snakes[MAX_SNAKE_COUNT];
     GameState state;
