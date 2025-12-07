@@ -1,5 +1,4 @@
 #include "snake.h"
-#include "level.h"
 
 #include <assert.h>
 #include <stdio.h>

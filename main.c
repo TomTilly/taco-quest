@@ -69,9 +69,9 @@ char* get_timestamp(void) {
 
 void reset_game(Game* game,
                 AppStateLobby* lobby_state) {
-    game->max_taco_count = lobby_state->game_settings.taco_count;
+    game_init(game, "assets/test_map_1.temap", lobby_state->game_settings.taco_count);
 
-    Level* level = &game->level;
+    Items* items = &game->items;
 
     S32 snake_count = 0;
     for (S32 p = 0; p < MAX_SNAKE_COUNT; p++) {
@@ -95,7 +95,7 @@ void reset_game(Game* game,
     game->snakes[0].color = lobby_state->players[0].snake_color;
 
     snake_spawn(game->snakes + 1,
-                (S16)(level->width - 3),
+                (S16)(items->width - 3),
                 2,
                 DIRECTION_SOUTH,
                 lobby_state->game_settings.starting_length,
@@ -109,8 +109,8 @@ void reset_game(Game* game,
 
     if (snake_count > 2) {
         snake_spawn(game->snakes + 2,
-                    (S16)(level->width - 2),
-                    (S16)(level->height - 3),
+                    (S16)(items->width - 2),
+                    (S16)(items->height - 3),
                     DIRECTION_WEST,
                     lobby_state->game_settings.starting_length,
                     (S8)(lobby_state->game_settings.segment_health));
@@ -120,48 +120,11 @@ void reset_game(Game* game,
     if (snake_count > 3) {
         snake_spawn(game->snakes + 3,
                     3,
-                    (S16)(level->height - 3),
+                    (S16)(items->height - 3),
                     DIRECTION_EAST,
                     lobby_state->game_settings.starting_length,
                     (S8)(lobby_state->game_settings.segment_health));
         game->snakes[3].color = lobby_state->players[3].snake_color;
-    }
-
-    const char tile_map[LEVEL_HEIGHT][LEVEL_WIDTH + 1] = {
-        "XXXXXXXXXXXXXXXXXXXXXXXX",
-        "X......................X",
-        "X......................X",
-        "X.....X................X",
-        "X.....X................X",
-        "X.....X................X",
-        "X.....X........X.......X",
-        "X.....X........X.......X",
-        "X.....X........X.......X",
-        "X.....X........X.......X",
-        "X.....X.....XXXX.......X",
-        "X.....X........X.......X",
-        "X.....X........X.......X",
-        "X.....X........X.......X",
-        "X.....X........X.......X",
-        "X..............XXXXX...X",
-        "X......................X",
-        "X......................X",
-        "X......................X",
-        "X................X.....X",
-        "X....XXXXX.......X.....X",
-        "X................X.....X",
-        "X......................X",
-        "XXXXXXXXXXXXXXXXXXXXXXXX",
-    };
-
-    for (S32 y = 0; y < level->height; y++) {
-        for (S32 x = 0; x < level->width; x++) {
-            if (tile_map[y][x] == 'X') {
-                level_set_cell(level, x, y, CELL_TYPE_WALL);
-            } else {
-                level_set_cell(level, x, y, CELL_TYPE_EMPTY);
-            }
-        }
     }
 }
 
@@ -193,10 +156,10 @@ bool draw_game(Game* game,
     }
 
     // draw items
-    for(S32 y = 0; y < game->level.height; y++) {
-        for(S32 x = 0; x < game->level.width; x++) {
+    for(S32 y = 0; y < game->items.height; y++) {
+        for(S32 x = 0; x < game->items.width; x++) {
             // TODO: Asserts
-            CellType cell_type = level_get_cell(&game->level, x, y);
+            ItemType item_type = items_get_cell(&game->items, x, y);
 
             SDL_FRect cell_rect = {
                 .x = (float)(x * cell_size),
@@ -205,15 +168,11 @@ bool draw_game(Game* game,
                 .h = (float)(cell_size)
             };
 
-            if (cell_type == CELL_TYPE_EMPTY) {
-                continue;
-            }
-
-            switch (cell_type) {
-                case CELL_TYPE_EMPTY: {
+            switch (item_type) {
+                case ITEM_TYPE_EMPTY: {
                     break;
                 }
-                case CELL_TYPE_TACO: {
+                case ITEM_TYPE_TACO: {
                     SDL_FRect source_rect = {64.0f, 0.0f, 16.0f, 16.0f};
                     bool result = SDL_RenderTexture(renderer,
                                                     snake_texture,
@@ -699,7 +658,6 @@ int main(S32 argc, char** argv) {
         }
     }
 
-    game_init(game, LEVEL_WIDTH, LEVEL_HEIGHT, 6);
     reset_game(game, &lobby_state);
 
     int rc = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD);
@@ -805,11 +763,6 @@ int main(S32 argc, char** argv) {
         return EXIT_FAILURE;
     }
     SDL_DestroySurface(tileset_surface);
-
-    if (!LoadMap(&game->map, "assets/test_map_1.temap")) {
-        fprintf(stderr, "Failed to load map.\n");
-        return EXIT_FAILURE;
-    }
 
     SDL_Gamepad* game_pads[MAX_GAME_CONTROLLERS];
     memset(game_pads, 0, sizeof(game_pads[0]) * MAX_GAME_CONTROLLERS);
