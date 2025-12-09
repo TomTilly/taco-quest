@@ -96,4 +96,3 @@ void RenderTile2(SDL_Renderer * renderer,
                  const SDL_FRect * dest);
 
 #endif /* __map_h */
-

@@ -1382,7 +1382,8 @@ int main(S32 argc, char** argv) {
                 S32 max_map_dimension =
                     (game->map.height > game->map.width) ? game->map.height : game->map.width;
                 cell_size = (min_display_dimension / max_map_dimension);
-                cell_size -= (cell_size % cell_pixel_size);
+                // This commented out logic ensures there are no visual artifacts by making sure the pixels are divisible.
+                // cell_size -= (cell_size % cell_pixel_size);
             }
 
             // Calculate offset so that map will be centered, all objects must use this offset.
