@@ -4,7 +4,7 @@
 #include "ints.h"
 #include "direction.h"
 
-#include <SDL2/SDL_render.h>
+#include <SDL3/SDL_render.h>
 #include <stdbool.h>
 
 #define INITIAL_SNAKE_LEN 5
@@ -121,7 +121,7 @@ bool snake_actions_are_opposite(SnakeAction action1, SnakeAction action2);
 const char* snake_action_string(SnakeAction action);
 void print_snake_action(SnakeAction action);
 SnakeAction snake_action_highest_priority(SnakeAction action);
-void snake_action_handle_keystate(const U8* keyboard_state,
+void snake_action_handle_keystate(const bool* keyboard_state,
                                   SnakeActionKeyState* prev_action_key_state,
                                   SnakeAction* actions);
 

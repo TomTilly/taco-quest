@@ -75,7 +75,11 @@ void ui_checkbox(UserInterface* ui,
     }
 
     // Outline
-    SDL_Rect outline_rect = {checkbox->x, checkbox->y, UI_CHECKBOX_SIZE, UI_CHECKBOX_SIZE};
+    SDL_FRect outline_rect = {
+        (float)(checkbox->x),
+        (float)(checkbox->y),
+        (float)(UI_CHECKBOX_SIZE),
+        (float)(UI_CHECKBOX_SIZE)};
     SDL_SetRenderDrawColor(renderer,
                            ui->outline_color.red,
                            ui->outline_color.green,
@@ -84,11 +88,11 @@ void ui_checkbox(UserInterface* ui,
     SDL_RenderFillRect(renderer, &outline_rect);
 
     // Background
-    SDL_Rect background_rect = {
-        outline_rect.x + UI_CHECKBOX_OUTLINE_SIZE,
-        outline_rect.y + UI_CHECKBOX_OUTLINE_SIZE,
-        outline_rect.w - (2 * UI_CHECKBOX_OUTLINE_SIZE),
-        outline_rect.h - (2 * UI_CHECKBOX_OUTLINE_SIZE)};
+    SDL_FRect background_rect = {
+        (float)(outline_rect.x + UI_CHECKBOX_OUTLINE_SIZE),
+        (float)(outline_rect.y + UI_CHECKBOX_OUTLINE_SIZE),
+        (float)(outline_rect.w - (2 * UI_CHECKBOX_OUTLINE_SIZE)),
+        (float)(outline_rect.h - (2 * UI_CHECKBOX_OUTLINE_SIZE))};
     SDL_SetRenderDrawColor(renderer,
                            active_background_color.red,
                            active_background_color.green,
@@ -98,11 +102,11 @@ void ui_checkbox(UserInterface* ui,
 
     if (*value) {
         // Checkmark
-        SDL_Rect checked_rect = {
-            outline_rect.x + UI_CHECKBOX_FILL_GAP,
-            outline_rect.y + UI_CHECKBOX_FILL_GAP,
-            outline_rect.w - (2 * UI_CHECKBOX_FILL_GAP),
-            outline_rect.h - (2 * UI_CHECKBOX_FILL_GAP)};
+        SDL_FRect checked_rect = {
+            (float)(outline_rect.x + UI_CHECKBOX_FILL_GAP),
+            (float)(outline_rect.y + UI_CHECKBOX_FILL_GAP),
+            (float)(outline_rect.w - (2 * UI_CHECKBOX_FILL_GAP)),
+            (float)(outline_rect.h - (2 * UI_CHECKBOX_FILL_GAP))};
         SDL_SetRenderDrawColor(renderer,
                                ui->outline_color.red,
                                ui->outline_color.green,
@@ -123,7 +127,11 @@ void ui_slider(UserInterface* ui,
     S32 height = ui_slider_height(slider, font_state.char_height);
 
     // Outline
-    SDL_Rect outline_rect = {slider->x, slider->y, width, height};
+    SDL_FRect outline_rect = {
+        (float)(slider->x),
+        (float)(slider->y),
+        (float)(width),
+        (float)(height)};
     SDL_SetRenderDrawColor(renderer,
                            ui->outline_color.red,
                            ui->outline_color.green,
@@ -143,11 +151,11 @@ void ui_slider(UserInterface* ui,
     }
 
     // Background
-    SDL_Rect background_rect = {
-        outline_rect.x + UI_SLIDER_OUTLINE_SIZE,
-        outline_rect.y + UI_SLIDER_OUTLINE_SIZE,
-        outline_rect.w - (2 * UI_SLIDER_OUTLINE_SIZE),
-        outline_rect.h - (2 * UI_SLIDER_OUTLINE_SIZE)};
+    SDL_FRect background_rect = {
+        (float)(outline_rect.x + UI_SLIDER_OUTLINE_SIZE),
+        (float)(outline_rect.y + UI_SLIDER_OUTLINE_SIZE),
+        (float)(outline_rect.w - (2 * UI_SLIDER_OUTLINE_SIZE)),
+        (float)(outline_rect.h - (2 * UI_SLIDER_OUTLINE_SIZE))};
     SDL_SetRenderDrawColor(renderer,
                            active_background_color.red,
                            active_background_color.green,
@@ -156,7 +164,11 @@ void ui_slider(UserInterface* ui,
     SDL_RenderFillRect(renderer, &background_rect);
 
     // Line
-    SDL_Rect line_rect = {slider->x + 2, slider->y + (height / 2), width - 4, 1};
+    SDL_FRect line_rect = {
+        (float)(slider->x + 2),
+        (float)(slider->y + (height / 2)),
+        (float)(width - 4),
+        (float)(1)};
     SDL_SetRenderDrawColor(renderer,
                            ui->outline_color.red,
                            ui->outline_color.green,
@@ -174,7 +186,7 @@ void ui_slider(UserInterface* ui,
         if (!mouse_state->left_clicked) {
             slider->active = false;
         } else {
-            S32 mouse_x = mouse_state->x - (slider->x + UI_SLIDER_H_PADDING);
+            S32 mouse_x = (S32)(mouse_state->x - (slider->x + UI_SLIDER_H_PADDING));
             if (mouse_x < 0) {
                 mouse_x = 0;
             }
@@ -191,11 +203,11 @@ void ui_slider(UserInterface* ui,
     float slider_scale = (S32)(*value - slider->min) / (float)(slider_range);
     float slider_pixel = (float)(slider->pixel_width) * slider_scale;
     S32 slider_x = slider->x + (S32)(slider_pixel);
-    SDL_Rect slider_rect = {
-        UI_SLIDER_H_PADDING + slider_x,
-        slider->y + UI_SLIDER_V_PADDING,
-        UI_SLIDER_CONTROL_WIDTH,
-        height - 4};
+    SDL_FRect slider_rect = {
+        (float)(UI_SLIDER_H_PADDING + slider_x),
+        (float)(slider->y + UI_SLIDER_V_PADDING),
+        (float)(UI_SLIDER_CONTROL_WIDTH),
+        (float)(height - 4)};
     SDL_SetRenderDrawColor(renderer,
                            ui->outline_color.red,
                            ui->outline_color.green,
@@ -218,7 +230,11 @@ void ui_dropdown(UserInterface* ui,
     S32 height = ui_dropdown_height(drop_down, font_height);
 
     // Outline
-    SDL_Rect outline_rect ={drop_down->x, drop_down->y, width, height};
+    SDL_FRect outline_rect = {
+        (float)(drop_down->x),
+        (float)(drop_down->y),
+        (float)(width),
+        (float)(height)};
     SDL_SetRenderDrawColor(renderer,
                            ui->outline_color.red,
                            ui->outline_color.green,
@@ -238,8 +254,11 @@ void ui_dropdown(UserInterface* ui,
     }
 
     // Background
-    SDL_Rect background_rect = {
-        outline_rect.x + 1, outline_rect.y + 1, outline_rect.w - 2, outline_rect.h - 2};
+    SDL_FRect background_rect = {
+        (float)(outline_rect.x + 1),
+        (float)(outline_rect.y + 1),
+        (float)(outline_rect.w - 2),
+        (float)(outline_rect.h - 2)};
     SDL_SetRenderDrawColor(renderer,
                            active_background_color.red,
                            active_background_color.green,
@@ -287,8 +306,11 @@ void ui_dropdown(UserInterface* ui,
                 mouse_state->x <= right &&
                 mouse_state->y >= bottom &&
                 mouse_state->y <= top) {
-                SDL_Rect hovering_rect = {
-                    left + 1, bottom, width - UI_DROPDOWN_H_PADDING, font_height};
+                SDL_FRect hovering_rect = {
+                    (float)(left + 1),
+                    (float)(bottom),
+                    (float)(width - UI_DROPDOWN_H_PADDING),
+                    (float)(font_height)};
                 SDL_SetRenderDrawColor(renderer,
                                        ui->hovering_color.red,
                                        ui->hovering_color.green,

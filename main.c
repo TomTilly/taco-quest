@@ -8,7 +8,7 @@
 #include <string.h>
 #include <assert.h>
 
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 
 #include "dev_mode.h"
 #include "lobby.h"
@@ -175,11 +175,11 @@ bool draw_game(Game* game,
             // TODO: Asserts
             CellType cell_type = level_get_cell(&game->level, x, y);
 
-            SDL_Rect cell_rect = {
-                .x = x * cell_size,
-                .y = y * cell_size,
-                .w = cell_size,
-                .h = cell_size
+            SDL_FRect cell_rect = {
+                .x = (float)(x * cell_size),
+                .y = (float)(y * cell_size),
+                .w = (float)(cell_size),
+                .h = (float)(cell_size)
             };
 
             if (((x + y) % 2) == 0) {
@@ -203,12 +203,12 @@ bool draw_game(Game* game,
                     break;
                 }
                 case CELL_TYPE_TACO: {
-                    SDL_Rect source_rect = {64, 0, 16, 16};
-                    int rc = SDL_RenderCopy(renderer,
-                                        snake_texture,
-                                        &source_rect,
-                                        &cell_rect);
-                    if (rc != 0) {
+                    SDL_FRect source_rect = {64.0f, 0.0f, 16.0f, 16.0f};
+                    bool result = SDL_RenderTexture(renderer,
+                                                    snake_texture,
+                                                    &source_rect,
+                                                    &cell_rect);
+                    if (!result) {
                         fprintf(stderr, "Tom F was wrong: %s\n", SDL_GetError());
                         return false;
                     }
@@ -229,9 +229,10 @@ bool draw_game(Game* game,
 }
 
 bool app_game_server_handle_keystate(AppStateGameServer* app_game_server,
-                                     const U8* keyboard_state,
+                                     const bool* keyboard_state,
                                      S32 cell_size,
-                                     bool use_keyboard_for_snake_actions) {
+                                     bool use_keyboard_for_snake_actions,
+                                     UIMouseState* ui_mouse_state) {
     switch (app_game_server->game.state) {
     case GAME_STATE_PLAYING: {
         if (use_keyboard_for_snake_actions) {
@@ -243,7 +244,8 @@ bool app_game_server_handle_keystate(AppStateGameServer* app_game_server,
         dev_mode_handle_keystate(&app_game_server->dev_mode,
                                  &app_game_server->game,
                                  cell_size,
-                                 keyboard_state);
+                                 keyboard_state,
+                                 ui_mouse_state);
         break;
     }
     case GAME_STATE_WAITING:
@@ -293,7 +295,7 @@ void app_game_server_update(AppStateGameServer* app_game_server,
     }
 }
 
-void app_game_client_handle_keystate(AppStateGameClient* app_game_client, const U8* keyboard_state) {
+void app_game_client_handle_keystate(AppStateGameClient* app_game_client, const bool* keyboard_state) {
     if (app_game_client->game.state == GAME_STATE_PLAYING) {
         snake_action_handle_keystate(keyboard_state,
                                      &app_game_client->prev_action_key_state,
@@ -322,22 +324,22 @@ void app_server_update(AppState* app_state,
     }
 }
 
-void init_controller_for_player(SDL_GameController* game_controllers[MAX_GAME_CONTROLLERS],
-                                S32 joystick_index,
+void init_controller_for_player(SDL_Gamepad* game_pads[MAX_GAME_CONTROLLERS],
+                                U32 joystick_index,
                                 AppStateLobby* lobby_state,
                                 SessionType session_type) {
     for (S32 c = 0; c < MAX_GAME_CONTROLLERS; c++) {
-        if (game_controllers[c] != NULL) {
-            if (SDL_JoystickInstanceID(
-                    SDL_GameControllerGetJoystick(game_controllers[c])) == joystick_index) {
+        if (game_pads[c] != NULL) {
+            if (SDL_GetJoystickID(
+                    SDL_GetGamepadJoystick(game_pads[c])) == joystick_index) {
                 return;
             }
             continue;
         }
 
-        game_controllers[c] = SDL_GameControllerOpen(joystick_index);
+        game_pads[c] = SDL_OpenGamepad(joystick_index);
 
-        if (game_controllers[c] == NULL) {
+        if (game_pads[c] == NULL) {
             fprintf(stderr, "Failed to open game controller %s\n", SDL_GetError());
         } else if (session_type == SESSION_TYPE_SINGLE_PLAYER || session_type == SESSION_TYPE_SERVER) {
             S32 next_available_lobby_player = -1;
@@ -358,8 +360,8 @@ void init_controller_for_player(SDL_GameController* game_controllers[MAX_GAME_CO
                         MAX_LOBBY_PLAYER_NAME_LEN);
             } else {
                 fprintf(stderr, "No more space in lobby for another controller\n");
-                SDL_GameControllerClose(game_controllers[c]);
-                game_controllers[c] = NULL;
+                SDL_CloseGamepad(game_pads[c]);
+                game_pads[c] = NULL;
             }
         } else if (session_type == SESSION_TYPE_CLIENT) {
             printf("using controller instead of keyboard\n");
@@ -370,17 +372,17 @@ void init_controller_for_player(SDL_GameController* game_controllers[MAX_GAME_CO
     }
 }
 
-void close_controller_for_player(SDL_GameController* game_controllers[MAX_GAME_CONTROLLERS],
-                                 S32 joystick_index,
+void close_controller_for_player(SDL_Gamepad* game_pads[MAX_GAME_CONTROLLERS],
+                                 U32 joystick_index,
                                  AppStateLobby* lobby_state,
                                  SessionType session_type) {
     for (S32 c = 0; c < MAX_GAME_CONTROLLERS; c++) {
-        if (game_controllers[c] == NULL) {
+        if (game_pads[c] == NULL) {
             continue;
         }
 
-        if (SDL_JoystickInstanceID(
-                SDL_GameControllerGetJoystick(game_controllers[c])) != joystick_index) {
+        if (SDL_GetJoystickID(
+                SDL_GetGamepadJoystick(game_pads[c])) != joystick_index) {
             continue;
         }
 
@@ -401,19 +403,19 @@ void close_controller_for_player(SDL_GameController* game_controllers[MAX_GAME_C
             }
         }
 
-        SDL_GameControllerClose(game_controllers[c]);
-        game_controllers[c] = NULL;
+        SDL_CloseGamepad(game_pads[c]);
+        game_pads[c] = NULL;
     }
 }
 
 void controller_handle_input(AppState app_state,
                              SessionType session_type,
-                             SDL_GameController* game_controllers[MAX_GAME_CONTROLLERS],
+                             SDL_Gamepad* game_pads[MAX_GAME_CONTROLLERS],
                              AppStateLobby* lobby_state,
                              AppStateGameServer* server_game_state,
                              AppStateGameClient* client_game_state) {
     for (S32 c = 0; c < MAX_GAME_CONTROLLERS; c++) {
-        if (game_controllers[c] == NULL) {
+        if (game_pads[c] == NULL) {
             continue;
         }
 
@@ -433,9 +435,9 @@ void controller_handle_input(AppState app_state,
         if (app_state == APP_STATE_LOBBY) {
             LobbyActionKeyState current_action_key_state = {0};
             current_action_key_state.toggle_ready =
-                SDL_GameControllerGetButton(game_controllers[c], SDL_CONTROLLER_BUTTON_A);
+                SDL_GetGamepadButton(game_pads[c], SDL_GAMEPAD_BUTTON_SOUTH);
             current_action_key_state.cycle_color =
-                SDL_GameControllerGetButton(game_controllers[c], SDL_CONTROLLER_BUTTON_X);
+                SDL_GetGamepadButton(game_pads[c], SDL_GAMEPAD_BUTTON_WEST);
 
             if (!lobby_state->prev_actions_key_states[player_index].toggle_ready &&
                 current_action_key_state.toggle_ready) {
@@ -451,19 +453,19 @@ void controller_handle_input(AppState app_state,
         } else if (app_state == APP_STATE_GAME) {
             SnakeActionKeyState current_action_key_state = {0};
             current_action_key_state.face_north =
-                SDL_GameControllerGetButton(game_controllers[c], SDL_CONTROLLER_BUTTON_DPAD_UP);
+                SDL_GetGamepadButton(game_pads[c], SDL_GAMEPAD_BUTTON_DPAD_UP);
             current_action_key_state.face_west =
-                SDL_GameControllerGetButton(game_controllers[c], SDL_CONTROLLER_BUTTON_DPAD_LEFT);
+                SDL_GetGamepadButton(game_pads[c], SDL_GAMEPAD_BUTTON_DPAD_LEFT);
             current_action_key_state.face_south =
-                SDL_GameControllerGetButton(game_controllers[c], SDL_CONTROLLER_BUTTON_DPAD_DOWN);
+                SDL_GetGamepadButton(game_pads[c], SDL_GAMEPAD_BUTTON_DPAD_DOWN);
             current_action_key_state.face_east =
-                SDL_GameControllerGetButton(game_controllers[c], SDL_CONTROLLER_BUTTON_DPAD_RIGHT);
+                SDL_GetGamepadButton(game_pads[c], SDL_GAMEPAD_BUTTON_DPAD_RIGHT);
             current_action_key_state.chomp =
-                SDL_GameControllerGetButton(game_controllers[c], SDL_CONTROLLER_BUTTON_A);
+                SDL_GetGamepadButton(game_pads[c], SDL_GAMEPAD_BUTTON_SOUTH);
             current_action_key_state.constrict_left =
-                SDL_GameControllerGetButton(game_controllers[c], SDL_CONTROLLER_BUTTON_X);
+                SDL_GetGamepadButton(game_pads[c], SDL_GAMEPAD_BUTTON_WEST);
             current_action_key_state.constrict_right =
-                SDL_GameControllerGetButton(game_controllers[c], SDL_CONTROLLER_BUTTON_B);
+                SDL_GetGamepadButton(game_pads[c], SDL_GAMEPAD_BUTTON_EAST);
 
             SnakeAction* snake_actions = NULL;
             SnakeActionKeyState* prev_snake_actions_key_states = NULL;
@@ -689,14 +691,24 @@ int main(S32 argc, char** argv) {
     game_init(game, LEVEL_WIDTH, LEVEL_HEIGHT, 6);
     reset_game(game, &lobby_state);
 
-    int rc = SDL_Init(SDL_INIT_EVERYTHING);
+    int rc = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD);
     if (rc < 0) {
         printf("SDL_Init failed %s\n", SDL_GetError());
         return EXIT_FAILURE;
     }
 
+
+    int display_count = 0;
+    SDL_DisplayID* displays = SDL_GetDisplays(&display_count);
+    if (display_count < 1) {
+        printf("No displays found\n");
+        return EXIT_FAILURE;
+    }
+
     SDL_Rect display_size;
-    SDL_GetDisplayBounds(0, &display_size);
+    SDL_GetDisplayBounds(displays[0], &display_size);
+
+    printf("display rect: %d, %d -> %d, %d\n", display_size.x, display_size.y, display_size.h, display_size.w);
 
     S32 min_display_dimension = (display_size.h < display_size.w) ? display_size.h : display_size.w;
     S32 max_level_dimension = (LEVEL_HEIGHT > LEVEL_WIDTH) ? LEVEL_HEIGHT : LEVEL_WIDTH;
@@ -706,22 +718,12 @@ int main(S32 argc, char** argv) {
     // window.
     min_display_dimension -= (min_display_dimension % max_level_dimension);
 
-    int window_x = SDL_WINDOWPOS_CENTERED;
-    int window_y = display_size.h / 4;
     S32 window_width = min_display_dimension;
     S32 window_height = min_display_dimension;
 
-    if ( session_type == SESSION_TYPE_SERVER ) {
-        window_x = display_size.w / 2 - window_width;
-    } else if ( session_type == SESSION_TYPE_CLIENT ) {
-        window_x = display_size.w / 2;
-    } else {
-        window_y = SDL_WINDOWPOS_CENTERED;
-    }
+    printf("creating window: %s %dx%d\n", window_title, window_width, window_height);
 
     SDL_Window* window = SDL_CreateWindow(window_title,
-                                          window_x,
-                                          window_y,
                                           window_width,
                                           window_height,
                                           0);
@@ -730,7 +732,7 @@ int main(S32 argc, char** argv) {
         return 1;
     }
 
-    SDL_Renderer * renderer = SDL_CreateRenderer(window, -1, 0);
+    SDL_Renderer * renderer = SDL_CreateRenderer(window, NULL);
     if ( renderer == NULL ) {
         printf("SDL_CreateRenderer failed %s\n", SDL_GetError());
         return 1;
@@ -768,8 +770,13 @@ int main(S32 argc, char** argv) {
         return EXIT_FAILURE;
     }
 
-    SDL_GameController* game_controllers[MAX_GAME_CONTROLLERS];
-    memset(game_controllers, 0, sizeof(game_controllers[0]) * MAX_GAME_CONTROLLERS);
+    if(!SDL_SetTextureScaleMode(snake_texture, SDL_SCALEMODE_NEAREST)) {
+        fprintf(stderr, "Failed to set texture scale mode %s\n", SDL_GetError());
+        return EXIT_FAILURE;
+    }
+
+    SDL_Gamepad* game_pads[MAX_GAME_CONTROLLERS];
+    memset(game_pads, 0, sizeof(game_pads[0]) * MAX_GAME_CONTROLLERS);
 
     UserInterface ui = {0};
     ui_create(&ui, font);
@@ -850,31 +857,31 @@ int main(S32 argc, char** argv) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             switch (event.type) {
-            case SDL_QUIT:
+            case SDL_EVENT_QUIT:
                 quit = true;
                 break;
-            case SDL_CONTROLLERDEVICEADDED:
+            case SDL_EVENT_GAMEPAD_ADDED:
                 if (app_state == APP_STATE_LOBBY) {
-                    init_controller_for_player(game_controllers,
+                    init_controller_for_player(game_pads,
                                                event.cdevice.which,
                                                &lobby_state,
                                                session_type);
                 }
                 // TODO: support connecting a controller during game ?
                 break;
-            case SDL_CONTROLLERDEVICEREMOVED:
+            case SDL_EVENT_GAMEPAD_REMOVED:
                 if (app_state == APP_STATE_LOBBY) {
-                    close_controller_for_player(game_controllers,
+                    close_controller_for_player(game_pads,
                                                event.cdevice.which,
                                                &lobby_state,
                                                session_type);
                 }
                 break;
-            case SDL_MOUSEMOTION:
+            case SDL_EVENT_MOUSE_MOTION:
                 ui_mouse_state.x = event.button.x;
                 ui_mouse_state.y = event.button.y;
                 break;
-            case SDL_MOUSEBUTTONDOWN:
+            case SDL_EVENT_MOUSE_BUTTON_DOWN:
                 switch (event.button.button) {
                 case SDL_BUTTON_LEFT:
                     ui_mouse_state.left_clicked = true;
@@ -886,7 +893,7 @@ int main(S32 argc, char** argv) {
                     break;
                 }
                 break;
-            case SDL_MOUSEBUTTONUP:
+            case SDL_EVENT_MOUSE_BUTTON_UP:
                 switch (event.button.button) {
                 case SDL_BUTTON_LEFT:
                     ui_mouse_state.left_clicked = false;
@@ -905,7 +912,7 @@ int main(S32 argc, char** argv) {
 
         // Handle snake action keys separately.
         {
-            const U8* keyboard_state = SDL_GetKeyboardState(NULL);
+            const bool* keyboard_state = SDL_GetKeyboardState(NULL);
 
             if (app_state == APP_STATE_LOBBY) {
                 if (lobby_state.players[0].type == LOBBY_PLAYER_TYPE_LOCAL_KEYBOARD) {
@@ -923,7 +930,8 @@ int main(S32 argc, char** argv) {
                     if (app_game_server_handle_keystate(&server_game_state,
                                                         keyboard_state,
                                                         cell_size,
-                                                        lobby_state.players[0].type == LOBBY_PLAYER_TYPE_LOCAL_KEYBOARD)) {
+                                                        lobby_state.players[0].type == LOBBY_PLAYER_TYPE_LOCAL_KEYBOARD,
+                                                        &ui_mouse_state)) {
                         for (S32 p = 0; p < MAX_SNAKE_COUNT; p++) {
                             if (lobby_state.players[p].state == LOBBY_PLAYER_STATE_READY) {
                                 lobby_state.players[p].state = LOBBY_PLAYER_STATE_NOT_READY;
@@ -943,7 +951,7 @@ int main(S32 argc, char** argv) {
 
         controller_handle_input(app_state,
                                 session_type,
-                                game_controllers,
+                                game_pads,
                                 &lobby_state,
                                 &server_game_state,
                                 &client_game_state);
@@ -1386,9 +1394,9 @@ int main(S32 argc, char** argv) {
     }
 
     for (S32 c = 0; c < MAX_GAME_CONTROLLERS; c++) {
-        if (game_controllers[c] != NULL) {
-            SDL_GameControllerClose(game_controllers[c]);
-            game_controllers[c] = NULL;
+        if (game_pads[c] != NULL) {
+            SDL_CloseGamepad(game_pads[c]);
+            game_pads[c] = NULL;
         }
     }
 

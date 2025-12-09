@@ -20,7 +20,7 @@ cl ^
     /DPLATFORM_WINDOWS ^
     /I"external\include" ^
     *.c plat_win\*.c ^
-    "SDL2.lib" "SDL2main.lib" "shell32.lib" "Ws2_32.lib" ^
+    "SDL3.lib" "shell32.lib" "Ws2_32.lib" ^
     /link ^
     "/OUT:taco-quest.exe" ^
     "/LIBPATH:external\lib" ^

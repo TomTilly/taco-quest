@@ -1,6 +1,6 @@
 #include "lobby.h"
 
-#include <SDL2/SDL.h>
+#include <SDL3/SDL_scancode.h>
 
 #include <assert.h>
 
@@ -29,7 +29,7 @@ bool app_lobby_update(AppStateLobby* lobby_state) {
 
     return all_ready;
 }
-void app_lobby_handle_keystate(AppStateLobby* lobby_state, const U8* keyboard_state) {
+void app_lobby_handle_keystate(AppStateLobby* lobby_state, const bool* keyboard_state) {
     LobbyActionKeyState current_action_key_state = {0};
     current_action_key_state.toggle_ready = keyboard_state[SDL_SCANCODE_RETURN];
     current_action_key_state.cycle_color = keyboard_state[SDL_SCANCODE_SPACE];

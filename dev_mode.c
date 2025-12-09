@@ -36,7 +36,11 @@ void dev_mode_draw(DevMode* dev_mode, Game* game, PF_Font* font, S32 window_widt
     }
 }
 
-void dev_mode_handle_keystate(DevMode* dev_mode, Game* game, S32 cell_size, const U8* keyboard_state) {
+void dev_mode_handle_keystate(DevMode* dev_mode,
+                              Game* game,
+                              S32 cell_size,
+                              const bool* keyboard_state,
+                              UIMouseState* ui_mouse_state) {
     DevModeKeyState current_dev_key_state = {0};
     current_dev_key_state.toggle_enabled = keyboard_state[SDL_SCANCODE_GRAVE];
     current_dev_key_state.toggle_step_mode = keyboard_state[SDL_SCANCODE_TAB];
@@ -66,11 +70,8 @@ void dev_mode_handle_keystate(DevMode* dev_mode, Game* game, S32 cell_size, cons
 
         if (!dev_mode->prev_key_state.place_taco &&
             current_dev_key_state.place_taco) {
-            int mouse_x = 0;
-            int mouse_y = 0;
-            SDL_GetMouseState(&mouse_x, &mouse_y);
-            S32 cell_x = mouse_x / cell_size;
-            S32 cell_y = mouse_y / cell_size;
+            S32 cell_x = (S32)(ui_mouse_state->x) / cell_size;
+            S32 cell_y = (S32)(ui_mouse_state->y) / cell_size;
             if (game_empty_at(game, cell_x, cell_y)) {
                 level_set_cell(&game->level, cell_x, cell_y, CELL_TYPE_TACO);
             }
@@ -89,8 +90,8 @@ void dev_mode_handle_mouse(DevMode* dev_mode,
     }
 
     if (ui_mouse_state->left_clicked) {
-        S32 cell_x = ui_mouse_state->x / cell_size;
-        S32 cell_y = ui_mouse_state->y / cell_size;
+        S32 cell_x = (S32)(ui_mouse_state->x) / cell_size;
+        S32 cell_y = (S32)(ui_mouse_state->y) / cell_size;
 
         switch (dev_mode->snake_selection_state) {
         case SNAKE_SELECTION_STATE_NONE: {

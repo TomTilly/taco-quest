@@ -5,7 +5,7 @@
 
 #include <stdbool.h>
 
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 
 #include "ints.h"
 #include "pixelfont.h"
@@ -17,8 +17,8 @@ typedef struct {
     bool left_clicked;
     bool prev_right_clicked;
     bool right_clicked;
-    S32 x;
-    S32 y;
+    float x;
+    float y;
 } UIMouseState;
 
 #define UI_CHECKBOX_SIZE 20
