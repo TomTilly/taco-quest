@@ -10,10 +10,13 @@ S32 ui_slider_height(UISlider* slider, S32 font_height) {
     return 2 * font_height + (2 * UI_SLIDER_V_PADDING);
 }
 
-S32 ui_dropdown_width(UIDropDown* drop_down, S32 font_width, S32 font_spacing) {
+S32 ui_dropdown_width(const char** options,
+                      S32 option_count,
+                      S32 font_width,
+                      S32 font_spacing) {
     S32 longest_option_len = 0;
-    for (S32 i = 0; i < drop_down->option_count; i++) {
-        S32 option_len = (S32)(strnlen(drop_down->options[i], UI_MAX_TEXT_LEN));
+    for (S32 i = 0; i < option_count; i++) {
+        S32 option_len = (S32)(strnlen(options[i], UI_MAX_TEXT_LEN));
         if (option_len > longest_option_len) {
             longest_option_len = option_len;
         }
@@ -22,10 +25,10 @@ S32 ui_dropdown_width(UIDropDown* drop_down, S32 font_width, S32 font_spacing) {
            (2 * UI_DROPDOWN_H_PADDING);
 }
 
-S32 ui_dropdown_height(UIDropDown* drop_down, S32 font_height) {
+S32 ui_dropdown_height(UIDropDown* drop_down, S32 option_count, S32 font_height) {
     S32 result = font_height + 2 * UI_DROPDOWN_V_PADDING;
     if (drop_down->dropped) {
-        result += (drop_down->option_count - 1) * font_height;
+        result += (option_count - 1) * font_height;
     }
     return result;
 }
@@ -219,15 +222,21 @@ void ui_slider(UserInterface* ui,
 void ui_dropdown(UserInterface* ui,
                  SDL_Renderer* renderer,
                  UIMouseState* mouse_state,
-                 UIDropDown* drop_down) {
-    assert(drop_down->selected >= 0 && drop_down->selected < drop_down->option_count);
+                 UIDropDown* drop_down,
+                 char** options,
+                 S32 option_count,
+                 S32* selected) {
+    assert(*selected >= 0 && *selected < option_count);
 
     PF_FontState font_state = PF_GetState(ui->font);
 
     S32 font_height = (S32)(font_state.char_height * font_state.scale);
 
-    S32 width = ui_dropdown_width(drop_down, (S32)(font_state.char_width * font_state.scale), font_state.letter_spacing);
-    S32 height = ui_dropdown_height(drop_down, font_height);
+    S32 width = ui_dropdown_width(options,
+                                  option_count,
+                                  (S32)(font_state.char_width * font_state.scale),
+                                  font_state.letter_spacing);
+    S32 height = ui_dropdown_height(drop_down, option_count, font_height);
 
     // Outline
     SDL_FRect outline_rect = {
@@ -272,7 +281,7 @@ void ui_dropdown(UserInterface* ui,
             // Figure out which option we're over and select it.
             S32 left = drop_down->x;
             S32 right = drop_down->x + width;
-            for (S32 i = 0; i < drop_down->option_count; i++) {
+            for (S32 i = 0; i < option_count; i++) {
                 S32 bottom =
                     drop_down->y + (i * (font_height));
                 S32 top = bottom + font_height;
@@ -280,7 +289,7 @@ void ui_dropdown(UserInterface* ui,
                     mouse_state->x <= right &&
                     mouse_state->y >= bottom &&
                     mouse_state->y <= top) {
-                    drop_down->selected = i;
+                    *selected = i;
                     drop_down->dropped = false;
                     break;
                 }
@@ -299,7 +308,7 @@ void ui_dropdown(UserInterface* ui,
         // TODO: compress with above.
         S32 left = drop_down->x;
         S32 right = drop_down->x + width;
-        for (S32 i = 0; i < drop_down->option_count; i++) {
+        for (S32 i = 0; i < option_count; i++) {
             S32 bottom = drop_down->y + UI_DROPDOWN_V_PADDING + (i * font_height);
             S32 top = bottom + font_height;
             if (mouse_state->x >= left &&
@@ -327,12 +336,12 @@ void ui_dropdown(UserInterface* ui,
                         "-");
 
         // Draw all the text options.
-        for (S32 i = 0; i < drop_down->option_count; i++) {
+        for (S32 i = 0; i < option_count; i++) {
             PF_RenderString(
                 ui->font,
                 2 * (font_state.char_width + font_state.letter_spacing) + drop_down->x + UI_DROPDOWN_H_PADDING,
                 drop_down->y + UI_DROPDOWN_V_PADDING + (i * font_height),
-                drop_down->options[i]);
+                options[i]);
         }
     } else {
         // Draw the selected text.
@@ -340,7 +349,7 @@ void ui_dropdown(UserInterface* ui,
             ui->font,
             2 * (font_state.char_width + font_state.letter_spacing) + drop_down->x + UI_DROPDOWN_H_PADDING,
             drop_down->y + UI_DROPDOWN_V_PADDING,
-            drop_down->options[drop_down->selected]);
+            options[*selected]);
 
         PF_RenderString(
             ui->font,

@@ -73,7 +73,7 @@ void dev_mode_handle_keystate(DevMode* dev_mode,
             S32 cell_x = (S32)(ui_mouse_state->x) / cell_size;
             S32 cell_y = (S32)(ui_mouse_state->y) / cell_size;
             if (game_empty_at(game, cell_x, cell_y)) {
-                level_set_cell(&game->level, cell_x, cell_y, CELL_TYPE_TACO);
+                items_set_cell(&game->items, cell_x, cell_y, ITEM_TYPE_TACO);
             }
         }
     }
@@ -131,8 +131,8 @@ void dev_mode_handle_mouse(DevMode* dev_mode,
                    break;
                 }
 
-                CellType cell_type = level_get_cell(&game->level, cell_x, cell_y);
-                if (cell_type != CELL_TYPE_EMPTY) {
+                ItemType item_type = items_get_cell(&game->items, cell_x, cell_y);
+                if (item_type != ITEM_TYPE_EMPTY) {
                    break;
                 }
                 if (game_query_for_snake_at(game, cell_x, cell_y) >= 0) {

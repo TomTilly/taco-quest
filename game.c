@@ -68,38 +68,45 @@ bool _snake_segment_positions_equal(SnakeSegmentPosition* a, SnakeSegmentPositio
 }
 
 void _print_game(Game* game) {
-    S32 print_height = game->level.height + 1; // For coordinates.
+    S32 print_height = game->map.height + 1; // For coordinates.
     char** string = malloc(print_height * sizeof(char*));
-    S32 string_length = game->level.width + 2; // For coordinates plus null terminator.
+    S32 string_length = game->map.width + 2; // For coordinates plus null terminator.
     for (S32 i = 0; i < print_height; i++) {
         string[i] = malloc(string_length);
         memset(string[i], 0, string_length);
     }
 
     string[0][0] = ' ';
-    for (S32 x = 0; x < game->level.width; x++) {
+    for (S32 x = 0; x < game->items.width; x++) {
         string[0][x + 1] = '0' + (x % 10);
     }
 
-    for (S32 y = 0; y < game->level.height; y++) {
+    for (S32 y = 0; y < game->items.height; y++) {
         S32 print_y = y + 1;
         string[print_y][0] = '0' + (y % 10);
-        for (S32 x = 0; x < game->level.width; x++) {
-            CellType cell = level_get_cell(&game->level, x, y);
+        for (S32 x = 0; x < game->items.width; x++) {
+            ItemType item = items_get_cell(&game->items, x, y);
             S32 print_x = x + 1;
-            switch(cell) {
-            case CELL_TYPE_EMPTY:
-                string[print_y][print_x] = '.';
-                break;
-            case CELL_TYPE_WALL:
-                string[print_y][print_x] = 'W';
-                break;
-            case CELL_TYPE_TACO:
+            switch(item) {
+            case ITEM_TYPE_TACO:
                 string[print_y][print_x] = 'T';
                 break;
             default:
                 string[print_y][print_x] = ' ';
                 break;
+            }
+        }
+    }
+
+    for (S32 y = 0; y < game->map.height; y++) {
+        S32 print_y = y + 1;
+        for (S32 x = 0; x < game->map.width; x++) {
+            GID tile_gid = GetMapTile(&game->map, x, y, MAP_SOLID_LAYER);
+            S32 print_x = x + 1;
+            if (tile_gid == 0) {
+                string[print_y][print_x] = '.';
+            } else {
+                string[print_y][print_x] = 'W';
             }
         }
     }
@@ -135,7 +142,7 @@ void _snake_chomp_segment(Game* game, SnakeCollision* snake_collision) {
     if (chomped_segment->health <= 0) {
         for (S32 e = snake_collision->segment_index; e < snake->length; e++) {
             SnakeSegment* segment = snake->segments + e;
-            level_set_cell(&game->level, segment->x, segment->y, CELL_TYPE_TACO);
+            items_set_cell(&game->items, segment->x, segment->y, ITEM_TYPE_TACO);
         }
         snake->length = snake_collision->segment_index;
         if (snake->length == 0) {
@@ -220,7 +227,7 @@ void _snake_move(Snake* snake, Game* game) {
                   &new_snake_x,
                   &new_snake_y);
 
-    CellType cell_type = level_get_cell(&game->level, new_snake_x, new_snake_y);
+    ItemType item_type = items_get_cell(&game->items, new_snake_x, new_snake_y);
 
     // TODO: Duplication with _snake_chomp() to figure out.
     SnakeCollision snake_collision = {
@@ -243,44 +250,45 @@ void _snake_move(Snake* snake, Game* game) {
         return;
     }
 
-    switch (cell_type) {
-    case CELL_TYPE_EMPTY: {
-        // Move the snake in the directon it is heading by moving all segments.
-        for (int i = snake->length - 1; i >= 1; i--) {
-            snake->segments[i].x = snake->segments[i - 1].x;
-            snake->segments[i].y = snake->segments[i - 1].y;
+    GID tile_gid = GetMapTile(&game->map, new_snake_x, new_snake_y, MAP_SOLID_LAYER);
+
+    if (tile_gid == 0) {
+        if (item_type == ITEM_TYPE_TACO) {
+            // Grow the snake length by consuming the taco.
+            items_set_cell(&game->items, new_snake_x, new_snake_y, ITEM_TYPE_EMPTY);
+            snake->length++;
+            // Shift all segments one over toward the tail. The new segment is added where the head is.
+            for ( int i = snake->length - 1; i >= 1; i-- ) {
+                snake->segments[i] = snake->segments[i - 1];
+            }
+            // The new segment has max health.
+            snake->segments[1].health = snake->segments[0].health;
+            // The head is moved into the position where the taco was.
+            snake->segments[0].x = (S16)(new_snake_x);
+            snake->segments[0].y = (S16)(new_snake_y);
+        } else {
+            // Move the snake in the directon it is heading by moving all segments.
+            for (int i = snake->length - 1; i >= 1; i--) {
+                snake->segments[i].x = snake->segments[i - 1].x;
+                snake->segments[i].y = snake->segments[i - 1].y;
+            }
+            snake->segments[0].x = (S16)(new_snake_x);
+            snake->segments[0].y = (S16)(new_snake_y);
         }
-        snake->segments[0].x = (S16)(new_snake_x);
-        snake->segments[0].y = (S16)(new_snake_y);
-        break;
-    }
-    case CELL_TYPE_TACO: {
-        // Grow the snake length by consuming the taco.
-        level_set_cell(&game->level, new_snake_x, new_snake_y, CELL_TYPE_EMPTY);
-        snake->length++;
-        // Shift all segments one over toward the tail. The new segment is added where the head is.
-        for ( int i = snake->length - 1; i >= 1; i-- ) {
-            snake->segments[i] = snake->segments[i - 1];
-        }
-        // The new segment has max health.
-        snake->segments[1].health = snake->segments[0].health;
-        // The head is moved into the position where the taco was.
-        snake->segments[0].x = (S16)(new_snake_x);
-        snake->segments[0].y = (S16)(new_snake_y);
-        break;
-    }
-    case CELL_TYPE_WALL:
-    default:
-        break;
     }
 }
 
-bool game_init(Game* game, S32 level_width, S32 level_height, S32 max_taco_count) {
-    if (!level_init(&game->level, level_width, level_height)) {
+bool game_init(Game* game, const char* map_filepath, S32 max_taco_count) {
+    if (!LoadMap(&game->map, map_filepath)) {
+        fprintf(stderr, "Failed to load map.\n");
         return false;
     }
 
-    int32_t snake_capacity = level_width * level_height;
+    if (!items_init(&game->items, game->map.width, game->map.height)) {
+        return false;
+    }
+
+    int32_t snake_capacity = game->map.width * game->map.height;
     for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
         if (!snake_init(game->snakes + s, snake_capacity)) {
             return false;
@@ -293,17 +301,20 @@ bool game_init(Game* game, S32 level_width, S32 level_height, S32 max_taco_count
 }
 
 void game_clone(Game* input, Game* output) {
-    if (input->level.width != output->level.width ||
-        input->level.height != output->level.height) {
-        level_destroy(&output->level);
-        level_init(&output->level, input->level.width, input->level.height);
+    if (input->items.width != output->items.width ||
+        input->items.height != output->items.height) {
+        items_destroy(&output->items);
+        items_init(&output->items, input->items.width, input->items.height);
     }
 
-    for (S32 x = 0; x < input->level.width; x++) {
-        for (S32 y = 0; y < input->level.height; y++) {
-            level_set_cell(&output->level, x, y, level_get_cell(&input->level, x, y));
+    for (S32 x = 0; x < input->items.width; x++) {
+        for (S32 y = 0; y < input->items.height; y++) {
+            items_set_cell(&output->items, x, y, items_get_cell(&input->items, x, y));
         }
     }
+
+    // TODO: actually deep clone ?
+    output->map = input->map;
 
     for (S32 i = 0; i < MAX_SNAKE_COUNT; i++) {
         if (output->snakes[i].capacity != input->snakes[i].capacity) {
@@ -383,22 +394,22 @@ typedef struct {
 } CellMove;
 
 void init_push_state(Game* game, PushState* push_state) {
-    S32 size = (game->level.height * game->level.width);
+    S32 size = (game->map.height * game->map.width);
     push_state->cells = malloc(size);
     memset(push_state->cells, 0, size);
 }
 
 bool has_been_pushed(PushState* push_state, Game* game, S32 x, S32 y, Direction direction) {
     assert(direction < DIRECTION_COUNT);
-    S32 index = y * game->level.width + x;
-    assert(index < (game->level.width * game->level.height));
+    S32 index = (y * game->map.width) + x;
+    assert(index < (game->map.width * game->map.height));
     return push_state->cells[index] & (1 << direction);
 }
 
 void mark_pushed(PushState* push_state, Game* game, S32 x, S32 y, Direction direction) {
     assert(direction < DIRECTION_COUNT);
-    S32 index = y * game->level.width + x;
-    assert(index < (game->level.width * game->level.height));
+    S32 index = (y * game->map.width) + x;
+    assert(index < (game->map.width * game->map.height));
     push_state->cells[index] |= (1 << direction);
 }
 
@@ -411,8 +422,8 @@ MoveResult _taco_push(Game* game, PushState* push_state, S32 x, S32 y, Direction
     MoveResult move_result = _game_object_push_impl(game, push_state, adjacent_x, adjacent_y, direction);
     if (move_result == MOVE_OBJECT_SUCCESS || move_result == MOVE_OBJECT_EMPTY) {
         if (game_empty_at(game, adjacent_x, adjacent_y)) {
-            level_set_cell(&game->level, x, y, CELL_TYPE_EMPTY);
-            level_set_cell(&game->level, adjacent_x, adjacent_y, CELL_TYPE_TACO);
+            items_set_cell(&game->items, x, y, ITEM_TYPE_EMPTY);
+            items_set_cell(&game->items, adjacent_x, adjacent_y, ITEM_TYPE_TACO);
         } else {
             return MOVE_OBJECT_PROGRESS;
         }
@@ -451,16 +462,9 @@ MoveResult _game_object_push_impl(Game* game, PushState* push_state, S32 x, S32 
     switch (queried_object.type) {
     case QUERIED_OBJECT_TYPE_NONE:
         return MOVE_OBJECT_EMPTY;
-    case QUERIED_OBJECT_TYPE_CELL:
-        switch(queried_object.cell) {
-        case CELL_TYPE_EMPTY:
-            return MOVE_OBJECT_EMPTY;
-        case CELL_TYPE_TACO:
+    case QUERIED_OBJECT_TYPE_ITEM:
+        if (queried_object.item == ITEM_TYPE_TACO) {
             return _taco_push(game, push_state, x, y, direction);
-        case CELL_TYPE_WALL:
-            return MOVE_OBJECT_FAIL;
-        default:
-            break;
         }
         break;
     case QUERIED_OBJECT_TYPE_SNAKE:
@@ -472,6 +476,8 @@ MoveResult _game_object_push_impl(Game* game, PushState* push_state, S32 x, S32 
                                   queried_object.snake.index,
                                   queried_object.snake.segment_index,
                                   direction);
+    case QUERIED_OBJECT_TYPE_WALL:
+        return MOVE_OBJECT_FAIL;
     default:
         break;
     }
@@ -1342,7 +1348,7 @@ bool snake_segment_is_constricting_towards(Game* game, S32 snake_index, S32 segm
 }
 
 SnakeKillCheck* kill_check_entry(Game* game, SnakeKillCheck* kill_checks, S32 x, S32 y) {
-    return kill_checks + (y * game->level.width) + x;
+    return kill_checks + (y * game->map.width) + x;
 }
 
 void _flood_fill_kill_checks(Game* game, SnakeKillCheck* kill_checks, S32 snake_index, S32 x, S32 y) {
@@ -1360,24 +1366,22 @@ void _flood_fill_kill_checks(Game* game, SnakeKillCheck* kill_checks, S32 snake_
             *entry = SNAKE_KILL_CHECK_OTHER_SNAKE;
         }
         break;
-    case QUERIED_OBJECT_TYPE_CELL:
-        if (queried_object.cell == CELL_TYPE_WALL) {
-            *entry = SNAKE_KILL_CHECK_WALL;
-            // Creates a boundary that we do not pass.
-            return;
-        } else if (queried_object.cell == CELL_TYPE_TACO) {
+    case QUERIED_OBJECT_TYPE_ITEM:
+        if (queried_object.item == ITEM_TYPE_TACO) {
             *entry = SNAKE_KILL_CHECK_TACO;
-        } else {
-            *entry = SNAKE_KILL_CHECK_CELL;
         }
         break;
+    case QUERIED_OBJECT_TYPE_WALL:
+        *entry = SNAKE_KILL_CHECK_WALL;
+        // Creates a boundary that we do not pass.
+        return;
     }
 
     for (S32 d = 0; d < DIRECTION_COUNT; d++) {
         S32 next_x = x;
         S32 next_y = y;
         adjacent_cell(d, &next_x, &next_y);
-        if (next_x < 0 || next_x >= game->level.width || next_y < 0 || next_y >= game->level.height) {
+        if (next_x < 0 || next_x >= game->map.width || next_y < 0 || next_y >= game->map.height) {
             continue;
         }
 
@@ -1395,7 +1399,7 @@ bool _kill_checks_has_adjacent_empty(Game* game,
                                      S32 y,
                                      S32 snake_index) {
     // TODO: clean this up.
-    S32 adjacent_check_index = y * game->level.width + x;
+    S32 adjacent_check_index = y * game->map.width + x;
     if (adjacent_checked[adjacent_check_index]) {
         return false;
     }
@@ -1445,7 +1449,7 @@ void snake_constrict(Game* game, S32 snake_index) {
 
     // Allocate an array of the size of the level wherel each cell is flood filled inside where
     // the snake is constricting.
-    S32 cell_count = game->level.width * game->level.height;
+    S32 cell_count = game->map.width * game->map.height;
     SnakeKillCheck* kill_checks = malloc(cell_count * sizeof(*kill_checks));
     bool* adjacent_checks = malloc(cell_count);
 
@@ -1527,8 +1531,8 @@ void snake_constrict(Game* game, S32 snake_index) {
 
             // Debug printing.
             // printf("\n");
-            // for (S32 y = 0; y < game->level.height; y++) {
-            //     for (S32 x = 0; x < game->level.width; x++) {
+            // for (S32 y = 0; y < game->map.height; y++) {
+            //     for (S32 x = 0; x < game->map.width; x++) {
             //         SnakeKillCheck* entry = kill_check_entry(game, kill_checks, x, y);
 
             //         // point out the current segment.
@@ -1588,8 +1592,8 @@ void snake_constrict(Game* game, S32 snake_index) {
 
                 // Track how many snake segments are inside the constriction and number of adjacent cells.
                 S32 snake_segment_count = 0;
-                for (S32 y = 0; y < game->level.height; y++) {
-                    for (S32 x = 0; x < game->level.width; x++) {
+                for (S32 y = 0; y < game->map.height; y++) {
+                    for (S32 x = 0; x < game->map.width; x++) {
                         SnakeKillCheck* entry = kill_check_entry(game, kill_checks, x, y);
                         if (*entry == SNAKE_KILL_CHECK_OTHER_SNAKE) {
                             QueriedObject queried_object = game_query(game, x, y);
@@ -1613,7 +1617,10 @@ void snake_constrict(Game* game, S32 snake_index) {
                     }
 
                     if (check_snake->length == 1) {
-                        level_set_cell(&game->level, check_snake->segments[0].x, check_snake->segments[0].y, CELL_TYPE_TACO);
+                        items_set_cell(&game->items,
+                                       check_snake->segments[0].x,
+                                       check_snake->segments[0].y,
+                                       ITEM_TYPE_TACO);
                         check_snake->length = 0;
                         check_snake->life_state = SNAKE_LIFE_STATE_DEAD;
                     }
@@ -1632,10 +1639,16 @@ void snake_constrict(Game* game, S32 snake_index) {
 QueriedObject game_query(Game* game, S32 x, S32 y) {
     QueriedObject result = {0};
 
-    CellType cell_type = level_get_cell(&game->level, x, y);
-    if (cell_type != CELL_TYPE_EMPTY) {
-        result.type = QUERIED_OBJECT_TYPE_CELL;
-        result.cell = cell_type;
+    GID tile_gid = GetMapTile(&game->map, x, y, MAP_SOLID_LAYER);
+    if (tile_gid != 0) {
+        result.type = QUERIED_OBJECT_TYPE_WALL;
+        return result;
+    }
+
+    ItemType item_type = items_get_cell(&game->items, x, y);
+    if (item_type != ITEM_TYPE_EMPTY) {
+        result.type = QUERIED_OBJECT_TYPE_ITEM;
+        result.item = item_type;
         return result;
     }
 
@@ -1727,7 +1740,7 @@ void game_update(Game* game, SnakeAction* snake_actions) {
 }
 
 void game_destroy(Game* game) {
-    level_destroy(&game->level);
+    items_destroy(&game->items);
     for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
         snake_destroy(game->snakes + s);
     }
@@ -1737,14 +1750,27 @@ void game_spawn_taco(Game* game) {
     // If there are no tacos on the map, generate one in an empty cell.
     int32_t attempts = 0;
     while (attempts < 10) {
-        int taco_x = rand() % game->level.width;
-        int taco_y = rand() % game->level.height;
+        int taco_x = (int)(rand() % game->map.width);
+        int taco_y = (int)(rand() % game->map.height);
 
-        CellType cell_type = level_get_cell(&game->level, taco_x, taco_y);
-        if (cell_type != CELL_TYPE_EMPTY) {
+        ItemType item_type = items_get_cell(&game->items, taco_x, taco_y);
+        if (item_type == ITEM_TYPE_TACO) {
             attempts++;
             continue;
         }
+
+        GID ground_tile_gid = GetMapTile(&game->map, taco_x, taco_y, MAP_GROUND_LAYER);
+        if (ground_tile_gid == 0) {
+            attempts++;
+            continue;
+        }
+
+        GID solid_tile_gid = GetMapTile(&game->map, taco_x, taco_y, MAP_SOLID_LAYER);
+        if (solid_tile_gid != 0) {
+            attempts++;
+            continue;
+        }
+
         bool spawned_on_snake = false;
         for (S32 s = 0; s < MAX_SNAKE_COUNT && !spawned_on_snake; s++) {
             for (S32 e = 0; e < game->snakes[s].length; e++) {
@@ -1760,17 +1786,17 @@ void game_spawn_taco(Game* game) {
             continue;
         }
 
-        level_set_cell(&game->level, taco_x, taco_y, CELL_TYPE_TACO);
+        items_set_cell(&game->items, taco_x, taco_y, ITEM_TYPE_TACO);
         break;
     }
 }
 
 S32 game_count_tacos(Game* game) {
     S32 taco_count = 0;
-    for(S32 y = 0; y < game->level.height; y++) {
-        for(S32 x = 0; x < game->level.width; x++) {
-            CellType cell_type = level_get_cell(&game->level, x, y);
-            if (cell_type == CELL_TYPE_TACO) {
+    for(S32 y = 0; y < game->map.height; y++) {
+        for(S32 x = 0; x < game->map.width; x++) {
+            ItemType item_type = items_get_cell(&game->items, x, y);
+            if (item_type == ITEM_TYPE_TACO) {
                 taco_count++;
             }
         }
@@ -1790,7 +1816,7 @@ size_t game_serialize(const Game* game, void* buffer, size_t buffer_size)
     memcpy(byte_buffer, &game->wait_to_start_ms, msg_size);
     byte_buffer += msg_size;
 
-    msg_size = level_serialize(&game->level, byte_buffer, buffer_size);
+    msg_size = items_serialize(&game->items, byte_buffer, buffer_size);
     byte_buffer += msg_size;
 
     for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
@@ -1818,13 +1844,13 @@ size_t game_deserialize(void * buffer, size_t size, Game * out)
     memcpy(&out->wait_to_start_ms, byte_buffer, msg_size);
     byte_buffer += msg_size;
 
-    msg_size = level_deserialize(byte_buffer, size, &out->level);
+    msg_size = items_deserialize(byte_buffer, size, &out->items);
     byte_buffer += msg_size;
 
     for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
         msg_size = snake_deserialize(byte_buffer,
-                                                size - (byte_buffer - (U8*)buffer),
-                                                &out->snakes[s]);
+                                     size - (byte_buffer - (U8*)buffer),
+                                     &out->snakes[s]);
         byte_buffer += msg_size;
     }
 

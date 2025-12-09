@@ -12,10 +12,13 @@
 #pragma warning(disable : 4201)
 #endif
 
-#include "snake.h"
-#include "level.h"
 #include "direction.h"
+#include "items.h"
+#include "map.h"
+#include "snake.h"
 
+#define MAP_GROUND_LAYER 0
+#define MAP_SOLID_LAYER 1
 #define MAX_SNAKE_COUNT 4
 
 typedef enum {
@@ -26,8 +29,9 @@ typedef enum {
 
 typedef enum {
     QUERIED_OBJECT_TYPE_NONE,
-    QUERIED_OBJECT_TYPE_CELL,
+    QUERIED_OBJECT_TYPE_ITEM,
     QUERIED_OBJECT_TYPE_SNAKE,
+    QUERIED_OBJECT_TYPE_WALL,
 } QueriedObjectType;
 
 typedef struct {
@@ -38,7 +42,7 @@ typedef struct {
 typedef struct {
     QueriedObjectType type;
     union {
-        CellType cell;
+        ItemType item;
         QueriedSnake snake;
     };
 } QueriedObject;
@@ -49,7 +53,8 @@ typedef struct {
 } PushState;
 
 typedef struct {
-    Level level;
+    Map map;
+    Items items;
     Snake snakes[MAX_SNAKE_COUNT];
     GameState state;
     bool head_invincible;
@@ -65,7 +70,7 @@ typedef enum {
     MOVE_OBJECT_EMPTY,
 } MoveResult;
 
-bool game_init(Game* game, S32 level_width, S32 level_height, S32 max_taco_count);
+bool game_init(Game* game, const char* map_filepath, S32 max_taco_count);
 void game_clone(Game* input, Game* output);
 void game_apply_snake_action(Game* game, SnakeAction snake_action, S32 snake_index);
 QueriedObject game_query(Game* game, S32 x, S32 y);
