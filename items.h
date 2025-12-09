@@ -13,9 +13,6 @@
 
 #include "ints.h"
 
-#define LEVEL_WIDTH 24
-#define LEVEL_HEIGHT 24
-
 typedef S8 ItemType;
 enum {
     ITEM_TYPE_INVALID = -1,

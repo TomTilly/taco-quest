@@ -53,15 +53,15 @@ S32 ui_slider_height(UISlider* slider, S32 font_height);
 typedef struct {
     S32 x;
     S32 y;
-    char** options;
-    S32 option_count;
 
-    S32 selected;
     bool dropped;
 } UIDropDown;
 
-S32 ui_dropdown_width(UIDropDown* drop_down, S32 font_width, S32 font_spacing);
-S32 ui_dropdown_height(UIDropDown* drop_down, S32 font_height);
+S32 ui_dropdown_width(const char** options,
+                      S32 option_count,
+                      S32 font_width,
+                      S32 font_spacing);
+S32 ui_dropdown_height(UIDropDown* drop_down, S32 option_count, S32 font_height);
 
 typedef struct {
     U8 red;
@@ -93,4 +93,7 @@ void ui_slider(UserInterface* ui,
 void ui_dropdown(UserInterface* ui,
                  SDL_Renderer* renderer,
                  UIMouseState* mouse_state,
-                 UIDropDown* drop_down);
+                 UIDropDown* drop_down,
+                 char** options,
+                 S32 option_count,
+                 S32* selected);

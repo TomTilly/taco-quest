@@ -17,6 +17,7 @@
 #include "map.h"
 #include "snake.h"
 
+#define MAP_GROUND_LAYER 0
 #define MAP_SOLID_LAYER 1
 #define MAX_SNAKE_COUNT 4
 

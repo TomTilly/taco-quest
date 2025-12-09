@@ -1759,8 +1759,14 @@ void game_spawn_taco(Game* game) {
             continue;
         }
 
-        GID tile_gid = GetMapTile(&game->map, taco_x, taco_y, MAP_SOLID_LAYER);
-        if (tile_gid != 0) {
+        GID ground_tile_gid = GetMapTile(&game->map, taco_x, taco_y, MAP_GROUND_LAYER);
+        if (ground_tile_gid == 0) {
+            attempts++;
+            continue;
+        }
+
+        GID solid_tile_gid = GetMapTile(&game->map, taco_x, taco_y, MAP_SOLID_LAYER);
+        if (solid_tile_gid != 0) {
             attempts++;
             continue;
         }

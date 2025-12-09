@@ -52,12 +52,14 @@ void snake_draw(SDL_Renderer* renderer,
                 SDL_Texture* texture,
                 Snake* snake,
                 S32 cell_size,
+                S32 camera_offset_x,
+                S32 camera_offset_y,
                 S32 max_segment_health) {
     int tail_index = snake->length - 1;
     for (int i = 0; i < snake->length; i++) {
         SDL_FRect dest_rect = {
-            .x = (float)(snake->segments[i].x * cell_size),
-            .y = (float)(snake->segments[i].y * cell_size),
+            .x = (float)(camera_offset_x + snake->segments[i].x * cell_size),
+            .y = (float)(camera_offset_y + snake->segments[i].y * cell_size),
             .w = (float)(cell_size),
             .h = (float)(cell_size)
         };

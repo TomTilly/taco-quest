@@ -68,8 +68,11 @@ char* get_timestamp(void) {
 }
 
 void reset_game(Game* game,
-                AppStateLobby* lobby_state) {
-    game_init(game, "assets/test_map_1.temap", lobby_state->game_settings.taco_count);
+                AppStateLobby* lobby_state,
+                const char* map_file_name) {
+    char map_path[128];
+    snprintf(map_path, 128, "assets/%s", map_file_name);
+    game_init(game, map_path, lobby_state->game_settings.taco_count);
 
     Items* items = &game->items;
 
@@ -133,7 +136,10 @@ bool draw_game(Game* game,
                SDL_Texture* snake_texture,
                SDL_Texture* tileset_texture,
                S32 cell_size,
+               S32 camera_offset_x,
+               S32 camera_offset_y,
                S32 max_segment_health) {
+
     // Draw level
     for (Uint8 l = 0; l < game->map.num_layers; l++) {
         for (Uint16 y = 0; y < game->map.height; y++) {
@@ -144,8 +150,8 @@ bool draw_game(Game* game,
                 }
 
                 SDL_FRect dest_rect = {
-                    (float)(x * cell_size),
-                    (float)(y * cell_size),
+                    (float)(camera_offset_x + x * cell_size),
+                    (float)(camera_offset_y + y * cell_size),
                     (float)(cell_size),
                     (float)(cell_size)
                 };
@@ -161,19 +167,20 @@ bool draw_game(Game* game,
             // TODO: Asserts
             ItemType item_type = items_get_cell(&game->items, x, y);
 
-            SDL_FRect cell_rect = {
-                .x = (float)(x * cell_size),
-                .y = (float)(y * cell_size),
-                .w = (float)(cell_size),
-                .h = (float)(cell_size)
-            };
-
             switch (item_type) {
                 case ITEM_TYPE_EMPTY: {
                     break;
                 }
                 case ITEM_TYPE_TACO: {
                     SDL_FRect source_rect = {64.0f, 0.0f, 16.0f, 16.0f};
+
+                    SDL_FRect cell_rect = {
+                        .x = (float)(camera_offset_x + x * cell_size),
+                        .y = (float)(camera_offset_y + y * cell_size),
+                        .w = (float)(cell_size),
+                        .h = (float)(cell_size)
+                    };
+
                     bool result = SDL_RenderTexture(renderer,
                                                     snake_texture,
                                                     &source_rect,
@@ -192,7 +199,13 @@ bool draw_game(Game* game,
 
     // draw snakes
     for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
-        snake_draw(renderer, snake_texture, game->snakes + s, cell_size, max_segment_health);
+        snake_draw(renderer,
+                   snake_texture,
+                   game->snakes + s,
+                   cell_size,
+                   camera_offset_x,
+                   camera_offset_y,
+                   max_segment_health);
     }
 
     return true;
@@ -277,13 +290,15 @@ void app_server_update(AppState* app_state,
                        AppStateLobby* lobby_state,
                        AppStateGameServer* server_game_state,
                        bool should_tick,
-                       S64 time_since_last_frame_us) {
+                       S64 time_since_last_frame_us,
+                       const char* map_file_name) {
     if (*app_state == APP_STATE_LOBBY) {
         if (app_lobby_update(lobby_state)) {
             *app_state = APP_STATE_GAME;
             server_game_state->game.wait_to_start_ms = 3000;
             reset_game(&server_game_state->game,
-                       lobby_state);
+                       lobby_state,
+                       map_file_name);
         }
     } else if (*app_state == APP_STATE_GAME) {
         app_game_server_update(server_game_state,
@@ -658,8 +673,6 @@ int main(S32 argc, char** argv) {
         }
     }
 
-    reset_game(game, &lobby_state);
-
     int rc = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD);
     if (rc < 0) {
         printf("SDL_Init failed %s\n", SDL_GetError());
@@ -680,12 +693,14 @@ int main(S32 argc, char** argv) {
     printf("display rect: %d, %d -> %d, %d\n", display_size.x, display_size.y, display_size.h, display_size.w);
 
     S32 min_display_dimension = (display_size.h < display_size.w) ? display_size.h : display_size.w;
-    S32 max_level_dimension = (LEVEL_HEIGHT > LEVEL_WIDTH) ? LEVEL_HEIGHT : LEVEL_WIDTH;
-    // stupid hack to account for title bar and start menu.
-    min_display_dimension -= 100;
+    S32 cell_pixel_size = 16;
+    // Stupid hack to account for title bar and start menu, which could vary depending on OS.
+    if (min_display_dimension == display_size.h) {
+        min_display_dimension -= 100;
+    }
     // Make sure the window dimention is a multiple of the level dimension so the level fits in the
     // window.
-    min_display_dimension -= (min_display_dimension % max_level_dimension);
+    min_display_dimension -= (min_display_dimension % cell_pixel_size);
 
     S32 window_width = min_display_dimension;
     S32 window_height = min_display_dimension;
@@ -746,7 +761,7 @@ int main(S32 argc, char** argv) {
     SDL_DestroySurface(snake_surface);
 
     // TODO: consolidate with above logic.
-    const char* tileset_bitmap_filepath = "assets/snake_testing_tileset.bmp";
+    const char* tileset_bitmap_filepath = "assets/snake_simplified_tileset.bmp";
     SDL_Surface* tileset_surface = SDL_LoadBMP(tileset_bitmap_filepath);
     if (snake_surface == NULL) {
         fprintf(stderr, "Failed to load bitmap %s: %s\n", snake_bitmap_filepath, SDL_GetError());
@@ -808,7 +823,23 @@ int main(S32 argc, char** argv) {
         .max = 500
     };
 
-    S32 cell_size = min_display_dimension / max_level_dimension;
+    UIDropDown ui_maps_drop_down = {
+        .x = 520,
+        .y = 170,
+        .dropped = false
+    };
+
+#if defined(PLATFORM_WINDOWS)
+    lobby_state.game_settings.map_list = list_files_in_dir("assets/" WINDOWS_MAP_SUFFIX_MATCHER);
+#else
+    lobby_state.game_settings.map_list = list_files_in_dir("assets", ".temap");
+#endif
+    printf("listing %d map fils in 'assets/'\n", lobby_state.game_settings.map_list.file_count);
+    for (S32 i = 0; i < lobby_state.game_settings.map_list.file_count; i++) {
+        printf("%s\n", lobby_state.game_settings.map_list.file_names[i]);
+    }
+
+    S32 cell_size = cell_pixel_size;
 
     int64_t time_since_tick_us = 0;
 
@@ -1013,6 +1044,14 @@ int main(S32 argc, char** argv) {
                 } else if (client_receive_packet.header.type == PACKET_TYPE_LEVEL_STATE) {
                     if (app_state == APP_STATE_LOBBY) {
                         app_state = APP_STATE_GAME;
+                        const char* map_file_name =
+                            lobby_state.game_settings.map_list.file_names[lobby_state.game_settings.selected_map];
+                        char map_path[128];
+                        snprintf(map_path, 128, "assets/%s", map_file_name);
+                        if (!LoadMap(&game->map, map_path)) {
+                            printf("failed to load server selected map %s\n", map_file_name);
+                            return EXIT_FAILURE;
+                        }
                     }
                     game_deserialize(client_receive_packet.payload,
                                      client_receive_packet.header.payload_size,
@@ -1101,11 +1140,14 @@ int main(S32 argc, char** argv) {
             }
 
             // TODO: Consolidate with SINGLE code path
+            const char* map_filename =
+                lobby_state.game_settings.map_list.file_names[lobby_state.game_settings.selected_map];
             app_server_update(&app_state,
                               &lobby_state,
                               &server_game_state,
                               should_tick,
-                              time_since_last_frame_us);
+                              time_since_last_frame_us,
+                              map_filename);
             if (!should_send_state) {
                 break;
             }
@@ -1179,11 +1221,14 @@ int main(S32 argc, char** argv) {
             break;
         }
         case SESSION_TYPE_SINGLE_PLAYER: {
+            const char* map_filename =
+                lobby_state.game_settings.map_list.file_names[lobby_state.game_settings.selected_map];
             app_server_update(&app_state,
                               &lobby_state,
                               &server_game_state,
                               should_tick,
-                              time_since_last_frame_us);
+                              time_since_last_frame_us,
+                              map_filename);
             break;
         }
         }
@@ -1196,7 +1241,7 @@ int main(S32 argc, char** argv) {
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0xFF);
         SDL_RenderClear(renderer);
 
-        float font_scale = (float)(cell_size / 16); // 16 is the sprite sheet tile size.
+        float font_scale = (float)(40 / 16); // 16 is the sprite sheet tile size.
 
         // Draw level
         if (app_state == APP_STATE_LOBBY) {
@@ -1214,6 +1259,7 @@ int main(S32 argc, char** argv) {
             PF_RenderString(font, 480, 38, "Start Len: %d", lobby_state.game_settings.starting_length);
             PF_RenderString(font, 720, 38, "Tacos: %d", lobby_state.game_settings.taco_count);
             PF_RenderString(font, 480, 90, "Tick MS: %d", lobby_state.game_settings.tick_ms);
+            PF_RenderString(font, 500, 148, "Map");
 
             {
                 UIMouseState* mouse_state = &ui_mouse_state;
@@ -1266,12 +1312,20 @@ int main(S32 argc, char** argv) {
                           &ui_tick_ms_slider,
                           &lobby_state.game_settings.tick_ms);
 
+                ui_dropdown(&ui,
+                            renderer,
+                            mouse_state,
+                            &ui_maps_drop_down,
+                            lobby_state.game_settings.map_list.file_names,
+                            lobby_state.game_settings.map_list.file_count,
+                            &lobby_state.game_settings.selected_map);
+
                 server_game_state.game.head_invincible = lobby_state.game_settings.head_invincible;
                 server_game_state.game.zero_taco_respawn = lobby_state.game_settings.zero_tacos_respawn;
             }
 
             S32 lobby_cell_size = 40;
-            S32 players_start_y = 4 * lobby_cell_size - 12;
+            S32 players_start_y = 148;
             S32 players_offset = 30;
 
             PF_RenderString(font, 3, players_start_y, "Players");
@@ -1305,28 +1359,35 @@ int main(S32 argc, char** argv) {
                     snake.length = 4;
                     snake.direction = DIRECTION_EAST;
                     snake.color = lobby_state.players[i].snake_color;
-                    snake.segments[0].x = 4;
-                    snake.segments[0].y = (S16)(5 + (i * 2));
-                    snake.segments[0].health = 3;
-                    snake.segments[1].x = 3;
-                    snake.segments[1].y = (S16)(5 + (i * 2));
-                    snake.segments[1].health = 3;
-                    snake.segments[2].x = 2;
-                    snake.segments[2].y = (S16)(5 + (i * 2));
-                    snake.segments[2].health = 3;
-                    snake.segments[3].x = 1;
-                    snake.segments[3].y = (S16)(5 + (i * 2));
-                    snake.segments[3].health = 3;
-                    snake_draw(renderer, snake_texture, &snake, lobby_cell_size, 3);
+                    for (S32 e = 0; e < 4; e++) {
+                        snake.segments[e].x = (S16)(4 - e);
+                        snake.segments[e].y = (S16)(5 + (i * 2));
+                        snake.segments[e].health = 3;
+                    }
+                    snake_draw(renderer, snake_texture, &snake, lobby_cell_size, 0, 0, 3);
                     snake_destroy(&snake);
                 }
             }
         } else if (app_state == APP_STATE_GAME) {
+            // Adjust cell size based on map dimensions and window dimensions.
+            if (game->map.width != 0 && game->map.height != 0) {
+                S32 max_map_dimension =
+                    (game->map.height > game->map.width) ? game->map.height : game->map.width;
+                cell_size = (min_display_dimension / max_map_dimension);
+                cell_size -= (cell_size % cell_pixel_size);
+            }
+
+            // Calculate offset so that map will be centered, all objects must use this offset.
+            S32 camera_offset_x = (window_width - (cell_size * game->map.width)) / 2;
+            S32 camera_offset_y = (window_height - (cell_size * game->map.height)) / 2;
+
             if (!draw_game(game,
                            renderer,
                            snake_texture,
                            tileset_texture,
                            cell_size,
+                           camera_offset_x,
+                           camera_offset_y,
                            lobby_state.game_settings.segment_health)) {
                 return EXIT_FAILURE;
             }
@@ -1396,6 +1457,7 @@ int main(S32 argc, char** argv) {
         }
     }
 
+    list_dir_destroy(&lobby_state.game_settings.map_list);
     net_shutdown();
     free(net_msg_buffer);
     PF_DestroyFont(font);

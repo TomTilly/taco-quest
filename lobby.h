@@ -2,6 +2,7 @@
 #define lobby_h
 
 #include "game.h"
+#include "list_dir.h"
 
 #define MAX_LOBBY_PLAYER_NAME_LEN 16
 
@@ -46,6 +47,8 @@ typedef struct{
     S32 starting_length;
     S32 taco_count;
     S32 tick_ms;
+    S32 selected_map;
+    ListDir map_list;
 } LobbyGameSettings;
 
 typedef struct {

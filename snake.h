@@ -111,6 +111,8 @@ void snake_draw(SDL_Renderer* renderer,
                 SDL_Texture* texture,
                 Snake* snake,
                 S32 cell_size,
+                S32 camera_offset_x,
+                S32 camera_offset_y,
                 S32 max_segment_health);
 
 size_t snake_serialize(const Snake* snake, void * buffer, size_t buffer_size);

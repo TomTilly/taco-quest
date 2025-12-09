@@ -29,6 +29,7 @@ bool app_lobby_update(AppStateLobby* lobby_state) {
 
     return all_ready;
 }
+
 void app_lobby_handle_keystate(AppStateLobby* lobby_state, const bool* keyboard_state) {
     LobbyActionKeyState current_action_key_state = {0};
     current_action_key_state.toggle_ready = keyboard_state[SDL_SCANCODE_RETURN];
@@ -68,9 +69,27 @@ size_t lobby_state_serialize(AppStateLobby* lobby_state,
         buffer_ptr += sizeof(lobby_state->players[i].snake_color);
     }
 
-    memcpy(buffer_ptr, &lobby_state->game_settings, sizeof(lobby_state->game_settings));
-    bytes_written += sizeof(lobby_state->game_settings);
-    buffer_ptr += sizeof(lobby_state->game_settings);
+    size_t game_settings_size =
+        sizeof(lobby_state->game_settings) - sizeof(lobby_state->game_settings.map_list);
+
+    memcpy(buffer_ptr, &lobby_state->game_settings, game_settings_size);
+    bytes_written += game_settings_size;
+    buffer_ptr += game_settings_size;
+
+    memcpy(buffer_ptr, &lobby_state->game_settings.map_list.file_count, sizeof(lobby_state->game_settings.map_list.file_count));
+    bytes_written += sizeof(lobby_state->game_settings.map_list.file_count);
+    buffer_ptr += sizeof(lobby_state->game_settings.map_list.file_count);
+    for (S32 i = 0; i < lobby_state->game_settings.map_list.file_count; i++) {
+        S32 file_name_len = (S32)strlen(lobby_state->game_settings.map_list.file_names[i]);
+
+        memcpy(buffer_ptr, &file_name_len, sizeof(file_name_len));
+        bytes_written += sizeof(file_name_len);
+        buffer_ptr += sizeof(file_name_len);
+
+        memcpy(buffer_ptr, lobby_state->game_settings.map_list.file_names[i], file_name_len);
+        bytes_written += file_name_len;
+        buffer_ptr += file_name_len;
+    }
 
     return bytes_written;
 }
@@ -97,9 +116,41 @@ size_t lobby_state_deserialize(void* buffer,
         buffer_ptr += sizeof(lobby_state->players[i].snake_color);
     }
 
-    memcpy(&lobby_state->game_settings, buffer_ptr, sizeof(lobby_state->game_settings));
-    bytes_read += sizeof(lobby_state->game_settings);
-    buffer_ptr += sizeof(lobby_state->game_settings);
+    size_t game_settings_size =
+        sizeof(lobby_state->game_settings) - sizeof(lobby_state->game_settings.map_list);
+
+    memcpy(&lobby_state->game_settings, buffer_ptr, game_settings_size);
+    bytes_read += game_settings_size;
+    buffer_ptr += game_settings_size;
+
+    if (lobby_state->game_settings.map_list.file_count > 0) {
+        for (S32 i = 0; i < lobby_state->game_settings.map_list.file_count; i++) {
+            free(lobby_state->game_settings.map_list.file_names[i]);
+        }
+        free(lobby_state->game_settings.map_list.file_names);
+    }
+
+    S32 file_count = 0;
+    memcpy(&file_count, buffer_ptr, sizeof(file_count));
+    bytes_read += sizeof(file_count);
+    buffer_ptr += sizeof(file_count);
+
+    lobby_state->game_settings.map_list.file_count = file_count;
+    lobby_state->game_settings.map_list.file_names = malloc(file_count * sizeof(char*));
+
+    for (S32 i = 0; i < lobby_state->game_settings.map_list.file_count; i++) {
+        S32 file_name_len = 0;
+        memcpy(&file_name_len, buffer_ptr, sizeof(file_name_len));
+        bytes_read += sizeof(file_name_len);
+        buffer_ptr += sizeof(file_name_len);
+
+        lobby_state->game_settings.map_list.file_names[i] = malloc(file_name_len + 1);
+
+        memcpy(lobby_state->game_settings.map_list.file_names[i], buffer_ptr, file_name_len);
+        lobby_state->game_settings.map_list.file_names[i][file_name_len] = 0;
+        bytes_read += file_name_len;
+        buffer_ptr += file_name_len;
+    }
 
     return bytes_read;
 }
