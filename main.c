@@ -583,6 +583,7 @@ int main(S32 argc, char** argv) {
     lobby_state.game_settings.starting_length = 5;
     lobby_state.game_settings.taco_count = 5;
     lobby_state.game_settings.tick_ms = 175;
+    lobby_state.game_settings.chomp_cooldown_ticks = 10;
 
     NetSocket* server_socket = NULL; // Used by server to listen for client connections.
     NetSocket* client_socket = NULL; // Used by client to send and receive.
@@ -821,6 +822,14 @@ int main(S32 argc, char** argv) {
         .pixel_width = 150,
         .min = 10,
         .max = 500
+    };
+
+    UISlider ui_chomp_cooldown_ticks_slider = {
+        .x = 740,
+        .y = 110,
+        .pixel_width = 150,
+        .min = 1,
+        .max = 40
     };
 
     UIDropDown ui_maps_drop_down = {
@@ -1259,6 +1268,7 @@ int main(S32 argc, char** argv) {
             PF_RenderString(font, 480, 38, "Start Len: %d", lobby_state.game_settings.starting_length);
             PF_RenderString(font, 720, 38, "Tacos: %d", lobby_state.game_settings.taco_count);
             PF_RenderString(font, 480, 90, "Tick MS: %d", lobby_state.game_settings.tick_ms);
+            PF_RenderString(font, 720, 90, "Chomp CD ticks: %d", lobby_state.game_settings.chomp_cooldown_ticks);
             PF_RenderString(font, 500, 148, "Map");
 
             {
@@ -1312,6 +1322,12 @@ int main(S32 argc, char** argv) {
                           &ui_tick_ms_slider,
                           &lobby_state.game_settings.tick_ms);
 
+                ui_slider(&ui,
+                          renderer,
+                          mouse_state,
+                          &ui_chomp_cooldown_ticks_slider,
+                          &lobby_state.game_settings.chomp_cooldown_ticks);
+
                 ui_dropdown(&ui,
                             renderer,
                             mouse_state,
@@ -1322,6 +1338,7 @@ int main(S32 argc, char** argv) {
 
                 server_game_state.game.head_invincible = lobby_state.game_settings.head_invincible;
                 server_game_state.game.zero_taco_respawn = lobby_state.game_settings.zero_tacos_respawn;
+                server_game_state.game.chomp_cooldown_ticks = (S8)(lobby_state.game_settings.chomp_cooldown_ticks);
             }
 
             S32 lobby_cell_size = 40;
@@ -1398,7 +1415,7 @@ int main(S32 argc, char** argv) {
                 PF_SetScale(font, font_scale);
                 dev_mode_draw(&server_game_state.dev_mode, game, font, window_width, cell_size);
             }
-            
+
             PF_SetScale(font, font_scale * 2.0f);
             PF_SetForeground(font, 255, 255, 255, 255);
 

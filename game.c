@@ -211,7 +211,7 @@ void _snake_chomp(Snake* snake, Game* game) {
     }
 
     if (did_chomp) {
-        snake->chomp_cooldown = SNAKE_CHOMP_COOLDOWN;
+        snake->chomp_cooldown = game->chomp_cooldown_ticks;
     }
 }
 

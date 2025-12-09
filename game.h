@@ -61,6 +61,7 @@ typedef struct {
     bool zero_taco_respawn;
     S32 max_taco_count;
     S32 wait_to_start_ms;
+    S8 chomp_cooldown_ticks;
 } Game;
 
 typedef enum {

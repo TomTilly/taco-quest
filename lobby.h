@@ -47,7 +47,9 @@ typedef struct{
     S32 starting_length;
     S32 taco_count;
     S32 tick_ms;
+    S32 chomp_cooldown_ticks;
     S32 selected_map;
+    // This map list is dynamic, so always keep it last, otherwise, serialization/deserialization is more complicated.
     ListDir map_list;
 } LobbyGameSettings;
 
