@@ -48,12 +48,13 @@ void app_lobby_handle_keystate(AppStateLobby* lobby_state, const bool* keyboard_
 }
 
 size_t lobby_state_serialize(AppStateLobby* lobby_state,
+                             GameSettings* game_settings,
                              void* buffer,
                              size_t buffer_size) {
     size_t bytes_written = 0;
     assert(buffer_size >= (MAX_SNAKE_COUNT *
                            (MAX_LOBBY_PLAYER_NAME_LEN + sizeof(lobby_state->players[0].state)) +
-                           sizeof(lobby_state->game_settings)));
+                           sizeof(*game_settings)));
     U8* buffer_ptr = buffer;
     for (S32 i = 0; i < MAX_SNAKE_COUNT; i++) {
         memcpy(buffer_ptr, lobby_state->players[i].name, MAX_LOBBY_PLAYER_NAME_LEN);
@@ -69,37 +70,39 @@ size_t lobby_state_serialize(AppStateLobby* lobby_state,
         buffer_ptr += sizeof(lobby_state->players[i].snake_color);
     }
 
-    size_t game_settings_size =
-        sizeof(lobby_state->game_settings) - sizeof(lobby_state->game_settings.map_list);
+    memcpy(buffer_ptr, game_settings, sizeof(*game_settings));
+    bytes_written += sizeof(*game_settings);
+    buffer_ptr += sizeof(*game_settings);
 
-    memcpy(buffer_ptr, &lobby_state->game_settings, game_settings_size);
-    bytes_written += game_settings_size;
-    buffer_ptr += game_settings_size;
-
-    memcpy(buffer_ptr, &lobby_state->game_settings.map_list.file_count, sizeof(lobby_state->game_settings.map_list.file_count));
-    bytes_written += sizeof(lobby_state->game_settings.map_list.file_count);
-    buffer_ptr += sizeof(lobby_state->game_settings.map_list.file_count);
-    for (S32 i = 0; i < lobby_state->game_settings.map_list.file_count; i++) {
-        S32 file_name_len = (S32)strlen(lobby_state->game_settings.map_list.file_names[i]);
+    memcpy(buffer_ptr, &lobby_state->map_list.file_count, sizeof(lobby_state->map_list.file_count));
+    bytes_written += sizeof(lobby_state->map_list.file_count);
+    buffer_ptr += sizeof(lobby_state->map_list.file_count);
+    for (S32 i = 0; i < lobby_state->map_list.file_count; i++) {
+        S32 file_name_len = (S32)strlen(lobby_state->map_list.file_names[i]);
 
         memcpy(buffer_ptr, &file_name_len, sizeof(file_name_len));
         bytes_written += sizeof(file_name_len);
         buffer_ptr += sizeof(file_name_len);
 
-        memcpy(buffer_ptr, lobby_state->game_settings.map_list.file_names[i], file_name_len);
+        memcpy(buffer_ptr, lobby_state->map_list.file_names[i], file_name_len);
         bytes_written += file_name_len;
         buffer_ptr += file_name_len;
     }
+
+    memcpy(buffer_ptr, &lobby_state->selected_map, sizeof(lobby_state->selected_map));
+    bytes_written += sizeof(lobby_state->selected_map);
+    buffer_ptr += sizeof(lobby_state->selected_map);
 
     return bytes_written;
 }
 
 size_t lobby_state_deserialize(void* buffer,
                                size_t buffer_size,
-                               AppStateLobby* lobby_state) {
+                               AppStateLobby* lobby_state,
+                               GameSettings* game_settings) {
     assert(buffer_size >= (MAX_SNAKE_COUNT *
                            (MAX_LOBBY_PLAYER_NAME_LEN + sizeof(lobby_state->players[0].state)) +
-                           sizeof(lobby_state->game_settings)));
+                           sizeof(*game_settings)));
     U8* buffer_ptr = buffer;
     size_t bytes_read = 0;
     for (S32 i = 0; i < MAX_SNAKE_COUNT; i++) {
@@ -116,18 +119,15 @@ size_t lobby_state_deserialize(void* buffer,
         buffer_ptr += sizeof(lobby_state->players[i].snake_color);
     }
 
-    size_t game_settings_size =
-        sizeof(lobby_state->game_settings) - sizeof(lobby_state->game_settings.map_list);
+    memcpy(game_settings, buffer_ptr, sizeof(*game_settings));
+    bytes_read += sizeof(*game_settings);
+    buffer_ptr += sizeof(*game_settings);
 
-    memcpy(&lobby_state->game_settings, buffer_ptr, game_settings_size);
-    bytes_read += game_settings_size;
-    buffer_ptr += game_settings_size;
-
-    if (lobby_state->game_settings.map_list.file_count > 0) {
-        for (S32 i = 0; i < lobby_state->game_settings.map_list.file_count; i++) {
-            free(lobby_state->game_settings.map_list.file_names[i]);
+    if (lobby_state->map_list.file_count > 0) {
+        for (S32 i = 0; i < lobby_state->map_list.file_count; i++) {
+            free(lobby_state->map_list.file_names[i]);
         }
-        free(lobby_state->game_settings.map_list.file_names);
+        free(lobby_state->map_list.file_names);
     }
 
     S32 file_count = 0;
@@ -135,22 +135,26 @@ size_t lobby_state_deserialize(void* buffer,
     bytes_read += sizeof(file_count);
     buffer_ptr += sizeof(file_count);
 
-    lobby_state->game_settings.map_list.file_count = file_count;
-    lobby_state->game_settings.map_list.file_names = malloc(file_count * sizeof(char*));
+    lobby_state->map_list.file_count = file_count;
+    lobby_state->map_list.file_names = malloc(file_count * sizeof(char*));
 
-    for (S32 i = 0; i < lobby_state->game_settings.map_list.file_count; i++) {
+    for (S32 i = 0; i < lobby_state->map_list.file_count; i++) {
         S32 file_name_len = 0;
         memcpy(&file_name_len, buffer_ptr, sizeof(file_name_len));
         bytes_read += sizeof(file_name_len);
         buffer_ptr += sizeof(file_name_len);
 
-        lobby_state->game_settings.map_list.file_names[i] = malloc(file_name_len + 1);
+        lobby_state->map_list.file_names[i] = malloc(file_name_len + 1);
 
-        memcpy(lobby_state->game_settings.map_list.file_names[i], buffer_ptr, file_name_len);
-        lobby_state->game_settings.map_list.file_names[i][file_name_len] = 0;
+        memcpy(lobby_state->map_list.file_names[i], buffer_ptr, file_name_len);
+        lobby_state->map_list.file_names[i][file_name_len] = 0;
         bytes_read += file_name_len;
         buffer_ptr += file_name_len;
     }
+
+    memcpy(&lobby_state->selected_map, buffer_ptr, sizeof(lobby_state->selected_map));
+    bytes_read += sizeof(lobby_state->selected_map);
+    buffer_ptr += sizeof(lobby_state->selected_map);
 
     return bytes_read;
 }

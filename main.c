@@ -72,7 +72,7 @@ void reset_game(Game* game,
                 const char* map_file_name) {
     char map_path[128];
     snprintf(map_path, 128, "assets/%s", map_file_name);
-    game_init(game, map_path, lobby_state->game_settings.taco_count);
+    game_init(game, map_path);
 
     Items* items = &game->items;
 
@@ -92,8 +92,8 @@ void reset_game(Game* game,
                 3,
                 2,
                 DIRECTION_EAST,
-                lobby_state->game_settings.starting_length,
-                (S8)(lobby_state->game_settings.segment_health));
+                game->settings.starting_length,
+                (S8)(game->settings.segment_health));
 
     game->snakes[0].color = lobby_state->players[0].snake_color;
 
@@ -101,8 +101,8 @@ void reset_game(Game* game,
                 (S16)(items->width - 3),
                 2,
                 DIRECTION_SOUTH,
-                lobby_state->game_settings.starting_length,
-                (S8)(lobby_state->game_settings.segment_health));
+                game->settings.starting_length,
+                (S8)(game->settings.segment_health));
 
     if (snake_count > 1) {
         game->snakes[1].color = lobby_state->players[1].snake_color;
@@ -115,8 +115,8 @@ void reset_game(Game* game,
                     (S16)(items->width - 2),
                     (S16)(items->height - 3),
                     DIRECTION_WEST,
-                    lobby_state->game_settings.starting_length,
-                    (S8)(lobby_state->game_settings.segment_health));
+                    game->settings.starting_length,
+                    (S8)(game->settings.segment_health));
         game->snakes[2].color = lobby_state->players[2].snake_color;
     }
 
@@ -125,8 +125,8 @@ void reset_game(Game* game,
                     3,
                     (S16)(items->height - 3),
                     DIRECTION_EAST,
-                    lobby_state->game_settings.starting_length,
-                    (S8)(lobby_state->game_settings.segment_health));
+                    game->settings.starting_length,
+                    (S8)(game->settings.segment_health));
         game->snakes[3].color = lobby_state->players[3].snake_color;
     }
 }
@@ -137,8 +137,7 @@ bool draw_game(Game* game,
                SDL_Texture* tileset_texture,
                S32 cell_size,
                S32 camera_offset_x,
-               S32 camera_offset_y,
-               S32 max_segment_health) {
+               S32 camera_offset_y) {
 
     // Draw level
     for (Uint8 l = 0; l < game->map.num_layers; l++) {
@@ -205,7 +204,7 @@ bool draw_game(Game* game,
                    cell_size,
                    camera_offset_x,
                    camera_offset_y,
-                   max_segment_health);
+                   game->settings.segment_health);
     }
 
     return true;
@@ -247,9 +246,7 @@ bool app_game_server_handle_keystate(AppStateGameServer* app_game_server,
 // returns whether or not a tick occurred.
 void app_game_server_update(AppStateGameServer* app_game_server,
                             bool should_tick,
-                            S64 time_since_update_us,
-                            bool enable_chomping,
-                            bool enable_constricting) {
+                            S64 time_since_update_us) {
     for (S32 i = 0; i < MAX_SNAKE_COUNT; i++) {
         if (app_game_server->snake_actions[i] != SNAKE_ACTION_NONE) {
             action_buffer_add(app_game_server->action_buffers + i, app_game_server->snake_actions[i]);
@@ -257,8 +254,8 @@ void app_game_server_update(AppStateGameServer* app_game_server,
     }
 
     if (app_game_server->game.state == GAME_STATE_WAITING) {
-        app_game_server->game.wait_to_start_ms -= (S32)(time_since_update_us / 1000);
-        if (app_game_server->game.wait_to_start_ms <= 0) {
+        app_game_server->game.settings.wait_to_start_ms -= (S32)(time_since_update_us / 1000);
+        if (app_game_server->game.settings.wait_to_start_ms <= 0) {
             app_game_server->game.state = GAME_STATE_PLAYING;
         }
     }
@@ -267,10 +264,10 @@ void app_game_server_update(AppStateGameServer* app_game_server,
         SnakeAction snake_actions[MAX_SNAKE_COUNT];
         for (S32 i = 0; i < MAX_SNAKE_COUNT; i++) {
             snake_actions[i] = action_buffer_remove(&app_game_server->action_buffers[i]);
-            if (!enable_chomping) {
+            if (!app_game_server->game.settings.enable_chomping) {
                 snake_actions[i] &= ~SNAKE_ACTION_CHOMP;
             }
-            if (!enable_constricting) {
+            if (!app_game_server->game.settings.enable_constricting) {
                 snake_actions[i] &= ~(SNAKE_ACTION_CONSTRICT_LEFT | SNAKE_ACTION_CONSTRICT_RIGHT);
             }
         }
@@ -295,7 +292,7 @@ void app_server_update(AppState* app_state,
     if (*app_state == APP_STATE_LOBBY) {
         if (app_lobby_update(lobby_state)) {
             *app_state = APP_STATE_GAME;
-            server_game_state->game.wait_to_start_ms = 3000;
+            server_game_state->game.settings.wait_to_start_ms = 3000;
             reset_game(&server_game_state->game,
                        lobby_state,
                        map_file_name);
@@ -303,9 +300,7 @@ void app_server_update(AppState* app_state,
     } else if (*app_state == APP_STATE_GAME) {
         app_game_server_update(server_game_state,
                                should_tick,
-                               time_since_last_frame_us,
-                               lobby_state->game_settings.enable_chomping,
-                               lobby_state->game_settings.enable_constricting);
+                               time_since_last_frame_us);
     }
 }
 
@@ -575,16 +570,6 @@ int main(S32 argc, char** argv) {
     AppStateGameServer server_game_state = {0};
     AppStateLobby lobby_state = {0};
 
-    lobby_state.game_settings.enable_chomping = true;
-    lobby_state.game_settings.enable_constricting = true;
-    lobby_state.game_settings.head_invincible = true;
-    lobby_state.game_settings.zero_tacos_respawn = false;
-    lobby_state.game_settings.segment_health = 3;
-    lobby_state.game_settings.starting_length = 5;
-    lobby_state.game_settings.taco_count = 5;
-    lobby_state.game_settings.tick_ms = 175;
-    lobby_state.game_settings.chomp_cooldown_ticks = 10;
-
     NetSocket* server_socket = NULL; // Used by server to listen for client connections.
     NetSocket* client_socket = NULL; // Used by client to send and receive.
 
@@ -660,6 +645,16 @@ int main(S32 argc, char** argv) {
         break;
     }
     }
+
+    game->settings.enable_chomping = true;
+    game->settings.enable_constricting = true;
+    game->settings.head_invincible = true;
+    game->settings.zero_tacos_respawn = false;
+    game->settings.segment_health = 3;
+    game->settings.starting_length = 5;
+    game->settings.taco_count = 5;
+    game->settings.tick_ms = 175;
+    game->settings.chomp_cooldown_ticks = 10;
 
     // Create the server player in the lobby.
     if (session_type == SESSION_TYPE_SINGLE_PLAYER || session_type == SESSION_TYPE_SERVER) {
@@ -839,13 +834,13 @@ int main(S32 argc, char** argv) {
     };
 
 #if defined(PLATFORM_WINDOWS)
-    lobby_state.game_settings.map_list = list_files_in_dir("assets/" WINDOWS_MAP_SUFFIX_MATCHER);
+    lobby_state.map_list = list_files_in_dir("assets/" WINDOWS_MAP_SUFFIX_MATCHER);
 #else
-    lobby_state.game_settings.map_list = list_files_in_dir("assets", ".temap");
+    lobby_state.map_list = list_files_in_dir("assets", ".temap");
 #endif
-    printf("listing %d map fils in 'assets/'\n", lobby_state.game_settings.map_list.file_count);
-    for (S32 i = 0; i < lobby_state.game_settings.map_list.file_count; i++) {
-        printf("%s\n", lobby_state.game_settings.map_list.file_names[i]);
+    printf("listing %d map fils in 'assets/'\n", lobby_state.map_list.file_count);
+    for (S32 i = 0; i < lobby_state.map_list.file_count; i++) {
+        printf("%s\n", lobby_state.map_list.file_names[i]);
     }
 
     S32 cell_size = cell_pixel_size;
@@ -988,8 +983,8 @@ int main(S32 argc, char** argv) {
         // The server/single player mode should only update the game state if a tick has passed.
         bool should_tick = false;
         bool should_send_state = false;
-        if (time_since_tick_us >= MS_TO_US(lobby_state.game_settings.tick_ms)) {
-            time_since_tick_us -= MS_TO_US(lobby_state.game_settings.tick_ms);
+        if (time_since_tick_us >= MS_TO_US(game->settings.tick_ms)) {
+            time_since_tick_us -= MS_TO_US(game->settings.tick_ms);
             should_send_state = true;
             if (server_game_state.game.state == GAME_STATE_PLAYING &&
                 dev_mode_should_step(&server_game_state.dev_mode)) {
@@ -1048,13 +1043,14 @@ int main(S32 argc, char** argv) {
                     }
                     lobby_state_deserialize(client_receive_packet.payload,
                                             client_receive_packet.header.payload_size,
-                                            &lobby_state);
+                                            &lobby_state,
+                                            &game->settings);
 
                 } else if (client_receive_packet.header.type == PACKET_TYPE_LEVEL_STATE) {
                     if (app_state == APP_STATE_LOBBY) {
                         app_state = APP_STATE_GAME;
                         const char* map_file_name =
-                            lobby_state.game_settings.map_list.file_names[lobby_state.game_settings.selected_map];
+                            lobby_state.map_list.file_names[lobby_state.selected_map];
                         char map_path[128];
                         snprintf(map_path, 128, "assets/%s", map_file_name);
                         if (!LoadMap(&game->map, map_path)) {
@@ -1149,8 +1145,7 @@ int main(S32 argc, char** argv) {
             }
 
             // TODO: Consolidate with SINGLE code path
-            const char* map_filename =
-                lobby_state.game_settings.map_list.file_names[lobby_state.game_settings.selected_map];
+            const char* map_filename = lobby_state.map_list.file_names[lobby_state.selected_map];
             app_server_update(&app_state,
                               &lobby_state,
                               &server_game_state,
@@ -1187,6 +1182,7 @@ int main(S32 argc, char** argv) {
                 } else if (app_state == APP_STATE_LOBBY) {
                     // Serialize game state
                     size_t msg_size = lobby_state_serialize(&lobby_state,
+                                                            &game->settings,
                                                             net_msg_buffer,
                                                             net_msg_buffer_size);
 
@@ -1230,8 +1226,7 @@ int main(S32 argc, char** argv) {
             break;
         }
         case SESSION_TYPE_SINGLE_PLAYER: {
-            const char* map_filename =
-                lobby_state.game_settings.map_list.file_names[lobby_state.game_settings.selected_map];
+            const char* map_filename = lobby_state.map_list.file_names[lobby_state.selected_map];
             app_server_update(&app_state,
                               &lobby_state,
                               &server_game_state,
@@ -1264,11 +1259,11 @@ int main(S32 argc, char** argv) {
             PF_RenderString(font, 42, 64, "Constricting");
             PF_RenderString(font, 42, 90, "Head Invincible");
             PF_RenderString(font, 42, 116, "Zero Tacos Respawn");
-            PF_RenderString(font, 240, 38, "Segment HP: %d", lobby_state.game_settings.segment_health);
-            PF_RenderString(font, 480, 38, "Start Len: %d", lobby_state.game_settings.starting_length);
-            PF_RenderString(font, 720, 38, "Tacos: %d", lobby_state.game_settings.taco_count);
-            PF_RenderString(font, 480, 90, "Tick MS: %d", lobby_state.game_settings.tick_ms);
-            PF_RenderString(font, 720, 90, "Chomp CD ticks: %d", lobby_state.game_settings.chomp_cooldown_ticks);
+            PF_RenderString(font, 240, 38, "Segment HP: %d", game->settings.segment_health);
+            PF_RenderString(font, 480, 38, "Start Len: %d", game->settings.starting_length);
+            PF_RenderString(font, 720, 38, "Tacos: %d", game->settings.taco_count);
+            PF_RenderString(font, 480, 90, "Tick MS: %d", game->settings.tick_ms);
+            PF_RenderString(font, 720, 90, "Chomp CD ticks: %d", game->settings.chomp_cooldown_ticks);
             PF_RenderString(font, 500, 148, "Map");
 
             {
@@ -1285,60 +1280,56 @@ int main(S32 argc, char** argv) {
                             renderer,
                             mouse_state,
                             &ui_enable_chomping_checkbox,
-                            &lobby_state.game_settings.enable_chomping);
+                            &game->settings.enable_chomping);
                 ui_checkbox(&ui,
                             renderer,
                             mouse_state,
                             &ui_enable_constricting_checkbox,
-                            &lobby_state.game_settings.enable_constricting);
+                            &game->settings.enable_constricting);
                 ui_checkbox(&ui,
                             renderer,
                             mouse_state,
                             &ui_head_invincible_checkbox,
-                            &lobby_state.game_settings.head_invincible);
+                            &game->settings.head_invincible);
                 ui_checkbox(&ui,
                             renderer,
                             mouse_state,
                             &ui_zero_tacos_respawn_checkbox,
-                            &lobby_state.game_settings.zero_tacos_respawn);
+                            &game->settings.zero_tacos_respawn);
                 ui_slider(&ui,
                           renderer,
                           mouse_state,
                           &ui_segment_health_slider,
-                          &lobby_state.game_settings.segment_health);
+                          &game->settings.segment_health);
                 ui_slider(&ui,
                           renderer,
                           mouse_state,
                           &ui_snake_length_slider,
-                          &lobby_state.game_settings.starting_length);
+                          &game->settings.starting_length);
                 ui_slider(&ui,
                           renderer,
                           mouse_state,
                           &ui_taco_count_slider,
-                          &lobby_state.game_settings.taco_count);
+                          &game->settings.taco_count);
                 ui_slider(&ui,
                           renderer,
                           mouse_state,
                           &ui_tick_ms_slider,
-                          &lobby_state.game_settings.tick_ms);
+                          &game->settings.tick_ms);
 
                 ui_slider(&ui,
                           renderer,
                           mouse_state,
                           &ui_chomp_cooldown_ticks_slider,
-                          &lobby_state.game_settings.chomp_cooldown_ticks);
+                          &game->settings.chomp_cooldown_ticks);
 
                 ui_dropdown(&ui,
                             renderer,
                             mouse_state,
                             &ui_maps_drop_down,
-                            lobby_state.game_settings.map_list.file_names,
-                            lobby_state.game_settings.map_list.file_count,
-                            &lobby_state.game_settings.selected_map);
-
-                server_game_state.game.head_invincible = lobby_state.game_settings.head_invincible;
-                server_game_state.game.zero_taco_respawn = lobby_state.game_settings.zero_tacos_respawn;
-                server_game_state.game.chomp_cooldown_ticks = (S8)(lobby_state.game_settings.chomp_cooldown_ticks);
+                            lobby_state.map_list.file_names,
+                            lobby_state.map_list.file_count,
+                            &lobby_state.selected_map);
             }
 
             S32 lobby_cell_size = 40;
@@ -1404,8 +1395,7 @@ int main(S32 argc, char** argv) {
                            tileset_texture,
                            cell_size,
                            camera_offset_x,
-                           camera_offset_y,
-                           lobby_state.game_settings.segment_health)) {
+                           camera_offset_y)) {
                 return EXIT_FAILURE;
             }
 
@@ -1422,7 +1412,8 @@ int main(S32 argc, char** argv) {
             switch(session_type) {
             case SESSION_TYPE_CLIENT:
                 if (game->state == GAME_STATE_WAITING) {
-                    PF_RenderString(font, 0, 0, "Game Starting in %d seconds", (S32)(ceil(client_game_state.game.wait_to_start_ms / 1000.0)));
+                    PF_RenderString(font, 0, 0, "Game Starting in %d seconds",
+                                    (S32)(ceil(client_game_state.game.settings.wait_to_start_ms / 1000.0)));
                 } else if (game->state == GAME_STATE_GAME_OVER) {
                     PF_RenderString(font, 0, 0, "Game Over!");
                 }
@@ -1430,7 +1421,8 @@ int main(S32 argc, char** argv) {
             case SESSION_TYPE_SERVER:
             case SESSION_TYPE_SINGLE_PLAYER:
                 if (game->state == GAME_STATE_WAITING) {
-                    PF_RenderString(font, 0, 0, "Game Starting in %d seconds", (S32)(ceil(server_game_state.game.wait_to_start_ms / 1000.0)));
+                    PF_RenderString(font, 0, 0, "Game Starting in %d seconds",
+                                    (S32)(ceil(server_game_state.game.settings.wait_to_start_ms / 1000.0)));
                 } else if (game->state == GAME_STATE_GAME_OVER) {
                     PF_RenderString(font, 0, 0, "Game Over!");
                 }
@@ -1470,7 +1462,7 @@ int main(S32 argc, char** argv) {
         }
     }
 
-    list_dir_destroy(&lobby_state.game_settings.map_list);
+    list_dir_destroy(&lobby_state.map_list);
     net_shutdown();
     free(net_msg_buffer);
     PF_DestroyFont(font);

@@ -132,7 +132,7 @@ void _print_game(Game* game) {
 
 void _snake_chomp_segment(Game* game, SnakeCollision* snake_collision) {
     // The head is invincible ! Constricting is the only way to kill.
-    if (game->head_invincible && snake_collision->segment_index == 0) {
+    if (game->settings.head_invincible && snake_collision->segment_index == 0) {
         return;
     }
 
@@ -211,7 +211,7 @@ void _snake_chomp(Snake* snake, Game* game) {
     }
 
     if (did_chomp) {
-        snake->chomp_cooldown = game->chomp_cooldown_ticks;
+        snake->chomp_cooldown = (S8)(game->settings.chomp_cooldown_ticks);
     }
 }
 
@@ -278,7 +278,7 @@ void _snake_move(Snake* snake, Game* game) {
     }
 }
 
-bool game_init(Game* game, const char* map_filepath, S32 max_taco_count) {
+bool game_init(Game* game, const char* map_filepath) {
     if (!LoadMap(&game->map, map_filepath)) {
         fprintf(stderr, "Failed to load map.\n");
         return false;
@@ -295,7 +295,6 @@ bool game_init(Game* game, const char* map_filepath, S32 max_taco_count) {
         }
     }
 
-    game->max_taco_count = max_taco_count;
     game->state = GAME_STATE_WAITING;
     return true;
 }
@@ -333,7 +332,7 @@ void game_clone(Game* input, Game* output) {
     }
 
     output->state = input->state;
-    output->max_taco_count = input->max_taco_count;
+    output->settings = input->settings;
 }
 
 void _snake_turn(Game* game, SnakeAction snake_action, S32 snake_index) {
@@ -1728,8 +1727,8 @@ void game_update(Game* game, SnakeAction* snake_actions) {
     }
 
     S32 taco_count = game_count_tacos(game);
-    if ((game->zero_taco_respawn && taco_count == 0) || !game->zero_taco_respawn) {
-        for (size_t i = taco_count; i < (size_t)game->max_taco_count; i++) {
+    if ((game->settings.zero_tacos_respawn && taco_count == 0) || !game->settings.zero_tacos_respawn) {
+        for (size_t i = taco_count; i < (size_t)game->settings.taco_count; i++) {
             game_spawn_taco(game);
         }
     }
@@ -1812,8 +1811,8 @@ size_t game_serialize(const Game* game, void* buffer, size_t buffer_size)
     memcpy(byte_buffer, &game->state, msg_size);
     byte_buffer += msg_size;
 
-    msg_size = sizeof(game->wait_to_start_ms);
-    memcpy(byte_buffer, &game->wait_to_start_ms, msg_size);
+    msg_size = sizeof(game->settings.wait_to_start_ms);
+    memcpy(byte_buffer, &game->settings.wait_to_start_ms, msg_size);
     byte_buffer += msg_size;
 
     msg_size = items_serialize(&game->items, byte_buffer, buffer_size);
@@ -1840,8 +1839,8 @@ size_t game_deserialize(void * buffer, size_t size, Game * out)
     memcpy(&out->state, byte_buffer, msg_size);
     byte_buffer += msg_size;
 
-    msg_size = sizeof(out->wait_to_start_ms);
-    memcpy(&out->wait_to_start_ms, byte_buffer, msg_size);
+    msg_size = sizeof(out->settings.wait_to_start_ms);
+    memcpy(&out->settings.wait_to_start_ms, byte_buffer, msg_size);
     byte_buffer += msg_size;
 
     msg_size = items_deserialize(byte_buffer, size, &out->items);

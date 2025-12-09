@@ -53,15 +53,24 @@ typedef struct {
 } PushState;
 
 typedef struct {
+    bool enable_chomping;
+    bool enable_constricting;
+    bool head_invincible;
+    bool zero_tacos_respawn;
+    S32 segment_health;
+    S32 starting_length;
+    S32 taco_count;
+    S32 chomp_cooldown_ticks;
+    S32 tick_ms;
+    S32 wait_to_start_ms;
+} GameSettings;
+
+typedef struct {
     Map map;
     Items items;
     Snake snakes[MAX_SNAKE_COUNT];
     GameState state;
-    bool head_invincible;
-    bool zero_taco_respawn;
-    S32 max_taco_count;
-    S32 wait_to_start_ms;
-    S8 chomp_cooldown_ticks;
+    GameSettings settings;
 } Game;
 
 typedef enum {
@@ -71,7 +80,7 @@ typedef enum {
     MOVE_OBJECT_EMPTY,
 } MoveResult;
 
-bool game_init(Game* game, const char* map_filepath, S32 max_taco_count);
+bool game_init(Game* game, const char* map_filepath);
 void game_clone(Game* input, Game* output);
 void game_apply_snake_action(Game* game, SnakeAction snake_action, S32 snake_index);
 QueriedObject game_query(Game* game, S32 x, S32 y);

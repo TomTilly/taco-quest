@@ -38,37 +38,25 @@ typedef struct {
     S32 input_index;
 } LobbyPlayer;
 
-typedef struct{
-    bool enable_chomping;
-    bool enable_constricting;
-    bool head_invincible;
-    bool zero_tacos_respawn;
-    S32 segment_health;
-    S32 starting_length;
-    S32 taco_count;
-    S32 tick_ms;
-    S32 chomp_cooldown_ticks;
-    S32 selected_map;
-    // This map list is dynamic, so always keep it last, otherwise, serialization/deserialization is more complicated.
-    ListDir map_list;
-} LobbyGameSettings;
-
 typedef struct {
     LobbyPlayer players[MAX_SNAKE_COUNT];
     LobbyActionKeyState prev_actions_key_states[MAX_SNAKE_COUNT];
     LobbyAction actions[MAX_SNAKE_COUNT];
-    LobbyGameSettings game_settings;
+    ListDir map_list;
+    S32 selected_map;
 } AppStateLobby;
 
 bool app_lobby_update(AppStateLobby* lobby_state);
 void app_lobby_handle_keystate(AppStateLobby* lobby_state, const bool* keyboard_state);
 
 size_t lobby_state_serialize(AppStateLobby* lobby_state,
+                             GameSettings* game_settings,
                              void* buffer,
                              size_t buffer_size);
 size_t lobby_state_deserialize(void* buffer,
                                size_t buffer_size,
-                               AppStateLobby* lobby_state);
+                               AppStateLobby* lobby_state,
+                               GameSettings* game_settings);
 S32 lobby_find_network_player(AppStateLobby* lobby_state, S32 socket_index);
 void lobby_remove_player(AppStateLobby* lobby_state, S32 player_index);
 SnakeColor lobby_find_next_unique_snake_color(SnakeColor starting_color, AppStateLobby* lobby_state);
