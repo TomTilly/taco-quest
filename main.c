@@ -67,6 +67,60 @@ char* get_timestamp(void) {
     return buff;
 }
 
+void pick_snake_spawn(Game* game,
+                      S16 start_x,
+                      S16 start_y,
+                      S16 end_x, // inclusive
+                      S16 end_y, // inclusive
+                      S16* spawn_x,
+                      S16* spawn_y) {
+    S16 range_x = (end_x - start_x) + 1;
+    S16 range_y = (end_y - start_y) + 1;
+
+    S16 attempts = 0;
+    while(attempts < 10) {
+        attempts++;
+
+        S16 x = start_x + (S16)(rand() % range_x);
+        S16 y = start_y + (S16)(rand() % range_y);
+
+        GID ground_tile_gid = GetMapTile(&game->map, x, y, MAP_GROUND_LAYER);
+        if (ground_tile_gid == 0) {
+            continue;
+        }
+
+        GID solid_tile_gid = GetMapTile(&game->map, x, y, MAP_SOLID_LAYER);
+        if (solid_tile_gid != 0) {
+            continue;
+        }
+
+        *spawn_x = x;
+        *spawn_y = y;
+        return;
+    }
+
+    for (S16 x = start_x; x <= end_x; x++) {
+        for (S16 y = start_y; y <= end_y; y++) {
+            GID ground_tile_gid = GetMapTile(&game->map, x, y, MAP_GROUND_LAYER);
+            if (ground_tile_gid == 0) {
+                continue;
+            }
+
+            GID solid_tile_gid = GetMapTile(&game->map, x, y, MAP_SOLID_LAYER);
+            if (solid_tile_gid != 0) {
+                continue;
+            }
+
+            *spawn_x = x;
+            *spawn_y = y;
+            return;
+        }
+    }
+
+    *spawn_x = start_x;
+    *spawn_y = start_y;
+}
+
 void reset_game(Game* game,
                 AppStateLobby* lobby_state,
                 const char* map_file_name) {
@@ -88,32 +142,48 @@ void reset_game(Game* game,
         game->snakes[i].life_state = SNAKE_LIFE_STATE_DEAD;
     }
 
-    snake_spawn(game->snakes + 0,
-                3,
-                2,
-                DIRECTION_EAST,
-                game->settings.starting_length,
-                (S8)(game->settings.segment_health));
+    {
+        S16 spawn_x = 0;
+        S16 spawn_y = 0;
+        pick_snake_spawn(game, 0, 0, game->map.width / 2, game->map.height / 2, &spawn_x, &spawn_y);
 
-    game->snakes[0].color = lobby_state->players[0].snake_color;
+        snake_spawn(game->snakes + 0,
+                    spawn_x,
+                    spawn_y,
+                    DIRECTION_EAST,
+                    game->settings.starting_length,
+                    (S8)(game->settings.segment_health));
 
-    snake_spawn(game->snakes + 1,
-                (S16)(items->width - 3),
-                2,
-                DIRECTION_SOUTH,
-                game->settings.starting_length,
-                (S8)(game->settings.segment_health));
+        game->snakes[0].color = lobby_state->players[0].snake_color;
+    }
 
-    if (snake_count > 1) {
-        game->snakes[1].color = lobby_state->players[1].snake_color;
-    } else {
-        game->snakes[1].color = (lobby_state->players[0].snake_color + 1) % SNAKE_COLOR_COUNT;
+    {
+        S16 spawn_x = 0;
+        S16 spawn_y = 0;
+        pick_snake_spawn(game, game->map.width / 2, 0, game->map.width, game->map.height / 2, &spawn_x, &spawn_y);
+
+        snake_spawn(game->snakes + 1,
+                    spawn_x,
+                    spawn_y,
+                    DIRECTION_SOUTH,
+                    game->settings.starting_length,
+                    (S8)(game->settings.segment_health));
+
+        if (snake_count > 1) {
+            game->snakes[1].color = lobby_state->players[1].snake_color;
+        } else {
+            game->snakes[1].color = (lobby_state->players[0].snake_color + 1) % SNAKE_COLOR_COUNT;
+        }
     }
 
     if (snake_count > 2) {
+        S16 spawn_x = 0;
+        S16 spawn_y = 0;
+        pick_snake_spawn(game, game->map.width / 2, game->map.height / 2, game->map.width, game->map.height, &spawn_x, &spawn_y);
+
         snake_spawn(game->snakes + 2,
-                    (S16)(items->width - 2),
-                    (S16)(items->height - 3),
+                    spawn_x,
+                    spawn_y,
                     DIRECTION_WEST,
                     game->settings.starting_length,
                     (S8)(game->settings.segment_health));
@@ -121,6 +191,9 @@ void reset_game(Game* game,
     }
 
     if (snake_count > 3) {
+        S16 spawn_x = 0;
+        S16 spawn_y = 0;
+        pick_snake_spawn(game, 0, game->map.height / 2, game->map.width / 2, game->map.height, &spawn_x, &spawn_y);
         snake_spawn(game->snakes + 3,
                     3,
                     (S16)(items->height - 3),
