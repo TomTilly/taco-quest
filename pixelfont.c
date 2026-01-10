@@ -59,18 +59,18 @@ RenderChar(PF_Font * font, int x, int y, char ch)
     const uint8_t char_w = (uint8_t)(font->state.char_width);
     const uint8_t char_h = (uint8_t)(font->state.char_height);
 
-    SDL_Rect src = {
-        .x = (ch % font->cols) * char_w,
-        .y = (ch / font->cols) * char_h,
-        .w = char_w,
-        .h = char_h
+    SDL_FRect src = {
+        .x = (float)((ch % font->cols) * char_w),
+        .y = (float)((ch / font->cols) * char_h),
+        .w = (float)(char_w),
+        .h = (float)(char_h)
     };
 
-    SDL_Rect dst = {
-        .x = x,
-        .y = y,
-        .w = (int32_t)(char_w * font->state.scale),
-        .h = (int32_t)(char_h * font->state.scale)
+    SDL_FRect dst = {
+        .x = (float)(x),
+        .y = (float)(y),
+        .w = (float)(char_w * font->state.scale),
+        .h = (float)(char_h * font->state.scale)
     };
 
     SDL_SetTextureColorMod(font->texture,
@@ -78,7 +78,7 @@ RenderChar(PF_Font * font, int x, int y, char ch)
                            font->state.foreground.g,
                            font->state.foreground.b);
     SDL_SetTextureAlphaMod(font->texture, font->state.foreground.a);
-    SDL_RenderCopy(font->renderer, font->texture, &src, &dst);
+    SDL_RenderTexture(font->renderer, font->texture, &src, &dst);
 }
 
 /** `width` is in characters */
@@ -89,11 +89,11 @@ RenderBackground(PF_Font * font, int x, int y, int width)
         return;
     }
 
-    SDL_Rect dst = {
-        .x = x,
-        .y = y,
-        .w = width * font->state.char_width,
-        .h = font->state.char_height
+    SDL_FRect dst = {
+        .x = (float)(x),
+        .y = (float)(y),
+        .w = (float)(width * font->state.char_width),
+        .h = (float)(font->state.char_height)
     };
 
     SDL_Color saved = GetRenderColor(font->renderer);
@@ -144,16 +144,24 @@ PF_LoadFont(const PF_Config * config)
         goto error;
     }
 
-    Uint32 key = SDL_MapRGB(surface->format,
+    Uint32 key = SDL_MapRGB(SDL_GetPixelFormatDetails(surface->format),
+                            NULL,
                             config->bmp_background.r,
                             config->bmp_background.g,
                             config->bmp_background.b);
-    SDL_SetColorKey(surface, SDL_TRUE, key);
+    SDL_SetSurfaceColorKey(surface, true, key);
 
     font->texture = SDL_CreateTextureFromSurface(config->renderer, surface);
 
     if ( font->texture == NULL ) {
         PF_SET_ERROR("failed to create font texture for '%s'\n", config->bmp_file);
+        goto error;
+    }
+
+    if(!SDL_SetTextureScaleMode(font->texture, SDL_SCALEMODE_NEAREST)) {
+        PF_SET_ERROR("Failed to set texture scale mode on '%s' error: %s\n",
+                     config->bmp_file,
+                     SDL_GetError());
         goto error;
     }
 
@@ -165,13 +173,13 @@ PF_LoadFont(const PF_Config * config)
 
     font->cols = (Uint16)(surface->w / config->char_width);
 
-    SDL_FreeSurface(surface);
+    SDL_DestroySurface(surface);
 
     return font;
 
 error:
     if ( surface ) {
-        SDL_FreeSurface(surface);
+        SDL_DestroySurface(surface);
     }
 
     if ( font ) {

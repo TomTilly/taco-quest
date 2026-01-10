@@ -13,7 +13,7 @@
 #ifndef PIXELFONT_H
 #define PIXELFONT_H
 
-#include <SDL2/SDL_render.h>
+#include <SDL3/SDL_render.h>
 
 #define PF_CENTER   0x10000
 #define PF_RIGHT    0x20000

@@ -8,12 +8,18 @@
 #ifndef game_h
 #define game_h
 
-#include "snake.h"
-#include "level.h"
-#include "direction.h"
+#ifdef PLATFORM_WINDOWS
+#pragma warning(disable : 4201)
+#endif
 
-#define MAX_TACO_COUNT 6
-#define MAX_SNAKE_COUNT 3
+#include "direction.h"
+#include "items.h"
+#include "map.h"
+#include "snake.h"
+
+#define MAP_GROUND_LAYER 0
+#define MAP_SOLID_LAYER 1
+#define MAX_SNAKE_COUNT 4
 
 typedef enum {
     GAME_STATE_WAITING,
@@ -21,15 +27,65 @@ typedef enum {
     GAME_STATE_GAME_OVER,
 } GameState;
 
+typedef enum {
+    QUERIED_OBJECT_TYPE_NONE,
+    QUERIED_OBJECT_TYPE_ITEM,
+    QUERIED_OBJECT_TYPE_SNAKE,
+    QUERIED_OBJECT_TYPE_WALL,
+} QueriedObjectType;
+
 typedef struct {
-    Level level;
+    S32 index;
+    S32 segment_index;
+} QueriedSnake;
+
+typedef struct {
+    QueriedObjectType type;
+    union {
+        ItemType item;
+        QueriedSnake snake;
+    };
+} QueriedObject;
+
+typedef struct {
+    U8* cells;
+    S32 original_snake_index;
+} PushState;
+
+typedef struct {
+    bool enable_chomping;
+    bool enable_constricting;
+    bool head_invincible;
+    bool zero_tacos_respawn;
+    S32 segment_health;
+    S32 starting_length;
+    S32 taco_count;
+    S32 chomp_cooldown_ticks;
+    S32 tick_ms;
+    S32 wait_to_start_ms;
+} GameSettings;
+
+typedef struct {
+    Map map;
+    Items items;
     Snake snakes[MAX_SNAKE_COUNT];
     GameState state;
+    GameSettings settings;
 } Game;
 
-void snake_update(Snake* snake, Game* game, bool chomp);
-bool game_init(Game* game, int32_t level_width, int32_t level_height);
+typedef enum {
+    MOVE_OBJECT_SUCCESS,
+    MOVE_OBJECT_FAIL,
+    MOVE_OBJECT_PROGRESS,
+    MOVE_OBJECT_EMPTY,
+} MoveResult;
+
+bool game_init(Game* game, const char* map_filepath);
+void game_clone(Game* input, Game* output);
 void game_apply_snake_action(Game* game, SnakeAction snake_action, S32 snake_index);
+QueriedObject game_query(Game* game, S32 x, S32 y);
+bool game_empty_at(Game* game, S32 x, S32 y);
+S32 game_query_for_snake_at(Game* game, S32 x, S32 y);
 void game_update(Game* game, SnakeAction* snake_actions);
 void game_destroy(Game* game);
 
@@ -38,5 +94,14 @@ S32 game_count_tacos(Game* game);
 
 size_t game_serialize(const Game* game, void* buffer, size_t buffer_size);
 size_t game_deserialize(void * buffer, size_t size, Game * out);
+
+void snake_constrict(Game* game, S32 snake_index);
+
+MoveResult snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 segment_index, Direction direction);
+MoveResult snake_segment_constrict(Game* game, S32 snake_index, S32 segment_index, bool left);
+
+bool snake_segment_is_constricting_towards(Game* game, S32 snake_index, S32 segment_index, Direction from);
+
+void init_push_state(Game* game, PushState* push_state);
 
 #endif /* game_h */

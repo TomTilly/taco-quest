@@ -1,2 +1,3 @@
 # Git operations on all files will use linux/macos line endings
 * text eol=lf
+*.temap binary
