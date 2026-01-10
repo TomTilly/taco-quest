@@ -7,6 +7,7 @@
 #include <time.h>
 #include <string.h>
 #include <assert.h>
+#include <math.h>
 
 #include <SDL3/SDL.h>
 
@@ -597,43 +598,72 @@ int main(S32 argc, char** argv) {
     const char* ip = NULL;
     const char* window_title = NULL;
     const char* player_name = NULL;
+    bool record_demo = false;
 
     SessionType session_type = SESSION_TYPE_SINGLE_PLAYER;
-    for (S32 i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "-s") == 0) {
+    for (int i = 1; i < argc; i++) {
+        const char* flag = argv[i];
+
+        if (strcmp(flag, "-s") == 0) {
+            if (session_type != SESSION_TYPE_SINGLE_PLAYER) {
+                puts("Expected one mode argument, but received multiple.");
+                return EXIT_FAILURE;
+            }
+
             session_type = SESSION_TYPE_SERVER;
 
-            if (argc <= (i + 1)) {
+            i++;
+            if (i < argc) {
+                port = argv[i];
+            } else {
                 puts("Expected port argument for server mode");
                 return EXIT_FAILURE;
             }
-
-            port = argv[i + 1];
-            i++;
-        } else if (strcmp(argv[i], "-c") == 0) {
-            session_type = SESSION_TYPE_CLIENT;
-
-            if (argc <= (i + 2)) {
-                puts("Expected ip and port arguments for client mode");
+        } else if (strcmp(flag, "-c") == 0) {
+            if (session_type != SESSION_TYPE_SINGLE_PLAYER) {
+                puts("Expected one mode argument, but received multiple.");
                 return EXIT_FAILURE;
             }
 
-            ip = argv[i + 1];
-            port = argv[i + 2];
-            i += 2;
-        } else if (strcmp(argv[i], "-n") == 0) {
-            if (argc <= (i + 1)) {
+            session_type = SESSION_TYPE_CLIENT;
+
+            i++;
+            if (i < argc) {
+                ip = argv[i];
+            } else {
+                puts("Expected ip argument for client mode");
+                return EXIT_FAILURE;
+            }
+
+            i++;
+            if (i < argc) {
+                port = argv[i];
+            } else {
+                puts("Expected port argument for client mode");
+                return EXIT_FAILURE;
+            }
+        } else if (strcmp(flag, "-r") == 0){
+            record_demo = true;
+        } else if (strcmp(flag, "-n") == 0) {
+            
+            i++;
+            if (i < argc) {
+                player_name = argv[i];
+            } else {
                 puts("Expected player name argument");
                 return EXIT_FAILURE;
             }
-
-            player_name = argv[i + 1];
-            i++;
         } else {
             puts("Unexpected argument passed");
             return EXIT_FAILURE;
         }
     }
+
+    if (record_demo && session_type == SESSION_TYPE_CLIENT) {
+        puts("-r argument only compatible in server or single player modes");
+        return EXIT_FAILURE;
+    }
+    (void)record_demo;
 
     //
     // Init game and level
@@ -1400,7 +1430,7 @@ int main(S32 argc, char** argv) {
                             renderer,
                             mouse_state,
                             &ui_maps_drop_down,
-                            lobby_state.map_list.file_names,
+                            (const char **)lobby_state.map_list.file_names,
                             lobby_state.map_list.file_count,
                             &lobby_state.selected_map);
             }
