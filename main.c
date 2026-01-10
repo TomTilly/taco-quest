@@ -7,6 +7,7 @@
 #include <time.h>
 #include <string.h>
 #include <assert.h>
+#include <math.h>
 
 #include <SDL3/SDL.h>
 
@@ -1429,7 +1430,7 @@ int main(S32 argc, char** argv) {
                             renderer,
                             mouse_state,
                             &ui_maps_drop_down,
-                            lobby_state.map_list.file_names,
+                            (const char **)lobby_state.map_list.file_names,
                             lobby_state.map_list.file_count,
                             &lobby_state.selected_map);
             }

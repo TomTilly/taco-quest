@@ -4,8 +4,11 @@
     #include <fileapi.h>
     #include <handleapi.h>
 #define WINDOWS_MAP_SUFFIX_MATCHER "*.temap"
+#define strdup _strdup
 #endif
 
+#include <dirent.h>
+#include <string.h>
 #include <assert.h>
 #include <stdlib.h>
 
@@ -18,7 +21,7 @@ bool list_dir_insert(ListDir* list_dir, const char* file_name) {
     }
 
     list_dir->file_names = reallocation;
-    list_dir->file_names[list_dir->file_count] = _strdup(file_name);
+    list_dir->file_names[list_dir->file_count] = strdup(file_name);
     list_dir->file_count = new_count;
     return true;
 }

@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 #define PF_BUFFER_SIZE 255
 #define PF_SET_ERROR(fmt, ...) \
