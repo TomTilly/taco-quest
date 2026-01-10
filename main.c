@@ -839,7 +839,8 @@ int main(S32 argc, char** argv) {
     timespec_get(&last_frame_timestamp, TIME_UTC);
 
     // Seed random with time.
-    srand((U32)(time(NULL)));
+    U32 seed = (U32)time(NULL);
+    srand(seed);
 
     const char* snake_bitmap_filepath = "assets/sprite-sheet.bmp";
     SDL_Surface* snake_surface = SDL_LoadBMP(snake_bitmap_filepath);
