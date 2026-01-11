@@ -244,7 +244,7 @@ bool draw_game(Game* game,
                     break;
                 }
                 case ITEM_TYPE_TACO: {
-                    SDL_FRect source_rect = {64.0f, 0.0f, 16.0f, 16.0f};
+                    SDL_FRect source_rect = {80.0f, 0.0f, 16.0f, 16.0f};
 
                     SDL_FRect cell_rect = {
                         .x = (float)(camera_offset_x + x * cell_size),
@@ -271,13 +271,31 @@ bool draw_game(Game* game,
 
     // draw snakes
     for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
-        snake_draw(renderer,
-                   snake_texture,
-                   game->snakes + s,
-                   cell_size,
-                   camera_offset_x,
-                   camera_offset_y,
-                   game->settings.segment_health);
+        Snake* snake = game->snakes + s;
+        if (snake->length == 0) {
+            continue;
+        }
+        snake_draw_body(renderer,
+                        snake_texture,
+                        snake,
+                        cell_size,
+                        camera_offset_x,
+                        camera_offset_y,
+                        game->settings.segment_health);
+    }
+
+    for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
+        Snake* snake = game->snakes + s;
+        if (snake->length == 0) {
+            continue;
+        }
+        snake_draw_head(renderer,
+                        snake_texture,
+                        snake,
+                        cell_size,
+                        camera_offset_x,
+                        camera_offset_y,
+                        game->settings.segment_health);
     }
 
     return true;
@@ -548,7 +566,7 @@ void controller_handle_input(AppState app_state,
                 *snake_actions |= SNAKE_ACTION_FACE_EAST;
             }
 
-            if (!prev_snake_actions_key_states->chomp && current_action_key_state.chomp) {
+            if (current_action_key_state.chomp) {
                 *snake_actions |= SNAKE_ACTION_CHOMP;
             }
 
@@ -727,7 +745,7 @@ int main(S32 argc, char** argv) {
     game->settings.starting_length = 5;
     game->settings.taco_count = 5;
     game->settings.tick_ms = 175;
-    game->settings.chomp_cooldown_ticks = 10;
+    game->settings.chomp_ticks = 3;
 
     // Create the server player in the lobby.
     if (session_type == SESSION_TYPE_SINGLE_PLAYER || session_type == SESSION_TYPE_SERVER) {
@@ -892,7 +910,7 @@ int main(S32 argc, char** argv) {
         .max = 500
     };
 
-    UISlider ui_chomp_cooldown_ticks_slider = {
+    UISlider ui_chomp_ticks_slider = {
         .x = 740,
         .y = 110,
         .pixel_width = 150,
@@ -1336,7 +1354,7 @@ int main(S32 argc, char** argv) {
             PF_RenderString(font, 480, 38, "Start Len: %d", game->settings.starting_length);
             PF_RenderString(font, 720, 38, "Tacos: %d", game->settings.taco_count);
             PF_RenderString(font, 480, 90, "Tick MS: %d", game->settings.tick_ms);
-            PF_RenderString(font, 720, 90, "Chomp CD ticks: %d", game->settings.chomp_cooldown_ticks);
+            PF_RenderString(font, 720, 90, "Chomp ticks: %d", game->settings.chomp_ticks);
             PF_RenderString(font, 500, 148, "Map");
 
             {
@@ -1393,8 +1411,8 @@ int main(S32 argc, char** argv) {
                 ui_slider(&ui,
                           renderer,
                           mouse_state,
-                          &ui_chomp_cooldown_ticks_slider,
-                          &game->settings.chomp_cooldown_ticks);
+                          &ui_chomp_ticks_slider,
+                          &game->settings.chomp_ticks);
 
                 ui_dropdown(&ui,
                             renderer,
@@ -1445,7 +1463,8 @@ int main(S32 argc, char** argv) {
                         snake.segments[e].y = (S16)(5 + (i * 2));
                         snake.segments[e].health = 3;
                     }
-                    snake_draw(renderer, snake_texture, &snake, lobby_cell_size, 0, 0, 3);
+                    snake_draw_body(renderer, snake_texture, &snake, lobby_cell_size, 0, 0, 3);
+                    snake_draw_head(renderer, snake_texture, &snake, lobby_cell_size, 0, 0, 3);
                     snake_destroy(&snake);
                 }
             }

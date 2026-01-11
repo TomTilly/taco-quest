@@ -130,6 +130,7 @@ void _print_game(Game* game) {
     free(string);
 }
 
+// returns whether or not we killed a segment.
 void _snake_chomp_segment(Game* game, SnakeCollision* snake_collision) {
     // The head is invincible ! Constricting is the only way to kill.
     if (game->settings.head_invincible && snake_collision->segment_index == 0) {
@@ -152,10 +153,7 @@ void _snake_chomp_segment(Game* game, SnakeCollision* snake_collision) {
 }
 
 void _snake_chomp(Snake* snake, Game* game) {
-    if (snake->chomp_cooldown > 0) {
-        return;
-    }
-
+    assert(snake->chomp_state == SNAKE_CHOMP_STATE_NONE);
     //
     // xxx
     //  a
@@ -211,7 +209,15 @@ void _snake_chomp(Snake* snake, Game* game) {
     }
 
     if (did_chomp) {
-        snake->chomp_cooldown = (S8)(game->settings.chomp_cooldown_ticks);
+        // The middle element is the one in front of the snake, if that one dies, we don't need
+        // to clamp, we can just do the bite and move on.
+        QueriedObject queried_object = game_query(game, chomp_check_x[1], chomp_check_y[1]);
+        if (queried_object.type == QUERIED_OBJECT_TYPE_SNAKE) {
+            snake->chomp_state = SNAKE_CHOMP_STATE_BEGIN;
+        } else {
+            snake->chomp_state = SNAKE_CHOMP_STATE_BITE;
+        }
+        snake->chomp_cooldown = (S8)(game->settings.chomp_ticks);
     }
 }
 
@@ -339,6 +345,10 @@ void _snake_turn(Game* game, SnakeAction snake_action, S32 snake_index) {
     Direction direction = DIRECTION_NONE;
     // TODO: snake_index check
     Snake* snake = game->snakes + snake_index;
+    // skip turning if currently chomping
+    if (snake->chomp_state != SNAKE_CHOMP_STATE_NONE) {
+        return;
+    }
     if (snake_action & SNAKE_ACTION_FACE_NORTH) {
         direction = DIRECTION_NORTH;
     }
@@ -1681,12 +1691,33 @@ void game_update(Game* game, SnakeAction* snake_actions) {
     }
 
     for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
-        if (game->snakes[s].chomp_cooldown > 0) {
-            game->snakes[s].chomp_cooldown--;
+        Snake* snake = game->snakes + s;
+        if (snake->chomp_cooldown > 0) {
+            snake->chomp_cooldown--;
         }
+
         SnakeAction snake_action = snake_actions[s];
-        if (snake_action & SNAKE_ACTION_CHOMP) {
-            _snake_chomp(game->snakes + s, game);
+        if (snake->chomp_state == SNAKE_CHOMP_STATE_NONE) {
+            if (snake_action & SNAKE_ACTION_CHOMP) {
+                _snake_chomp(snake, game);
+            }
+        } else if (snake->chomp_state == SNAKE_CHOMP_STATE_BEGIN) {
+            if (snake->chomp_cooldown == 0) {
+                snake->chomp_state = SNAKE_CHOMP_STATE_CLAMPING;
+            }
+        } else if (snake->chomp_state == SNAKE_CHOMP_STATE_BITE) {
+            if (snake->chomp_cooldown == 0) {
+                snake->chomp_state = SNAKE_CHOMP_STATE_NONE;
+            }
+        } else if (snake->chomp_state == SNAKE_CHOMP_STATE_CLAMPING) {
+            if ((snake_action & SNAKE_ACTION_CHOMP) == 0) {
+                snake->chomp_state = SNAKE_CHOMP_STATE_END;
+                snake->chomp_cooldown = (S8)(game->settings.chomp_ticks);
+            }
+        } else if (snake->chomp_state == SNAKE_CHOMP_STATE_END) {
+            if (snake->chomp_cooldown == 0) {
+                snake->chomp_state = SNAKE_CHOMP_STATE_NONE;
+            }
         }
     }
 
@@ -1721,7 +1752,8 @@ void game_update(Game* game, SnakeAction* snake_actions) {
     for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
         Snake* snake = game->snakes + s;
         // Only allow movement if we aren't constricting.
-        if (snake->constrict_state == SNAKE_CONSTRICT_STATE_NONE) {
+        if (snake->constrict_state == SNAKE_CONSTRICT_STATE_NONE &&
+            snake->chomp_state == SNAKE_CHOMP_STATE_NONE) {
             _snake_move(game->snakes + s, game);
         }
     }

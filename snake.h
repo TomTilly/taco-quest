@@ -10,6 +10,7 @@
 #define INITIAL_SNAKE_LEN 5
 #define ACTION_BUF_SIZE 2
 #define SNAKE_KILL_DAMAGE_COOLDOWN 4
+#define SNAKE_DAMAGE_FRAMES 3
 #define CHOMP_POINT_CHECK_COUNT 3
 
 typedef U8 SnakeAction;
@@ -79,11 +80,20 @@ typedef enum {
     SNAKE_COLOR_COUNT,
 } SnakeColor;
 
+typedef enum {
+    SNAKE_CHOMP_STATE_NONE,
+    SNAKE_CHOMP_STATE_BEGIN,
+    SNAKE_CHOMP_STATE_CLAMPING,
+    SNAKE_CHOMP_STATE_BITE,
+    SNAKE_CHOMP_STATE_END,
+} SnakeChompState;
+
 typedef struct {
     SnakeSegment* segments;
     S32 length;
     S32 capacity; // I hate STL
     Direction direction;
+    SnakeChompState chomp_state;
     S8 chomp_cooldown;
     S8 kill_damage_cooldown;
     SnakeLifeState life_state;
@@ -106,13 +116,20 @@ void snake_spawn(Snake* snake,
                  S32 length,
                  S8 segment_health);
 void snake_turn(Snake* snake, Direction direction);
-void snake_draw(SDL_Renderer* renderer,
-                SDL_Texture* texture,
-                Snake* snake,
-                S32 cell_size,
-                S32 camera_offset_x,
-                S32 camera_offset_y,
-                S32 max_segment_health);
+void snake_draw_head(SDL_Renderer* renderer,
+                     SDL_Texture* texture,
+                     Snake* snake,
+                     S32 cell_size,
+                     S32 camera_offset_x,
+                     S32 camera_offset_y,
+                     S32 max_segment_health);
+void snake_draw_body(SDL_Renderer* renderer,
+                     SDL_Texture* texture,
+                     Snake* snake,
+                     S32 cell_size,
+                     S32 camera_offset_x,
+                     S32 camera_offset_y,
+                     S32 max_segment_health);
 
 size_t snake_serialize(const Snake* snake, void * buffer, size_t buffer_size);
 size_t snake_deserialize(void * buffer, size_t size, Snake* out);

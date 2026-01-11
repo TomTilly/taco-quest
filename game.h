@@ -60,7 +60,7 @@ typedef struct {
     S32 segment_health;
     S32 starting_length;
     S32 taco_count;
-    S32 chomp_cooldown_ticks;
+    S32 chomp_ticks;
     S32 tick_ms;
     S32 wait_to_start_ms;
 } GameSettings;
