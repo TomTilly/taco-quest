@@ -404,10 +404,10 @@ void action_buffer_add(ActionBuffer * buf, SnakeAction actions) {
         return;
     }
 
-    // filter out previous actions in the buffer.
+    // filter out previous movements in the buffer.
     SnakeAction prev_actions = {0};
     for (S32 i = 0; i < buf->count; i++) {
-        prev_actions |= buf->actions[i];
+        prev_actions |= (buf->actions[i] & ALL_SNAKE_ACTION_MOVEMENTS);
     }
     SnakeAction filtered_action = actions & (~prev_actions);
 
@@ -458,7 +458,7 @@ void snake_action_handle_keystate(const bool* keyboard_state,
         *snake_actions |= SNAKE_ACTION_FACE_EAST;
     }
 
-    if (!prev_snake_actions_key_state->chomp && current_snake_actions_key_state.chomp) {
+    if (current_snake_actions_key_state.chomp) {
         *snake_actions |= SNAKE_ACTION_CHOMP;
     }
 

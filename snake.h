@@ -12,6 +12,7 @@
 #define SNAKE_KILL_DAMAGE_COOLDOWN 4
 #define SNAKE_DAMAGE_FRAMES 3
 #define CHOMP_POINT_CHECK_COUNT 3
+#define ALL_SNAKE_ACTION_MOVEMENTS (SNAKE_ACTION_FACE_NORTH | SNAKE_ACTION_FACE_EAST | SNAKE_ACTION_FACE_WEST | SNAKE_ACTION_FACE_SOUTH)
 
 typedef U8 SnakeAction;
 
@@ -57,6 +58,7 @@ typedef struct {
     S16 x;
     S16 y;
     S8 health;
+    bool clamped;
 } SnakeSegment;
 
 typedef enum {
