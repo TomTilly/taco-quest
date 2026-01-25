@@ -49,6 +49,7 @@ typedef struct {
     SnakeAction snake_actions[MAX_SNAKE_COUNT];
     ActionBuffer action_buffers[MAX_SNAKE_COUNT];
     DevMode dev_mode;
+    FILE *demo_file;
 } AppStateGameServer;
 
 typedef struct {
@@ -72,6 +73,63 @@ char* get_timestamp(void) {
     long ms = ts.tv_nsec / 1000000;
     snprintf(buff + length, sizeof(buff) - length, ".%03ld", ms);
     return buff;
+}
+
+FILE* create_demo_file(void) {
+    // Get application preferences path
+    const char * pref_path = SDL_GetPrefPath("three_guys", "taco_quest");
+    if (pref_path == NULL) {
+        fprintf(stderr, "Failed to get pref path");
+        return NULL;
+    }
+
+    // Create demos directory
+    char path[PATH_MAX] = {0};
+    strcat(path, pref_path);
+    SDL_free((void *)pref_path); // idaho lives
+    strcat(path, "demos/");
+    bool dir_created = SDL_CreateDirectory(path);
+    if (!dir_created) {
+        fprintf(stderr, "Failed to create demos directory: %s\n", SDL_GetError());
+        return NULL;
+    }
+
+    // Append demo filename
+    char filename[64];
+    time_t now = time(NULL);
+    struct tm *tm_info = localtime(&now);
+    strftime(
+        filename,
+        sizeof(filename),
+        "demo_%y_%m_%d_%H%M%S.sgd",
+        tm_info
+    );
+    strcat(path, filename);
+
+    printf("Creating demo file: %s\n", path);
+
+    // Open demos file
+    FILE *file = fopen(path, "wb");
+    if (file == NULL) {
+        fprintf(stderr, "Failed to create demo file: %s\n", strerror(errno));
+        return NULL;
+    }
+
+    return file;
+}
+
+// TODO
+// bool write_demo_file(FILE *file) {
+
+// }
+
+bool close_demo_file(FILE **file) {
+    if (!file || !*file) return true;
+
+    int return_code = fclose(*file);
+    *file = NULL;
+
+    return return_code == 0;
 }
 
 void pick_snake_spawn(Game* game,
@@ -290,6 +348,7 @@ bool draw_game(Game* game,
     return true;
 }
 
+// Return true on game over
 bool app_game_server_handle_keystate(AppStateGameServer* app_game_server,
                                      const bool* keyboard_state,
                                      S32 cell_size,
@@ -376,6 +435,10 @@ void app_server_update(AppState* app_state,
             reset_game(&server_game_state->game,
                        lobby_state,
                        map_file_name);
+            
+            if (server_game_state->game.settings.record_demo) {
+                server_game_state->demo_file = create_demo_file();
+            }
         }
     } else if (*app_state == APP_STATE_GAME) {
         app_game_server_update(server_game_state,
@@ -599,51 +662,6 @@ void handle_client_disconnect(NetSocket** server_client_sockets,
     server_client_sockets[socket_index] = NULL;
 }
 
-void write_demo_file(void) {
-    // Get application preferences path
-    const char * pref_path = SDL_GetPrefPath("three_guys", "taco_quest");
-    if (pref_path == NULL) {
-        fprintf(stderr, "Failed to get pref path");
-        return;
-    }
-
-    // Create demos directory
-    char path[PATH_MAX] = {0};
-    strcat(path, pref_path);
-    SDL_free((void *)pref_path); // idaho lives
-    strcat(path, "demos/");
-    bool dir_created = SDL_CreateDirectory(path);
-    if (!dir_created) {
-        fprintf(stderr, "Failed to create demos directory: %s\n", SDL_GetError());
-        return;
-    }
-
-    // Append demo filename
-    char filename[64];
-    time_t now = time(NULL);
-    struct tm *tm_info = localtime(&now);
-    strftime(
-        filename,
-        sizeof(filename),
-        "demo_%y_%m_%d_%H%M%S.sgd",
-        tm_info
-    );
-    strcat(path, filename);
-
-    printf("Writing demo file: %s\n", path);
-
-    // Open demos file
-    FILE *file = fopen(path, "wb");
-    if (file == NULL) {
-        fprintf(stderr, "Failed to create demo file: %s\n", strerror(errno));
-        return;
-    }
-
-    // write binary data here...
-    
-    fclose(file);
-}
-
 int main(S32 argc, char** argv) {
     const char* port = NULL;
     const char* ip = NULL;
@@ -714,7 +732,6 @@ int main(S32 argc, char** argv) {
         puts("-r argument only compatible in server or single player modes");
         return EXIT_FAILURE;
     }
-    (void)record_demo;
 
     //
     // Init game and level
@@ -1119,6 +1136,13 @@ int main(S32 argc, char** argv) {
                             }
                         }
                         app_state = APP_STATE_LOBBY;
+                        
+                        if (server_game_state.game.settings.record_demo) {
+                            bool demo_file_closed = close_demo_file(&(server_game_state.demo_file));
+                            if (!demo_file_closed) {
+                                fprintf(stderr, "Failed to close demo file. Demo file may be corrupted or incomplete.\n");
+                            }
+                        }
                     }
                     dev_mode_handle_mouse(&server_game_state.dev_mode,
                                           &server_game_state.game,
@@ -1618,8 +1642,23 @@ int main(S32 argc, char** argv) {
                 net_destroy_socket(server_client_sockets[i]);
             }
         }
+
+        if (server_game_state.game.settings.record_demo) {
+            bool demo_file_closed = close_demo_file(&(server_game_state.demo_file));
+            if (!demo_file_closed) {
+                fprintf(stderr, "Failed to close demo file. Demo file may be corrupted or incomplete.\n");
+            }
+        }
+
         break;
     case SESSION_TYPE_SINGLE_PLAYER:
+        if (server_game_state.game.settings.record_demo) {
+            bool demo_file_closed = close_demo_file(&(server_game_state.demo_file));
+            if (!demo_file_closed) {
+                fprintf(stderr, "Failed to close demo file. Demo file may be corrupted or incomplete.\n");
+            }
+        }
+
         break;
     }
 
@@ -1630,10 +1669,6 @@ int main(S32 argc, char** argv) {
         }
     }
 
-    // Write demo file
-    if ((session_type == SESSION_TYPE_SERVER || session_type == SESSION_TYPE_SINGLE_PLAYER) && game->settings.record_demo) {
-        write_demo_file();
-    }
 
     list_dir_destroy(&lobby_state.map_list);
     net_shutdown();
