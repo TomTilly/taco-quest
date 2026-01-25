@@ -8,6 +8,12 @@
 #include <string.h>
 #include <assert.h>
 #include <math.h>
+#include <limits.h>
+#ifdef PLATFORM_WINDOWS
+  #include <direct.h>
+#else
+  #include <sys/stat.h>
+#endif
 
 #include <SDL3/SDL.h>
 
@@ -591,6 +597,51 @@ void handle_client_disconnect(NetSocket** server_client_sockets,
 
     net_destroy_socket(server_client_sockets[socket_index]);
     server_client_sockets[socket_index] = NULL;
+}
+
+void write_demo_file(void) {
+    // Get application preferences path
+    const char * pref_path = SDL_GetPrefPath("three_guys", "taco_quest");
+    if (pref_path == NULL) {
+        fprintf(stderr, "Failed to get pref path");
+        return;
+    }
+
+    // Create demos directory
+    char path[PATH_MAX] = {0};
+    strcat(path, pref_path);
+    SDL_free((void *)pref_path); // idaho lives
+    strcat(path, "demos/");
+    bool dir_created = SDL_CreateDirectory(path);
+    if (!dir_created) {
+        fprintf(stderr, "Failed to create demos directory: %s\n", SDL_GetError());
+        return;
+    }
+
+    // Append demo filename
+    char filename[64];
+    time_t now = time(NULL);
+    struct tm *tm_info = localtime(&now);
+    strftime(
+        filename,
+        sizeof(filename),
+        "demo_%y_%m_%d_%H%M%S.sgd",
+        tm_info
+    );
+    strcat(path, filename);
+
+    printf("Writing demo file: %s\n", path);
+
+    // Open demos file
+    FILE *file = fopen(path, "wb");
+    if (file == NULL) {
+        fprintf(stderr, "Failed to create demo file: %s\n", strerror(errno));
+        return;
+    }
+
+    // write binary data here...
+    
+    fclose(file);
 }
 
 int main(S32 argc, char** argv) {
@@ -1577,6 +1628,11 @@ int main(S32 argc, char** argv) {
             SDL_CloseGamepad(game_pads[c]);
             game_pads[c] = NULL;
         }
+    }
+
+    // Write demo file
+    if ((session_type == SESSION_TYPE_SERVER || session_type == SESSION_TYPE_SINGLE_PLAYER) && game->settings.record_demo) {
+        write_demo_file();
     }
 
     list_dir_destroy(&lobby_state.map_list);
