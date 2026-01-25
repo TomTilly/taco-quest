@@ -6,7 +6,13 @@ bool dev_mode_should_step(const DevMode *dev_mode) {
     return dev_mode->should_step;
 }
 
-void dev_mode_draw(DevMode* dev_mode, Game* game, PF_Font* font, S32 window_width, S32 cell_size) {
+void dev_mode_draw(DevMode* dev_mode,
+                   Game* game,
+                   PF_Font* font,
+                   S32 window_width,
+                   S32 cell_size,
+                   S32 camera_offset_x,
+                   S32 camera_offset_y) {
     if (!dev_mode->enabled) {
         return;
     }
@@ -29,8 +35,8 @@ void dev_mode_draw(DevMode* dev_mode, Game* game, PF_Font* font, S32 window_widt
         for (S32 j = 1; j < snake->length; j++) {
             SnakeSegment *segment = snake->segments + j;
             PF_RenderChar(font,
-                          (S16)((segment->x * cell_size) + (cell_size - (font_state.char_width * font_state.scale)) / 2),
-                          (S16)((segment->y * cell_size) + (cell_size - (font_state.char_height * font_state.scale)) / 2),
+                          (S16)((segment->x * cell_size) + (cell_size - (font_state.char_width * font_state.scale)) / 2) + camera_offset_x,
+                          (S16)((segment->y * cell_size) + (cell_size - (font_state.char_height * font_state.scale)) / 2) + camera_offset_y,
                           (char)('1' + j));
         }
     }
@@ -84,14 +90,16 @@ void dev_mode_handle_keystate(DevMode* dev_mode,
 void dev_mode_handle_mouse(DevMode* dev_mode,
                            Game* game,
                            UIMouseState* ui_mouse_state,
-                           S32 cell_size) {
+                           S32 cell_size,
+                           S32 camera_offset_x,
+                           S32 camera_offset_y) {
     if (!dev_mode->enabled) {
         return;
     }
 
     if (ui_mouse_state->left_clicked) {
-        S32 cell_x = (S32)(ui_mouse_state->x) / cell_size;
-        S32 cell_y = (S32)(ui_mouse_state->y) / cell_size;
+        S32 cell_x = (S32)(ui_mouse_state->x - camera_offset_x) / cell_size;
+        S32 cell_y = (S32)(ui_mouse_state->y - camera_offset_y) / cell_size;
 
         switch (dev_mode->snake_selection_state) {
         case SNAKE_SELECTION_STATE_NONE: {

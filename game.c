@@ -361,10 +361,10 @@ bool _snake_unkink_clamped(Snake* snake,
 bool _snake_unravel_clamped(Game* game,
                             Snake* snake,
                             S16 origin_index,
-                            S16 first_clamped_segment_index,
+                            S16 first_clamped_segment_after_origin_index,
                             S32 next_head_x,
                             S32 next_head_y) {
-    assert(origin_index <= first_clamped_segment_index);
+    assert(origin_index <= first_clamped_segment_after_origin_index);
 
     // An example unravel
     //
@@ -378,7 +378,7 @@ bool _snake_unravel_clamped(Game* game,
     // get unraveled to support free movement. If it isn't the the head, then movement needs to be
     // restricted to unravel only after the original segment that moves.
     S32 start_index = (origin_index == 0) ? 0 : origin_index + 1;
-    for (S32 i = start_index; i < first_clamped_segment_index; i++) {
+    for (S32 i = start_index; i < first_clamped_segment_after_origin_index; i++) {
         // TODO: Evaluate if snake_segment_direction_to_head() should do this logic.
         Direction direction_to_head = (i == 0) ? snake->direction : snake_segment_direction_to_head(snake, i);
         Direction direction_to_tail = snake_segment_direction_to_tail(snake, i);
@@ -441,6 +441,10 @@ bool _snake_unravel_clamped(Game* game,
             last_corner_direction_to_tail = DIRECTION_NONE;
         }
     }
+
+    last_corner_index = -1;
+    last_corner_direction_to_head = DIRECTION_NONE;
+    last_corner_direction_to_tail = DIRECTION_NONE;
 
     return false;
 }
@@ -1630,6 +1634,14 @@ MoveResult snake_segment_constrict(Game* game, S32 snake_index, S32 segment_inde
 
     // If any segments after the current segment to move are clamped, then we need to try to
     // unravel up until the clamped segment.
+    S32 clamped_segment_before_index = -1;
+    for (S32 i = 0; i < segment_to_move_index; i++) {
+        SnakeSegment* check_segment = snake->segments + i;
+        if (check_segment->clamped) {
+            clamped_segment_before_index = i;
+        }
+    }
+
     for (S32 i = segment_to_move_index; i < snake->length; i++) {
         SnakeSegment* check_segment = snake->segments + i;
         if (check_segment->clamped) {

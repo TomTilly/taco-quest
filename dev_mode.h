@@ -30,7 +30,13 @@ typedef struct {
 } DevMode;
 
 bool dev_mode_should_step(const DevMode *dev_mode);
-void dev_mode_draw(DevMode* dev_mode, Game* game, PF_Font* font, S32 window_width, S32 cell_size);
+void dev_mode_draw(DevMode* dev_mode,
+                   Game* game,
+                   PF_Font* font,
+                   S32 window_width,
+                   S32 cell_size,
+                   S32 camera_offset_x,
+                   S32 camera_offset_y);
 void dev_mode_handle_keystate(DevMode* dev_mode,
                               Game* game,
                               S32 cell_size,
@@ -39,6 +45,8 @@ void dev_mode_handle_keystate(DevMode* dev_mode,
 void dev_mode_handle_mouse(DevMode* dev_mode,
                            Game* game,
                            UIMouseState* ui_mouse_state,
-                           S32 cell_size);
+                           S32 cell_size,
+                           S32 camera_offset_x,
+                           S32 camera_offset_y);
 
 #endif

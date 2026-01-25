@@ -968,6 +968,19 @@ int main(S32 argc, char** argv) {
         }
         client_game_state.snake_actions = 0;
 
+        // Adjust cell size based on map dimensions and window dimensions.
+        if (game->map.width != 0 && game->map.height != 0) {
+            S32 max_map_dimension =
+                (game->map.height > game->map.width) ? game->map.height : game->map.width;
+            cell_size = (min_display_dimension / max_map_dimension);
+            // This commented out logic ensures there are no visual artifacts by making sure the pixels are divisible.
+            // cell_size -= (cell_size % cell_pixel_size);
+        }
+
+        // Calculate offset so that map will be centered, all objects must use this offset.
+        S32 camera_offset_x = (window_width - (cell_size * game->map.width)) / 2;
+        S32 camera_offset_y = (window_height - (cell_size * game->map.height)) / 2;
+
         // Handle events, such as input or window changes.
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
@@ -1057,7 +1070,9 @@ int main(S32 argc, char** argv) {
                     dev_mode_handle_mouse(&server_game_state.dev_mode,
                                           &server_game_state.game,
                                           &ui_mouse_state,
-                                          cell_size);
+                                          cell_size,
+                                          camera_offset_x,
+                                          camera_offset_y);
                     break;
                 }
                 }
@@ -1469,19 +1484,6 @@ int main(S32 argc, char** argv) {
                 }
             }
         } else if (app_state == APP_STATE_GAME) {
-            // Adjust cell size based on map dimensions and window dimensions.
-            if (game->map.width != 0 && game->map.height != 0) {
-                S32 max_map_dimension =
-                    (game->map.height > game->map.width) ? game->map.height : game->map.width;
-                cell_size = (min_display_dimension / max_map_dimension);
-                // This commented out logic ensures there are no visual artifacts by making sure the pixels are divisible.
-                // cell_size -= (cell_size % cell_pixel_size);
-            }
-
-            // Calculate offset so that map will be centered, all objects must use this offset.
-            S32 camera_offset_x = (window_width - (cell_size * game->map.width)) / 2;
-            S32 camera_offset_y = (window_height - (cell_size * game->map.height)) / 2;
-
             if (!draw_game(game,
                            renderer,
                            snake_texture,
@@ -1496,7 +1498,13 @@ int main(S32 argc, char** argv) {
 
             if (session_type == SESSION_TYPE_SERVER || session_type == SESSION_TYPE_SINGLE_PLAYER) {
                 PF_SetScale(font, font_scale);
-                dev_mode_draw(&server_game_state.dev_mode, game, font, window_width, cell_size);
+                dev_mode_draw(&server_game_state.dev_mode,
+                              game,
+                              font,
+                              window_width,
+                              cell_size,
+                              camera_offset_x,
+                              camera_offset_y);
             }
 
             PF_SetScale(font, font_scale * 2.0f);
