@@ -753,6 +753,7 @@ int main(S32 argc, char** argv) {
     game->settings.enable_constricting = true;
     game->settings.head_invincible = true;
     game->settings.zero_tacos_respawn = false;
+    game->settings.record_demo = record_demo;
     game->settings.segment_health = 3;
     game->settings.starting_length = 5;
     game->settings.taco_count = 5;
@@ -891,6 +892,7 @@ int main(S32 argc, char** argv) {
     UICheckBox ui_enable_constricting_checkbox = {15, 60};
     UICheckBox ui_head_invincible_checkbox = {15, 85};
     UICheckBox ui_zero_tacos_respawn_checkbox = {15, 110};
+    UICheckBox ui_record_demo_checkbox = {15, 135};
     UISlider ui_segment_health_slider = {
         .x = 260,
         .y = 60,
@@ -933,7 +935,7 @@ int main(S32 argc, char** argv) {
 
     UIDropDown ui_maps_drop_down = {
         .x = 520,
-        .y = 170,
+        .y = 206,
         .dropped = false
     };
 
@@ -1363,12 +1365,15 @@ int main(S32 argc, char** argv) {
             PF_RenderString(font, 42, 64, "Constricting");
             PF_RenderString(font, 42, 90, "Head Invincible");
             PF_RenderString(font, 42, 116, "Zero Tacos Respawn");
+            if (session_type != SESSION_TYPE_CLIENT) {
+                PF_RenderString(font, 42, 142, "Record Demo");
+            }
             PF_RenderString(font, 240, 38, "Segment HP: %d", game->settings.segment_health);
             PF_RenderString(font, 480, 38, "Start Len: %d", game->settings.starting_length);
             PF_RenderString(font, 720, 38, "Tacos: %d", game->settings.taco_count);
             PF_RenderString(font, 480, 90, "Tick MS: %d", game->settings.tick_ms);
             PF_RenderString(font, 720, 90, "Chomp CD ticks: %d", game->settings.chomp_cooldown_ticks);
-            PF_RenderString(font, 500, 148, "Map");
+            PF_RenderString(font, 500, 184, "Map");
 
             {
                 UIMouseState* mouse_state = &ui_mouse_state;
@@ -1400,6 +1405,13 @@ int main(S32 argc, char** argv) {
                             mouse_state,
                             &ui_zero_tacos_respawn_checkbox,
                             &game->settings.zero_tacos_respawn);
+                if (session_type != SESSION_TYPE_CLIENT) {
+                    ui_checkbox(&ui,
+                                renderer,
+                                mouse_state,
+                                &ui_record_demo_checkbox,
+                                &game->settings.record_demo);
+                }
                 ui_slider(&ui,
                           renderer,
                           mouse_state,
@@ -1437,7 +1449,7 @@ int main(S32 argc, char** argv) {
             }
 
             S32 lobby_cell_size = 40;
-            S32 players_start_y = 148;
+            S32 players_start_y = 184;
             S32 players_offset = 30;
 
             PF_RenderString(font, 3, players_start_y, "Players");
@@ -1473,7 +1485,7 @@ int main(S32 argc, char** argv) {
                     snake.color = lobby_state.players[i].snake_color;
                     for (S32 e = 0; e < 4; e++) {
                         snake.segments[e].x = (S16)(4 - e);
-                        snake.segments[e].y = (S16)(5 + (i * 2));
+                        snake.segments[e].y = (S16)(6 + (i * 2));
                         snake.segments[e].health = 3;
                     }
                     snake_draw(renderer, snake_texture, &snake, lobby_cell_size, 0, 0, 3);

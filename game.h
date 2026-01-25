@@ -57,6 +57,7 @@ typedef struct {
     bool enable_constricting;
     bool head_invincible;
     bool zero_tacos_respawn;
+    bool record_demo;
     S32 segment_health;
     S32 starting_length;
     S32 taco_count;
