@@ -130,8 +130,114 @@ void _print_game(Game* game) {
     free(string);
 }
 
+void _snake_eat_taco(Game* game, Snake* snake, S32 new_x, S32 new_y) {
+    // Grow the snake length by consuming the taco.
+    items_set_cell(&game->items, new_x, new_y, ITEM_TYPE_EMPTY);
+    snake->length++;
+    // Shift all segments one over toward the tail. The new segment is added where the head is.
+    for ( int i = snake->length - 1; i >= 1; i-- ) {
+        snake->segments[i] = snake->segments[i - 1];
+    }
+    // The new segment has max health.
+    snake->segments[1].health = snake->segments[0].health;
+    // The head is moved into the position where the taco was.
+    snake->segments[0].x = (S16)(new_x);
+    snake->segments[0].y = (S16)(new_y);
+}
+
+void _print_snake_segments(Snake* snake) {
+    S32 min_x = -1;
+    S32 max_x = -1;
+    S32 min_y = -1;
+    S32 max_y = -1;
+    for (S32 i = 0; i < snake->length; i++) {
+        printf("%02d: %d, %d\n", i, snake->segments[i].x, snake->segments[i].y);
+
+        if (i == 0) {
+            min_x = snake->segments[i].x;
+            max_x = snake->segments[i].x;
+            min_y = snake->segments[i].y;
+            max_y = snake->segments[i].y;
+        } else {
+            if (snake->segments[i].x < min_x) {
+                min_x = snake->segments[i].x;
+            }
+            if (snake->segments[i].x > max_x) {
+                max_x = snake->segments[i].x;
+            }
+
+            if (snake->segments[i].y < min_y) {
+                min_y = snake->segments[i].y;
+            }
+            if (snake->segments[i].y > max_y) {
+                max_y = snake->segments[i].y;
+            }
+        }
+    }
+    printf("\n");
+
+    printf("  ");
+    for (S32 x = min_x; x <= max_x; x++) {
+        printf(" %02d", x);
+    }
+    printf("\n");
+
+    for (S32 y = min_y; y <= max_y; y++) {
+        printf("%02d", y);
+        for (S32 x = min_x; x <= max_x; x++) {
+            S32 matched_index = -1;
+            for (S32 i = 0; i < snake->length; i++) {
+                if (snake->segments[i].x == x && snake->segments[i].y == y) {
+                    if (matched_index >= 0) {
+                        matched_index = -2;
+                    } else if (matched_index != -2) {
+                        matched_index = i;
+                    }
+                }
+            }
+            if (matched_index == -1) {
+                printf("   ");
+            } else if (matched_index == -2) {
+                // For when multiple segments live on a cell.
+                printf(" **");
+            } else {
+                if (snake->segments[matched_index].clamped) {
+                    printf("c%02d", matched_index);
+                } else {
+                    printf(" %02d", matched_index);
+                }
+            }
+        }
+        printf("\n");
+    }
+}
+
+void _assert_snake_connected(Snake* original_snake, Snake* final_snake) {
+    for (S32 i = 0; i < final_snake->length; i++) {
+        if (i >= (final_snake->length - 1)) {
+            break;
+        }
+
+        // Skip over the segment if the next one is identical.
+        if (final_snake->segments[i].x == final_snake->segments[i + 1].x &&
+            final_snake->segments[i].y == final_snake->segments[i + 1].y) {
+            continue;
+        }
+
+        Direction check = snake_segment_direction_to_tail(final_snake, i);
+        if (check == DIRECTION_NONE) {
+            printf("Detected disconnect snake\n");
+            printf("original snake: %d\n", original_snake->length);
+            _print_snake_segments(original_snake);
+            printf("final snake: %d\n", final_snake->length);
+            _print_snake_segments(final_snake);
+            assert(check != DIRECTION_NONE);
+        }
+    }
+}
+
 // returns whether or not we killed a segment.
-void _snake_chomp_segment(Game* game, SnakeCollision* snake_collision) {
+void _snake_chomp_segment(Game* game, SnakeCollision* snake_collision, bool clamped) {
     // The head is invincible ! Constricting is the only way to kill.
     if (game->settings.head_invincible && snake_collision->segment_index == 0) {
         return;
@@ -149,6 +255,8 @@ void _snake_chomp_segment(Game* game, SnakeCollision* snake_collision) {
         if (snake->length == 0) {
             snake->life_state = SNAKE_LIFE_STATE_DEAD;
         }
+    } else if (clamped) {
+        chomped_segment->clamped = clamped;
     }
 }
 
@@ -203,7 +311,9 @@ void _snake_chomp(Snake* snake, Game* game) {
         }
 
         if (snake_collision.snake_index >= 0 && snake_collision.snake_index >= 0) {
-            _snake_chomp_segment(game, &snake_collision);
+            // The middle segment gets clamped.
+            bool clamped = (i == 1);
+            _snake_chomp_segment(game, &snake_collision, clamped);
             did_chomp = true;
         }
     }
@@ -221,17 +331,233 @@ void _snake_chomp(Snake* snake, Game* game) {
     }
 }
 
+bool _snake_unkink_clamped(Snake* snake,
+                           S16 origin_index,
+                           S16 first_clamped_segment_index,
+                           S32 next_head_x,
+                           S32 next_head_y) {
+    assert(origin_index <= first_clamped_segment_index);
+
+    // If any segments are on top of each other, unravel them.
+    // TODO: This should be able to be consolidated with the normal snake move code.
+    for (S32 i = origin_index; i < first_clamped_segment_index; i++) {
+        if (snake->segments[i].x == snake->segments[i + 1].x &&
+            snake->segments[i].y == snake->segments[i + 1].y) {
+
+            // TODO: consolidate logic with below
+            for (S32 j = i; j > origin_index; j--) {
+                snake->segments[j].x = snake->segments[j - 1].x;
+                snake->segments[j].y = snake->segments[j - 1].y;
+            }
+            snake->segments[origin_index].x = (S16)(next_head_x);
+            snake->segments[origin_index].y = (S16)(next_head_y);
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool _snake_unravel_clamped(Game* game,
+                            Snake* snake,
+                            S16 origin_index,
+                            S16 first_clamped_segment_index,
+                            S32 next_head_x,
+                            S32 next_head_y) {
+    assert(origin_index <= first_clamped_segment_index);
+
+    // An example unravel
+    //
+    // [1][2][3]
+    // [0]   [4][>] -> [0][1][2][[3/4][>]
+    //
+    S32 last_corner_index = -1;
+    Direction last_corner_direction_to_head = DIRECTION_NONE;
+    Direction last_corner_direction_to_tail = DIRECTION_NONE;
+    // If the index we're dealing with is the head, then allow it to be part of the corners that
+    // get unraveled to support free movement. If it isn't the the head, then movement needs to be
+    // restricted to unravel only after the original segment that moves.
+    S32 start_index = (origin_index == 0) ? 0 : origin_index + 1;
+    for (S32 i = start_index; i < first_clamped_segment_index; i++) {
+        // TODO: Evaluate if snake_segment_direction_to_head() should do this logic.
+        Direction direction_to_head = (i == 0) ? snake->direction : snake_segment_direction_to_head(snake, i);
+        Direction direction_to_tail = snake_segment_direction_to_tail(snake, i);
+
+        if (i > 0 &&
+            snake->segments[i].x == snake->segments[i - 1].x &&
+            snake->segments[i].y == snake->segments[i - 1].y) {
+            continue;
+        }
+
+        // Check if we are a corner
+        DirectionRelationship segment_direction_relationship =
+            direction_relationship(direction_to_head, direction_to_tail);
+        if (segment_direction_relationship == DIRECTION_RELATIONSHIP_CLOCKWISE ||
+            segment_direction_relationship == DIRECTION_RELATIONSHIP_COUNTER_CLOCKWISE) {
+            if (direction_relationship(last_corner_direction_to_tail, direction_to_head)
+                    == DIRECTION_RELATIONSHIP_OPPOSITE &&
+                last_corner_direction_to_head == direction_to_tail) {
+                // Perform unravel, moving each segment
+                for (S32 j = i; j > last_corner_index; j--) {
+                    S32 new_x = snake->segments[j].x;
+                    S32 new_y = snake->segments[j].y;
+                    adjacent_cell(direction_to_head, &new_x, &new_y);
+                    adjacent_cell(direction_to_tail, &new_x, &new_y);
+                    snake->segments[j].x = (S16)(new_x);
+                    snake->segments[j].y = (S16)(new_y);
+                }
+                for (S32 j = last_corner_index; j > origin_index; j--) {
+                    snake->segments[j].x = snake->segments[j - 1].x;
+                    snake->segments[j].y = snake->segments[j - 1].y;
+                }
+                snake->segments[origin_index].x = (S16)(next_head_x);
+                snake->segments[origin_index].y = (S16)(next_head_y);
+                return true;
+            } else {
+                last_corner_index = i;
+                last_corner_direction_to_head = direction_to_head;
+                last_corner_direction_to_tail = direction_to_tail;
+            }
+        } else if (segment_direction_relationship == DIRECTION_RELATIONSHIP_OPPOSITE) {
+            // If this segment is straight and our last corner is populated, check if the adjacent
+            // square is empty. This is important because it means we can skip this checking in the
+            // actual unravel logic.
+            if (last_corner_direction_to_head != DIRECTION_NONE) {
+                S32 check_x = snake->segments[i].x;
+                S32 check_y = snake->segments[i].y;
+                adjacent_cell(last_corner_direction_to_head, &check_x, &check_y);
+                QueriedObject queried_object = game_query(game, check_x, check_y);
+                if (queried_object.type != QUERIED_OBJECT_TYPE_NONE) {
+                    // If it isn't empty then reset the last corner, because we cannot unravel
+                    // using it.
+                    last_corner_index = -1;
+                    last_corner_direction_to_head = DIRECTION_NONE;
+                    last_corner_direction_to_tail = DIRECTION_NONE;
+                }
+            }
+        } else {
+            last_corner_index = -1;
+            last_corner_direction_to_head = DIRECTION_NONE;
+            last_corner_direction_to_tail = DIRECTION_NONE;
+        }
+    }
+
+    return false;
+}
+
+void _snake_move_clamped(Snake* snake, Game* game, S16 first_clamped_segment_index) {
+    // Check if the head can move forward
+    S32 next_head_x = snake->segments[0].x;
+    S32 next_head_y = snake->segments[0].y;
+    adjacent_cell(snake->direction, &next_head_x, &next_head_y);
+    QueriedObject queried_object = game_query(game, next_head_x, next_head_y);
+    if (queried_object.type == QUERIED_OBJECT_TYPE_ITEM &&
+        queried_object.item == ITEM_TYPE_TACO) {
+        _snake_eat_taco(game, snake, next_head_x, next_head_y);
+        return;
+    }
+
+    if (queried_object.type != QUERIED_OBJECT_TYPE_NONE) {
+        return;
+    }
+
+    Snake original_snake = {0};
+    snake_clone(&original_snake, snake);
+
+    if (_snake_unkink_clamped(snake, 0, first_clamped_segment_index, next_head_x, next_head_y)) {
+        _assert_snake_connected(&original_snake, snake);
+        snake_destroy(&original_snake);
+        return;
+    }
+
+    if (_snake_unravel_clamped(game, snake, 0, first_clamped_segment_index, next_head_x, next_head_y)) {
+        _assert_snake_connected(&original_snake, snake);
+        snake_destroy(&original_snake);
+        return;
+    }
+    snake_destroy(&original_snake);
+
+    Direction direction_to_tail = snake_segment_direction_to_tail(snake, 0);
+    if (snake->direction == direction_to_tail) {
+        // Attempt a 2 segment unravel
+        //
+        // [ ]    -> [ ][ ][>]
+        // [ ][>]
+        //
+        Direction next_direction_to_tail = snake_segment_direction_to_tail(snake, 1);
+        if (!directions_are_perpendicular(direction_to_tail, next_direction_to_tail)) {
+            return;
+        }
+
+        S32 through_cell_x = (S32)(snake->segments[0].x);
+        S32 through_cell_y = (S32)(snake->segments[0].y);
+        adjacent_cell(next_direction_to_tail, &through_cell_x, &through_cell_y);
+
+        queried_object = game_query(game, through_cell_x, through_cell_y);
+        if (queried_object.type != QUERIED_OBJECT_TYPE_NONE) {
+            return;
+        }
+
+        S32 final_cell_x = through_cell_x;
+        S32 final_cell_y = through_cell_y;
+        adjacent_cell(snake->direction, &final_cell_x, &final_cell_y);
+
+        queried_object = game_query(game, final_cell_x, final_cell_y);
+        if (queried_object.type != QUERIED_OBJECT_TYPE_NONE) {
+            return;
+        }
+
+        snake->segments[1].x = (S16)(through_cell_x);
+        snake->segments[1].y = (S16)(through_cell_y);
+        snake->segments[0].x = (S16)(final_cell_x);
+        snake->segments[0].y = (S16)(final_cell_y);
+        return;
+    }
+
+    //
+    // [ ][ ] -> [ ][ ][>]
+    //    [>]
+    //
+
+    S32 through_cell_x = (S32)(snake->segments[0].x);
+    S32 through_cell_y = (S32)(snake->segments[0].y);
+    adjacent_cell(snake->direction, &through_cell_x, &through_cell_y);
+
+    queried_object = game_query(game, through_cell_x, through_cell_y);
+    if (queried_object.type != QUERIED_OBJECT_TYPE_NONE) {
+        return;
+    }
+
+    S32 final_cell_x = through_cell_x;
+    S32 final_cell_y = through_cell_y;
+    adjacent_cell(direction_to_tail, &final_cell_x, &final_cell_y);
+
+    queried_object = game_query(game, final_cell_x, final_cell_y);
+    if (queried_object.type != QUERIED_OBJECT_TYPE_NONE) {
+        return;
+    }
+
+    snake->segments[0].x = (S16)(final_cell_x);
+    snake->segments[0].y = (S16)(final_cell_y);
+}
+
 void _snake_move(Snake* snake, Game* game) {
     if (snake->length <= 0) {
         return;
     }
 
+    for (S16 i = 0; i < snake->length; i++) {
+        SnakeSegment* segment = snake->segments + i;
+        if (segment->clamped) {
+            _snake_move_clamped(snake, game, i);
+            return;
+        }
+    }
+
     S32 new_snake_x = (S32)(snake->segments[0].x);
     S32 new_snake_y = (S32)(snake->segments[0].y);
 
-    adjacent_cell(snake->direction,
-                  &new_snake_x,
-                  &new_snake_y);
+    adjacent_cell(snake->direction, &new_snake_x, &new_snake_y);
 
     ItemType item_type = items_get_cell(&game->items, new_snake_x, new_snake_y);
 
@@ -260,21 +586,18 @@ void _snake_move(Snake* snake, Game* game) {
 
     if (tile_gid == 0) {
         if (item_type == ITEM_TYPE_TACO) {
-            // Grow the snake length by consuming the taco.
-            items_set_cell(&game->items, new_snake_x, new_snake_y, ITEM_TYPE_EMPTY);
-            snake->length++;
-            // Shift all segments one over toward the tail. The new segment is added where the head is.
-            for ( int i = snake->length - 1; i >= 1; i-- ) {
-                snake->segments[i] = snake->segments[i - 1];
-            }
-            // The new segment has max health.
-            snake->segments[1].health = snake->segments[0].health;
-            // The head is moved into the position where the taco was.
-            snake->segments[0].x = (S16)(new_snake_x);
-            snake->segments[0].y = (S16)(new_snake_y);
+            _snake_eat_taco(game, snake, new_snake_x, new_snake_y);
         } else {
             // Move the snake in the directon it is heading by moving all segments.
-            for (int i = snake->length - 1; i >= 1; i--) {
+            S32 first_index_to_unravel = (snake->length - 1);
+            for (int i = 0; i <= first_index_to_unravel; i++) {
+                if (snake->segments[i].x == snake->segments[i + 1].x &&
+                    snake->segments[i].y == snake->segments[i + 1].y) {
+                    first_index_to_unravel = i;
+                    break;
+                }
+            }
+            for (int i = first_index_to_unravel; i >= 1; i--) {
                 snake->segments[i].x = snake->segments[i - 1].x;
                 snake->segments[i].y = snake->segments[i - 1].y;
             }
@@ -1067,6 +1390,10 @@ MoveResult snake_segment_constrict(Game* game, S32 snake_index, S32 segment_inde
 
     SnakeSegment* segment_to_move = snake->segments + segment_to_move_index;
 
+    if (segment_to_move->clamped) {
+        return MOVE_OBJECT_FAIL;
+    }
+
     Direction current_direction_to_head = snake_segment_direction_to_head(snake, segment_index);
     Direction next_direction_to_head = snake_segment_direction_to_head(snake, segment_to_move_index);
 
@@ -1129,6 +1456,14 @@ MoveResult snake_segment_constrict(Game* game, S32 snake_index, S32 segment_inde
                 SnakeSegment* check_segment = snake->segments + segment_to_check_index;
                 if (check_segment->x == final_cell_move_x &&
                     check_segment->y == final_cell_move_y) {
+
+                    // If any segment is clamped between us and the tail we cannot move.
+                    for (S32 i = segment_to_move_index; i < snake->length; i++) {
+                        if (snake->segments[i].clamped) {
+                            return MOVE_OBJECT_FAIL;
+                        }
+                    }
+
                     S32 tail_index = (snake->length - 1);
                     Direction tail_direction_to_expand = snake_segment_direction_to_tail(snake, tail_index);
                     S32 first_expanded_x = 0;
@@ -1289,6 +1624,40 @@ MoveResult snake_segment_constrict(Game* game, S32 snake_index, S32 segment_inde
     if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
         return MOVE_OBJECT_PROGRESS;
     }
+
+    Snake original_snake = {0};
+    snake_clone(&original_snake, snake);
+
+    // If any segments after the current segment to move are clamped, then we need to try to
+    // unravel up until the clamped segment.
+    for (S32 i = segment_to_move_index; i < snake->length; i++) {
+        SnakeSegment* check_segment = snake->segments + i;
+        if (check_segment->clamped) {
+            // TODO: May need to clone game to see if this action works, as the first could cause a
+            // change while the second doesn't. However, the second should since we've verified
+            // above that both spots are empty.
+            if (_snake_unravel_clamped(game,
+                                       snake,
+                                       (S16)(segment_to_move_index),
+                                       (S16)(i),
+                                       initial_cell_move_x,
+                                       initial_cell_move_y) &&
+                _snake_unkink_clamped(snake,
+                                      (S16)(segment_to_move_index),
+                                      (S16)(i),
+                                      final_cell_move_x,
+                                      final_cell_move_y)) {
+                _assert_snake_connected(&original_snake, snake);
+                snake_destroy(&original_snake);
+                return MOVE_OBJECT_SUCCESS;
+            }
+
+            _assert_snake_connected(&original_snake, snake);
+            snake_destroy(&original_snake);
+            return MOVE_OBJECT_FAIL;
+        }
+    }
+    snake_destroy(&original_snake);
 
     // As long as the adjacent squares are empty, we can drag the snake's body through it.
     // TODO: If we can push things out of the way, that works too.
@@ -1622,7 +1991,7 @@ void snake_constrict(Game* game, S32 snake_index) {
                             .segment_index = (S16)(e)
                         };
 
-                        _snake_chomp_segment(game, &snake_collision);
+                        _snake_chomp_segment(game, &snake_collision, false);
                     }
 
                     if (check_snake->length == 1) {
@@ -1717,6 +2086,21 @@ void game_update(Game* game, SnakeAction* snake_actions) {
         } else if (snake->chomp_state == SNAKE_CHOMP_STATE_END) {
             if (snake->chomp_cooldown == 0) {
                 snake->chomp_state = SNAKE_CHOMP_STATE_NONE;
+
+                // If there is a segment in front of the head, it is no longer clamped.
+                S32 clamped_cell_x = (S16)(snake->segments[0].x);
+                S32 clamped_cell_y = (S16)(snake->segments[0].y);
+
+                adjacent_cell(snake->direction, &clamped_cell_x, &clamped_cell_y);
+
+                // TODO: This has a bug where if 2 snakes are clamping the same segment, we could
+                // set the flag to false even if the other snake is still clamping.
+                QueriedObject queried_object = game_query(game, clamped_cell_x, clamped_cell_y);
+                if (queried_object.type == QUERIED_OBJECT_TYPE_SNAKE) {
+                    Snake* clamped_snake = game->snakes + queried_object.snake.index;
+                    SnakeSegment* clamped_segment = clamped_snake->segments + queried_object.snake.segment_index;
+                    clamped_segment->clamped = false;
+                }
             }
         }
     }

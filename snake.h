@@ -109,6 +109,7 @@ typedef struct {
 } ActionBuffer;
 
 bool snake_init(Snake* snake, S32 capacity);
+void snake_clone(Snake* new_snake, Snake* to_be_cloned);
 void snake_destroy(Snake* snake);
 
 void snake_spawn(Snake* snake,

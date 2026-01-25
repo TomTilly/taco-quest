@@ -244,7 +244,7 @@ bool draw_game(Game* game,
                     break;
                 }
                 case ITEM_TYPE_TACO: {
-                    SDL_FRect source_rect = {80.0f, 0.0f, 16.0f, 16.0f};
+                    SDL_FRect source_rect = {112.0f, 0.0f, 16.0f, 16.0f};
 
                     SDL_FRect cell_rect = {
                         .x = (float)(camera_offset_x + x * cell_size),
