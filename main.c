@@ -123,15 +123,6 @@ FILE* create_demo_file(void) {
 
 // }
 
-bool close_demo_file(FILE **file) {
-    if (!file || !*file) return true;
-
-    int return_code = fclose(*file);
-    *file = NULL;
-
-    return return_code == 0;
-}
-
 void pick_snake_spawn(Game* game,
                       S16 start_x,
                       S16 start_y,
@@ -1138,10 +1129,8 @@ int main(S32 argc, char** argv) {
                         app_state = APP_STATE_LOBBY;
                         
                         if (server_game_state.game.settings.record_demo) {
-                            bool demo_file_closed = close_demo_file(&(server_game_state.demo_file));
-                            if (!demo_file_closed) {
-                                fprintf(stderr, "Failed to close demo file. Demo file may be corrupted or incomplete.\n");
-                            }
+                            fclose(server_game_state.demo_file);
+                            server_game_state.demo_file = NULL;
                         }
                     }
                     dev_mode_handle_mouse(&server_game_state.dev_mode,
@@ -1644,19 +1633,15 @@ int main(S32 argc, char** argv) {
         }
 
         if (server_game_state.game.settings.record_demo) {
-            bool demo_file_closed = close_demo_file(&(server_game_state.demo_file));
-            if (!demo_file_closed) {
-                fprintf(stderr, "Failed to close demo file. Demo file may be corrupted or incomplete.\n");
-            }
+            fclose(server_game_state.demo_file);
+            server_game_state.demo_file = NULL;
         }
 
         break;
     case SESSION_TYPE_SINGLE_PLAYER:
         if (server_game_state.game.settings.record_demo) {
-            bool demo_file_closed = close_demo_file(&(server_game_state.demo_file));
-            if (!demo_file_closed) {
-                fprintf(stderr, "Failed to close demo file. Demo file may be corrupted or incomplete.\n");
-            }
+            fclose(server_game_state.demo_file);
+            server_game_state.demo_file = NULL;
         }
 
         break;
