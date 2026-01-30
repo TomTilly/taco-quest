@@ -676,7 +676,7 @@ Direction snake_segment_direction_to_tail(Snake* snake, S32 segment_index) {
     SnakeSegment* next_segment = snake->segments + next_segment_index;
     while (curr_segment->x == next_segment->x &&
            curr_segment->y == next_segment->y) {
-        next_segment_index--;
+        next_segment_index++;
         if (next_segment_index >= snake->length) {
             return snake_segment_direction_to_tail(snake, snake->length - 1);
         }

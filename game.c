@@ -67,6 +67,35 @@ bool _snake_segment_positions_equal(SnakeSegmentPosition* a, SnakeSegmentPositio
            a->next_y == b->next_y;
 }
 
+S32 _snake_next_unkinked_segment_index(Snake* snake, S32 segment_index) {
+    SnakeSegment* original_segment = snake->segments + segment_index;
+    for (S32 i = segment_index + 1; i < snake->length; i++) {
+        if (snake->segments[i].x != original_segment->x ||
+            snake->segments[i].y != original_segment->y) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+S32 _snake_move_all_kinked_segments(Snake* snake, S32 segment_index, S32 new_x, S32 new_y) {
+    SnakeSegment* original_segment = snake->segments + segment_index;
+    S32 first_unkinked_segment_index = -1;
+    for (S32 i = segment_index + 1; i < snake->length; i++) {
+        if (snake->segments[i].x == original_segment->x &&
+            snake->segments[i].y == original_segment->y) {
+            snake->segments[i].x = (S16)(new_x);
+            snake->segments[i].y = (S16)(new_y);
+        } else {
+            first_unkinked_segment_index = i;
+            break;
+        }
+    }
+    original_segment->x = (S16)(new_x);
+    original_segment->y = (S16)(new_y);
+    return first_unkinked_segment_index;
+}
+
 void _print_game(Game* game) {
     S32 print_height = game->map.height + 1; // For coordinates.
     char** string = malloc(print_height * sizeof(char*));
@@ -224,14 +253,15 @@ void _assert_snake_connected(Snake* original_snake, Snake* final_snake) {
             continue;
         }
 
-        Direction check = snake_segment_direction_to_tail(final_snake, i);
-        if (check == DIRECTION_NONE) {
+        Direction check_head = snake_segment_direction_to_head(final_snake, i);
+        Direction check_tail = snake_segment_direction_to_tail(final_snake, i);
+        if (check_tail == DIRECTION_NONE || check_head == check_tail) {
             printf("Detected disconnect snake\n");
             printf("original snake: %d\n", original_snake->length);
             _print_snake_segments(original_snake);
             printf("final snake: %d\n", final_snake->length);
             _print_snake_segments(final_snake);
-            assert(check != DIRECTION_NONE);
+            assert(check_tail != DIRECTION_NONE && check_head != check_tail);
         }
     }
 }
@@ -361,44 +391,59 @@ bool _snake_unkink_clamped(Snake* snake,
 bool _snake_unravel_clamped(Game* game,
                             Snake* snake,
                             S16 origin_index,
-                            S16 first_clamped_segment_after_origin_index,
-                            S32 next_head_x,
-                            S32 next_head_y) {
+                            S16 first_clamped_segment_after_origin_index) {
     assert(origin_index <= first_clamped_segment_after_origin_index);
 
     // An example unravel
     //
     // [1][2][3]
-    // [0]   [4][>] -> [0][1][2][[3/4][>]
+    // [0]   [4][>] -> [0][1][2/3/4][>]
     //
     S32 last_corner_index = -1;
     Direction last_corner_direction_to_head = DIRECTION_NONE;
     Direction last_corner_direction_to_tail = DIRECTION_NONE;
-    // If the index we're dealing with is the head, then allow it to be part of the corners that
-    // get unraveled to support free movement. If it isn't the the head, then movement needs to be
-    // restricted to unravel only after the original segment that moves.
-    S32 start_index = (origin_index == 0) ? 0 : origin_index + 1;
-    for (S32 i = start_index; i < first_clamped_segment_after_origin_index; i++) {
+
+    S32 unkinked_after_origin_index = _snake_next_unkinked_segment_index(snake, origin_index);
+    for (S32 i = unkinked_after_origin_index; i < first_clamped_segment_after_origin_index; i++) {
         // TODO: Evaluate if snake_segment_direction_to_head() should do this logic.
         Direction direction_to_head = (i == 0) ? snake->direction : snake_segment_direction_to_head(snake, i);
         Direction direction_to_tail = snake_segment_direction_to_tail(snake, i);
-
-        if (i > 0 &&
-            snake->segments[i].x == snake->segments[i - 1].x &&
-            snake->segments[i].y == snake->segments[i - 1].y) {
-            continue;
-        }
 
         // Check if we are a corner
         DirectionRelationship segment_direction_relationship =
             direction_relationship(direction_to_head, direction_to_tail);
         if (segment_direction_relationship == DIRECTION_RELATIONSHIP_CLOCKWISE ||
             segment_direction_relationship == DIRECTION_RELATIONSHIP_COUNTER_CLOCKWISE) {
+            // Did we find a corner that matches the last one ?
             if (direction_relationship(last_corner_direction_to_tail, direction_to_head)
                     == DIRECTION_RELATIONSHIP_OPPOSITE &&
                 last_corner_direction_to_head == direction_to_tail) {
-                // Perform unravel, moving each segment
-                for (S32 j = i; j > last_corner_index; j--) {
+
+                // If the final corner has multiple kinks, find the last one by continuing the iteration.
+                if ((i + 1) < snake->length &&
+                    snake->segments[i].x == snake->segments[i + 1].x &&
+                    snake->segments[i].y == snake->segments[i + 1].y) {
+                    continue;
+                }
+
+                // Collapse 2 segments starting from the first corner into the origin segment.
+                S32 collapse_index = last_corner_index - 1;
+                S32 unkinked_after_last_corner_index = _snake_next_unkinked_segment_index(snake, last_corner_index);
+                if (unkinked_after_last_corner_index < 0) {
+                    return false;
+                }
+                _snake_move_all_kinked_segments(snake,
+                                                last_corner_index,
+                                                snake->segments[collapse_index].x,
+                                                snake->segments[collapse_index].y);
+                S32 after_unkinked_last_corner_index =
+                    _snake_move_all_kinked_segments(snake,
+                                                    unkinked_after_last_corner_index,
+                                                    snake->segments[collapse_index].x,
+                                                    snake->segments[collapse_index].y);
+
+                // Unravel the rest of the segments
+                for (S32 j = after_unkinked_last_corner_index; j <= i; j++) {
                     S32 new_x = snake->segments[j].x;
                     S32 new_y = snake->segments[j].y;
                     adjacent_cell(direction_to_head, &new_x, &new_y);
@@ -406,14 +451,16 @@ bool _snake_unravel_clamped(Game* game,
                     snake->segments[j].x = (S16)(new_x);
                     snake->segments[j].y = (S16)(new_y);
                 }
-                for (S32 j = last_corner_index; j > origin_index; j--) {
-                    snake->segments[j].x = snake->segments[j - 1].x;
-                    snake->segments[j].y = snake->segments[j - 1].y;
-                }
-                snake->segments[origin_index].x = (S16)(next_head_x);
-                snake->segments[origin_index].y = (S16)(next_head_y);
                 return true;
             } else {
+                // If this segment is the same as the last segment, skip it.
+                if (i > unkinked_after_origin_index &&
+                    snake->segments[i].x == snake->segments[i - 1].x &&
+                    snake->segments[i].y == snake->segments[i - 1].y) {
+                    continue;
+                }
+
+                // If not, store this one to see if it matches the next.
                 last_corner_index = i;
                 last_corner_direction_to_head = direction_to_head;
                 last_corner_direction_to_tail = direction_to_tail;
@@ -441,10 +488,6 @@ bool _snake_unravel_clamped(Game* game,
             last_corner_direction_to_tail = DIRECTION_NONE;
         }
     }
-
-    last_corner_index = -1;
-    last_corner_direction_to_head = DIRECTION_NONE;
-    last_corner_direction_to_tail = DIRECTION_NONE;
 
     return false;
 }
@@ -474,11 +517,28 @@ void _snake_move_clamped(Snake* snake, Game* game, S16 first_clamped_segment_ind
         return;
     }
 
-    if (_snake_unravel_clamped(game, snake, 0, first_clamped_segment_index, next_head_x, next_head_y)) {
+    // TODO: Check for
+    //
+    // [>]
+    // [1][2]
+    //
+    S32 next_unkinked_segment_index = _snake_next_unkinked_segment_index(snake, 0);
+    if (next_unkinked_segment_index > 0 &&
+        snake_segment_direction_to_tail(snake, next_unkinked_segment_index) == snake->direction) {
+        _snake_move_all_kinked_segments(snake, 0, next_head_x, next_head_y);
+        _snake_move_all_kinked_segments(snake, next_unkinked_segment_index, next_head_x, next_head_y);
         _assert_snake_connected(&original_snake, snake);
         snake_destroy(&original_snake);
         return;
+    // Check for general unravelling.
+    } else if (_snake_unravel_clamped(game, snake, 0, first_clamped_segment_index)) {
+        // TODO: assume this does something ?
+        _assert_snake_connected(&original_snake, snake);
+        _snake_unkink_clamped(snake, 0, first_clamped_segment_index, next_head_x, next_head_y);
+        snake_destroy(&original_snake);
+        return;
     }
+
     snake_destroy(&original_snake);
 
     Direction direction_to_tail = snake_segment_direction_to_tail(snake, 0);
@@ -1645,23 +1705,47 @@ MoveResult snake_segment_constrict(Game* game, S32 snake_index, S32 segment_inde
     for (S32 i = segment_to_move_index; i < snake->length; i++) {
         SnakeSegment* check_segment = snake->segments + i;
         if (check_segment->clamped) {
-            // TODO: May need to clone game to see if this action works, as the first could cause a
-            // change while the second doesn't. However, the second should since we've verified
-            // above that both spots are empty.
-            if (_snake_unravel_clamped(game,
-                                       snake,
-                                       (S16)(segment_to_move_index),
-                                       (S16)(i),
-                                       initial_cell_move_x,
-                                       initial_cell_move_y) &&
-                _snake_unkink_clamped(snake,
-                                      (S16)(segment_to_move_index),
-                                      (S16)(i),
-                                      final_cell_move_x,
-                                      final_cell_move_y)) {
+            //
+            // Detect and address this special case
+            //
+            // [2][1][>] ->       [>]
+            // [3]          [3][2][1]
+            // [4]          [4]
+            //
+            S32 next_unkinked_segment_index = _snake_next_unkinked_segment_index(snake, segment_to_move_index);
+            if (next_unkinked_segment_index > segment_to_move_index &&
+                next_unkinked_segment_index < i &&
+                snake_segment_direction_to_tail(snake, segment_to_move_index) == opposite_direction(next_direction_to_head) &&
+                snake_segment_direction_to_tail(snake, next_unkinked_segment_index) == rotation_direction) {
+                _snake_move_all_kinked_segments(snake, next_unkinked_segment_index, initial_cell_move_x, initial_cell_move_y);
+                _snake_move_all_kinked_segments(snake, segment_to_move_index, final_cell_move_x, final_cell_move_y);
                 _assert_snake_connected(&original_snake, snake);
                 snake_destroy(&original_snake);
                 return MOVE_OBJECT_SUCCESS;
+            } else {
+                // Otherwise, run the normal unravel logic.
+
+                // TODO: May need to clone game to see if this action works, as the first could cause a
+                // change while the second doesn't. However, the second should since we've verified
+                // above that both spots are empty.
+                if (_snake_unravel_clamped(game,
+                                           snake,
+                                           (S16)(segment_to_move_index),
+                                           (S16)(i)) &&
+                    _snake_unkink_clamped(snake,
+                                          (S16)(segment_to_move_index),
+                                          (S16)(i),
+                                          initial_cell_move_x,
+                                          initial_cell_move_y) &&
+                    _snake_unkink_clamped(snake,
+                                          (S16)(segment_to_move_index),
+                                          (S16)(i),
+                                          final_cell_move_x,
+                                          final_cell_move_y)) {
+                    _assert_snake_connected(&original_snake, snake);
+                    snake_destroy(&original_snake);
+                    return MOVE_OBJECT_SUCCESS;
+                }
             }
 
             _assert_snake_connected(&original_snake, snake);
@@ -1871,7 +1955,8 @@ void snake_constrict(Game* game, S32 snake_index) {
         }
 
         S32 original_segment_index = segment_index;
-        if (snake_segment_constrict(game, snake_index, segment_index, left) == MOVE_OBJECT_SUCCESS) {
+        bool constrict_success = snake_segment_constrict(game, snake_index, segment_index, left) == MOVE_OBJECT_SUCCESS;
+        if (constrict_success) {
             segment_index++;
         }
 
