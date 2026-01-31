@@ -26,6 +26,7 @@ typedef enum {
     SNAKE_ACTION_CHOMP = 16,
     SNAKE_ACTION_CONSTRICT_LEFT = 32,
     SNAKE_ACTION_CONSTRICT_RIGHT = 64,
+    SNAKE_ACTION_LUNGE = 128,
 } SnakeActionFlags;
 
 typedef enum {
@@ -47,6 +48,7 @@ typedef struct {
     bool chomp;
     bool constrict_left;
     bool constrict_right;
+    bool lunge;
 } SnakeActionKeyState;
 
 typedef struct {

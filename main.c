@@ -537,6 +537,8 @@ void controller_handle_input(AppState app_state,
                 SDL_GetGamepadButton(game_pads[c], SDL_GAMEPAD_BUTTON_WEST);
             current_action_key_state.constrict_right =
                 SDL_GetGamepadButton(game_pads[c], SDL_GAMEPAD_BUTTON_EAST);
+            current_action_key_state.lunge =
+                SDL_GetGamepadButton(game_pads[c], SDL_GAMEPAD_BUTTON_NORTH);
 
             SnakeAction* snake_actions = NULL;
             SnakeActionKeyState* prev_snake_actions_key_states = NULL;
@@ -566,11 +568,15 @@ void controller_handle_input(AppState app_state,
                 *snake_actions |= SNAKE_ACTION_FACE_EAST;
             }
 
+            if (!prev_snake_actions_key_states->lunge && current_action_key_state.lunge) {
+                *snake_actions |= SNAKE_ACTION_LUNGE;
+            }
+
+            // Constricting and chomping acts different, where you can hold it down.
             if (current_action_key_state.chomp) {
                 *snake_actions |= SNAKE_ACTION_CHOMP;
             }
 
-            // Constricting acts different, where you can hold it down.
             if (current_action_key_state.constrict_left) {
                 *snake_actions |= SNAKE_ACTION_CONSTRICT_LEFT;
             }

@@ -460,6 +460,7 @@ void snake_action_handle_keystate(const bool* keyboard_state,
     current_snake_actions_key_state.chomp = keyboard_state[SDL_SCANCODE_SPACE];
     current_snake_actions_key_state.constrict_left = keyboard_state[SDL_SCANCODE_Q];
     current_snake_actions_key_state.constrict_right = keyboard_state[SDL_SCANCODE_E];
+    current_snake_actions_key_state.lunge = keyboard_state[SDL_SCANCODE_LCTRL];
 
     // Actions are triggered on the press event.
     if (!prev_snake_actions_key_state->face_north && current_snake_actions_key_state.face_north) {
@@ -478,11 +479,15 @@ void snake_action_handle_keystate(const bool* keyboard_state,
         *snake_actions |= SNAKE_ACTION_FACE_EAST;
     }
 
+    if (!prev_snake_actions_key_state->lunge && current_snake_actions_key_state.lunge) {
+        *snake_actions |= SNAKE_ACTION_LUNGE;
+    }
+
+    // Constricting and chomping act different, where you can hold it down.
     if (current_snake_actions_key_state.chomp) {
         *snake_actions |= SNAKE_ACTION_CHOMP;
     }
 
-    // Constricting acts different, where you can hold it down.
     if (current_snake_actions_key_state.constrict_left) {
         *snake_actions |= SNAKE_ACTION_CONSTRICT_LEFT;
     }
