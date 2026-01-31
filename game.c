@@ -972,6 +972,18 @@ void _snake_lunge(Snake* snake, Game* game) {
                     break;
                 }
 
+                // Reset the loop to before the original corner to see if we created another corner
+                // at the previous element
+                //
+                // > [4][3]
+                //   [5][2]    ->  > [5][4]
+                //[7][6][1][>]    [7][6][3][2][1][>]
+                //
+                i = last_corner_index - 2;
+                if (i < 0) {
+                    i = -1;
+                }
+
                 last_corner_index = -1;
                 last_corner_direction_to_head = DIRECTION_NONE;
                 last_corner_direction_to_tail = DIRECTION_NONE;
