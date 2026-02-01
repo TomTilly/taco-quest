@@ -746,59 +746,19 @@ void _snake_move_clamped(Snake* snake, Game* game, S16 first_clamped_segment_ind
 
     snake_destroy(&original_snake);
 
-    Direction direction_to_tail = snake_segment_direction_to_tail(snake, 0);
-    if (snake->direction == direction_to_tail) {
-        // Attempt a 2 segment unravel
-        //
-        // [ ]    -> [ ][ ][>]
-        // [ ][>]
-        //
-        Direction next_direction_to_tail = snake_segment_direction_to_tail(snake, 1);
-        if (!directions_are_perpendicular(direction_to_tail, next_direction_to_tail)) {
-            return;
-        }
-
-        S32 through_cell_x = (S32)(snake->segments[0].x);
-        S32 through_cell_y = (S32)(snake->segments[0].y);
-        adjacent_cell(next_direction_to_tail, &through_cell_x, &through_cell_y);
-
-        queried_object = game_query(game, through_cell_x, through_cell_y);
-        if (queried_object.type != QUERIED_OBJECT_TYPE_NONE) {
-            return;
-        }
-
-        S32 final_cell_x = through_cell_x;
-        S32 final_cell_y = through_cell_y;
-        adjacent_cell(snake->direction, &final_cell_x, &final_cell_y);
-
-        queried_object = game_query(game, final_cell_x, final_cell_y);
-        if (queried_object.type != QUERIED_OBJECT_TYPE_NONE) {
-            return;
-        }
-
-        snake->segments[1].x = (S16)(through_cell_x);
-        snake->segments[1].y = (S16)(through_cell_y);
-        snake->segments[0].x = (S16)(final_cell_x);
-        snake->segments[0].y = (S16)(final_cell_y);
-        return;
-    }
-
     //
     // [ ][ ] -> [ ][ ][>]
     //    [>]
     //
+    // or
+    //
+    // [ ]     [ ]
+    // [ ]  -> [ ][>]
+    // [>]
+    //
 
-    S32 through_cell_x = (S32)(snake->segments[0].x);
-    S32 through_cell_y = (S32)(snake->segments[0].y);
-    adjacent_cell(snake->direction, &through_cell_x, &through_cell_y);
-
-    queried_object = game_query(game, through_cell_x, through_cell_y);
-    if (queried_object.type != QUERIED_OBJECT_TYPE_NONE) {
-        return;
-    }
-
-    S32 final_cell_x = through_cell_x;
-    S32 final_cell_y = through_cell_y;
+    S32 final_cell_x = next_head_x;
+    S32 final_cell_y = next_head_y;
     adjacent_cell(direction_to_tail, &final_cell_x, &final_cell_y);
 
     queried_object = game_query(game, final_cell_x, final_cell_y);
