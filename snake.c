@@ -425,18 +425,31 @@ void action_buffer_add(ActionBuffer * buf, SnakeAction actions) {
     }
 
     // filter out previous movements in the buffer.
-    SnakeAction prev_actions = {0};
+    SnakeAction prev_movement_actions = {0};
     for (S32 i = 0; i < buf->count; i++) {
-        prev_actions |= (buf->actions[i] & ALL_SNAKE_ACTION_MOVEMENTS);
+        prev_movement_actions |= (buf->actions[i] & ALL_SNAKE_ACTION_MOVEMENTS);
     }
-    SnakeAction filtered_action = actions & (~prev_actions);
+    SnakeAction filtered_actions = actions & (~prev_movement_actions);
 
-    if (filtered_action == 0) {
+    if (filtered_actions == 0) {
         return; // Tried to press the same direction again, ignore
     }
 
-    SnakeAction prioritized_action = snake_action_highest_priority(filtered_action);
-    buf->actions[buf->count++] = prioritized_action;
+    // Separate movement and other actions. Other actions are defined as non-movement actions:
+    // - chomping, lunging, constricting
+    SnakeAction movement_actions = (filtered_actions & ALL_SNAKE_ACTION_MOVEMENTS);
+    SnakeAction other_actions =
+        (filtered_actions & ~ALL_SNAKE_ACTION_MOVEMENTS) |
+        (buf->actions[0] & ~ALL_SNAKE_ACTION_MOVEMENTS);
+
+    // Movements are queued
+    buf->actions[buf->count] = movement_actions;
+    buf->count++;
+
+    // The highest priority other action overwrites the current other action while preserving the
+    // current movement.
+    SnakeAction prioritized_other_actions = snake_action_highest_priority(other_actions);
+    buf->actions[0] = prioritized_other_actions | (buf->actions[0] & ALL_SNAKE_ACTION_MOVEMENTS);
 }
 
 SnakeAction snake_action_highest_priority(SnakeAction action) {
@@ -529,6 +542,7 @@ SnakeAction action_buffer_remove(ActionBuffer * buf) {
             buf->actions[i] = buf->actions[i + 1];
         }
         buf->count--;
+        buf->actions[buf->count] = 0;
     }
 
     return action;

@@ -15,6 +15,8 @@ typedef struct {
     S16 segment_index;
 } SnakeCollision;
 
+typedef SnakeCollision SnakeSegmentID;
+
 typedef enum {
     SNAKE_KILL_CHECK_UNREACHABLE,
     SNAKE_KILL_CHECK_CELL,
@@ -327,7 +329,7 @@ void _assert_snake_connected(Snake* original_snake, Snake* final_snake) {
     }
 }
 
-void _snake_chomp_segment(Game* game, SnakeCollision* snake_collision, bool clamped) {
+void _snake_chomp_segment(Game* game, SnakeCollision* snake_collision) {
     // The head is invincible ! Constricting is the only way to kill.
     if (game->settings.head_invincible && snake_collision->segment_index == 0) {
         return;
@@ -356,8 +358,6 @@ void _snake_chomp_segment(Game* game, SnakeCollision* snake_collision, bool clam
                 snake->life_state = SNAKE_LIFE_STATE_DEAD;
             }
             break;
-        } else if (clamped) {
-            chomped_segment->clamped = clamped;
         }
     }
 }
@@ -414,8 +414,7 @@ void _snake_chomp(Snake* snake, Game* game) {
 
         if (snake_collision.snake_index >= 0 && snake_collision.snake_index >= 0) {
             // The middle segment gets clamped.
-            bool clamped = (i == 1);
-            _snake_chomp_segment(game, &snake_collision, clamped);
+            _snake_chomp_segment(game, &snake_collision);
             did_chomp = true;
         }
     }
@@ -877,7 +876,9 @@ void _snake_move(Snake* snake, Game* game) {
     }
 }
 
-void _snake_lunge(Snake* snake, Game* game) {
+bool _snake_lunge(Snake* snake, Game* game) {
+    bool lunged = false;
+
     // TODO: Consolidate with unraveling code.
     S32 last_corner_index = -1;
     Direction last_corner_direction_to_head = DIRECTION_NONE;
@@ -968,6 +969,8 @@ void _snake_lunge(Snake* snake, Game* game) {
                     _snake_uncoil_clamped(snake, 0, (S16)(i), next_head_x, next_head_y);
                 }
 
+                lunged = true;
+
                 if (hit_object) {
                     break;
                 }
@@ -1025,6 +1028,8 @@ void _snake_lunge(Snake* snake, Game* game) {
             last_corner_direction_to_tail = DIRECTION_NONE;
         }
     }
+
+    return lunged;
 }
 
 bool game_init(Game* game, const char* map_filepath) {
@@ -2472,7 +2477,7 @@ void snake_constrict(Game* game, S32 snake_index) {
                             .segment_index = (S16)(e)
                         };
 
-                        _snake_chomp_segment(game, &snake_collision, false);
+                        _snake_chomp_segment(game, &snake_collision);
                     }
 
                     if (check_snake->length == 1) {
@@ -2567,22 +2572,66 @@ void game_update(Game* game, SnakeAction* snake_actions) {
         } else if (snake->chomp_state == SNAKE_CHOMP_STATE_END) {
             if (snake->chomp_cooldown == 0) {
                 snake->chomp_state = SNAKE_CHOMP_STATE_NONE;
-
-                // If there is a segment in front of the head, it is no longer clamped.
-                S32 clamped_cell_x = (S16)(snake->segments[0].x);
-                S32 clamped_cell_y = (S16)(snake->segments[0].y);
-
-                adjacent_cell(snake->direction, &clamped_cell_x, &clamped_cell_y);
-
-                // TODO: This has a bug where if 2 snakes are clamping the same segment, we could
-                // set the flag to false even if the other snake is still clamping.
-                QueriedObject queried_object = game_query(game, clamped_cell_x, clamped_cell_y);
-                if (queried_object.type == QUERIED_OBJECT_TYPE_SNAKE) {
-                    Snake* clamped_snake = game->snakes + queried_object.snake.index;
-                    SnakeSegment* clamped_segment = clamped_snake->segments + queried_object.snake.segment_index;
-                    clamped_segment->clamped = false;
-                }
             }
+        }
+    }
+
+    // Calculate which segments are being clamped, it is important that this is done before any
+    // constricting, lunging or moving, because this impacts those within the current tick.
+    SnakeSegmentID clamped_segment_ids[MAX_SNAKE_COUNT];
+    for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
+        Snake* snake = game->snakes + s;
+        if (snake->chomp_state == SNAKE_CHOMP_STATE_NONE) {
+            clamped_segment_ids[s].snake_index = -1;
+            continue;
+        }
+
+        S32 clamped_cell_x = (S16)(snake->segments[0].x);
+        S32 clamped_cell_y = (S16)(snake->segments[0].y);
+
+        adjacent_cell(snake->direction, &clamped_cell_x, &clamped_cell_y);
+
+        QueriedObject queried_object = game_query(game, clamped_cell_x, clamped_cell_y);
+        if (queried_object.type == QUERIED_OBJECT_TYPE_SNAKE) {
+            clamped_segment_ids[s].snake_index = (S16)(queried_object.snake.index);
+            clamped_segment_ids[s].segment_index = (S16)(queried_object.snake.segment_index);
+        } else {
+            clamped_segment_ids[s].snake_index = -1;
+
+            // If no segment is in front of the snake, then it is no longer chomping.
+            snake->chomp_state = SNAKE_CHOMP_STATE_NONE;
+            snake->chomp_cooldown = 0;
+        }
+    }
+
+    // Clear all segments being clamped
+    for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
+        Snake* snake = game->snakes + s;
+        for (S32 e = 0; e < snake->length; e++) {
+            SnakeSegment* segment = snake->segments + e;
+            segment->clamped = false;
+        }
+    }
+
+    // Mark segments that are clamped
+    for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
+        if (clamped_segment_ids[s].snake_index < 0) {
+            continue;
+        }
+
+        Snake* snake = game->snakes + clamped_segment_ids[s].snake_index;
+
+        // This segment could be coiled with others, so find and apply clamping to all coiled
+        // segments.
+        S32 first_segment_index = -1;
+        S32 last_segment_index = -1;
+        _snake_segment_coiled_index_range(snake,
+                                          clamped_segment_ids[s].segment_index,
+                                          &first_segment_index,
+                                          &last_segment_index);
+        for (S32 e = first_segment_index; e <= last_segment_index; e++) {
+            SnakeSegment* segment = snake->segments + e;
+            segment->clamped = true;
         }
     }
 
@@ -2622,9 +2671,13 @@ void game_update(Game* game, SnakeAction* snake_actions) {
             continue;
         }
 
+        bool lunged = false;
         if (snake_actions[s] & SNAKE_ACTION_LUNGE) {
-            _snake_lunge(game->snakes + s, game);
-        } else {
+            lunged = _snake_lunge(game->snakes + s, game);
+        }
+
+        // Move if we weren't trying to or didn't successfully lunge.
+        if (!lunged) {
             _snake_move(game->snakes + s, game);
         }
     }
