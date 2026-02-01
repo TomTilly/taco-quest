@@ -13,6 +13,8 @@
 #define SNAKE_DAMAGE_FRAMES 3
 #define CHOMP_POINT_CHECK_COUNT 3
 #define ALL_SNAKE_ACTION_MOVEMENTS (SNAKE_ACTION_FACE_NORTH | SNAKE_ACTION_FACE_EAST | SNAKE_ACTION_FACE_WEST | SNAKE_ACTION_FACE_SOUTH)
+#define SNAKE_CONSTRCT_ACTIONS (SNAKE_ACTION_CONSTRICT_LEFT | SNAKE_ACTION_CONSTRICT_RIGHT)
+#define ALL_SNAKE_OTHER_ACTIONS (SNAKE_ACTION_CHOMP | SNAKE_CONSTRCT_ACTIONS | SNAKE_ACTION_LUNGE)
 
 typedef U8 SnakeAction;
 
@@ -141,7 +143,7 @@ SnakeAction snake_action_from_direction(Direction direction);
 bool snake_actions_are_opposite(SnakeAction action1, SnakeAction action2);
 const char* snake_action_string(SnakeAction action);
 void print_snake_action(SnakeAction action);
-SnakeAction snake_action_highest_priority(SnakeAction action);
+SnakeAction snake_other_action_highest_priority(SnakeAction action);
 void snake_action_handle_keystate(const bool* keyboard_state,
                                   SnakeActionKeyState* prev_action_key_state,
                                   SnakeAction* actions);

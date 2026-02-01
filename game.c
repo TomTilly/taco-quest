@@ -759,6 +759,7 @@ void _snake_move_clamped(Snake* snake, Game* game, S16 first_clamped_segment_ind
 
     S32 final_cell_x = next_head_x;
     S32 final_cell_y = next_head_y;
+    Direction direction_to_tail = snake_segment_direction_to_tail(snake, 0);
     adjacent_cell(direction_to_tail, &final_cell_x, &final_cell_y);
 
     queried_object = game_query(game, final_cell_x, final_cell_y);

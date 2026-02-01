@@ -435,31 +435,32 @@ void action_buffer_add(ActionBuffer * buf, SnakeAction actions) {
         return; // Tried to press the same direction again, ignore
     }
 
-    // Separate movement and other actions. Other actions are defined as non-movement actions:
-    // - chomping, lunging, constricting
+    // Separate movement to queue after the current action.
     SnakeAction movement_actions = (filtered_actions & ALL_SNAKE_ACTION_MOVEMENTS);
-    SnakeAction other_actions =
-        (filtered_actions & ~ALL_SNAKE_ACTION_MOVEMENTS) |
-        (buf->actions[0] & ~ALL_SNAKE_ACTION_MOVEMENTS);
-
-    // Movements are queued
     buf->actions[buf->count] = movement_actions;
     buf->count++;
 
+    // Other actions are defined as non-movement actions:
+    // - chomping, lunging, constricting
     // The highest priority other action overwrites the current other action while preserving the
     // current movement.
-    SnakeAction prioritized_other_actions = snake_action_highest_priority(other_actions);
+    SnakeAction prioritized_other_actions = snake_other_action_highest_priority(
+        (filtered_actions & ALL_SNAKE_OTHER_ACTIONS) | (buf->actions[0] & ALL_SNAKE_OTHER_ACTIONS));
     buf->actions[0] = prioritized_other_actions | (buf->actions[0] & ALL_SNAKE_ACTION_MOVEMENTS);
 }
 
-SnakeAction snake_action_highest_priority(SnakeAction action) {
-    for (S32 i = 0; i < 8; i++) {
-        U8 action_to_check = 1 << i;
-        if (action_to_check & action) {
-            return (SnakeAction)(action_to_check);
-        }
+SnakeAction snake_other_action_highest_priority(SnakeAction actions) {
+    if (actions & SNAKE_ACTION_LUNGE) {
+        // Lunging can only occur on its own.
+        return SNAKE_ACTION_LUNGE;
     }
-    return SNAKE_ACTION_NONE;
+    // Including both constrict actions, cancels out.
+    if ((actions & SNAKE_CONSTRCT_ACTIONS) == SNAKE_CONSTRCT_ACTIONS) {
+        actions &= ~SNAKE_CONSTRCT_ACTIONS;
+    }
+    // Chomping and a single constrict are compatible, as we want people who are clamping to be
+    // able to constrict.
+    return actions & ALL_SNAKE_OTHER_ACTIONS;
 }
 
 void snake_action_handle_keystate(const bool* keyboard_state,
