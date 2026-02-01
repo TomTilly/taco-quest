@@ -751,7 +751,7 @@ int main(S32 argc, char** argv) {
     game->settings.starting_length = 5;
     game->settings.taco_count = 5;
     game->settings.tick_ms = 175;
-    game->settings.chomp_ticks = 3;
+    game->settings.chomp_ticks = 5;
 
     // Create the server player in the lobby.
     if (session_type == SESSION_TYPE_SINGLE_PLAYER || session_type == SESSION_TYPE_SERVER) {

@@ -235,6 +235,7 @@ void _snake_eat_taco(Game* game, Snake* snake, S32 new_x, S32 new_y) {
     // The head is moved into the position where the taco was.
     snake->segments[0].x = (S16)(new_x);
     snake->segments[0].y = (S16)(new_y);
+    snake->segments[0].health = (S8)(game->settings.segment_health);
 }
 
 void _print_snake_segments(Snake* snake) {
@@ -424,11 +425,10 @@ void _snake_chomp(Snake* snake, Game* game) {
         // to clamp, we can just do the bite and move on.
         QueriedObject queried_object = game_query(game, chomp_check_x[1], chomp_check_y[1]);
         if (queried_object.type == QUERIED_OBJECT_TYPE_SNAKE) {
-            snake->chomp_state = SNAKE_CHOMP_STATE_BEGIN;
+            snake->chomp_state = SNAKE_CHOMP_STATE_CLAMPING;
         } else {
             snake->chomp_state = SNAKE_CHOMP_STATE_BITE;
         }
-        snake->chomp_cooldown = (S8)(game->settings.chomp_ticks);
     }
 }
 
@@ -2471,7 +2471,7 @@ void snake_constrict(Game* game, S32 snake_index) {
 
                 // If all of the segments are found within the constriction, kill the snake and replace with tacos.
                 if (snake_segment_count == check_snake->length) {
-                    for (S32 e = 0; e < check_snake->length; e++) {
+                    for (S32 e = 1; e < check_snake->length; e++) {
                         SnakeCollision snake_collision = {
                             .snake_index = (S16)(s),
                             .segment_index = (S16)(e)
@@ -2480,7 +2480,9 @@ void snake_constrict(Game* game, S32 snake_index) {
                         _snake_chomp_segment(game, &snake_collision);
                     }
 
-                    if (check_snake->length == 1) {
+                    check_snake->segments[0].health--;
+
+                    if (check_snake->segments[0].health == 0) {
                         items_set_cell(&game->items,
                                        check_snake->segments[0].x,
                                        check_snake->segments[0].y,
@@ -2552,26 +2554,18 @@ void game_update(Game* game, SnakeAction* snake_actions) {
         }
 
         SnakeAction snake_action = snake_actions[s];
-        if (snake->chomp_state == SNAKE_CHOMP_STATE_NONE) {
+        if (snake->chomp_state == SNAKE_CHOMP_STATE_NONE &&
+            snake->chomp_cooldown == 0) {
             if (snake_action & SNAKE_ACTION_CHOMP) {
                 _snake_chomp(snake, game);
             }
-        } else if (snake->chomp_state == SNAKE_CHOMP_STATE_BEGIN) {
-            if (snake->chomp_cooldown == 0) {
-                snake->chomp_state = SNAKE_CHOMP_STATE_CLAMPING;
-            }
         } else if (snake->chomp_state == SNAKE_CHOMP_STATE_BITE) {
-            if (snake->chomp_cooldown == 0) {
-                snake->chomp_state = SNAKE_CHOMP_STATE_NONE;
-            }
+            snake->chomp_state = SNAKE_CHOMP_STATE_NONE;
+            snake->chomp_cooldown = (S8)(game->settings.chomp_ticks);
         } else if (snake->chomp_state == SNAKE_CHOMP_STATE_CLAMPING) {
             if ((snake_action & SNAKE_ACTION_CHOMP) == 0) {
-                snake->chomp_state = SNAKE_CHOMP_STATE_END;
-                snake->chomp_cooldown = (S8)(game->settings.chomp_ticks);
-            }
-        } else if (snake->chomp_state == SNAKE_CHOMP_STATE_END) {
-            if (snake->chomp_cooldown == 0) {
                 snake->chomp_state = SNAKE_CHOMP_STATE_NONE;
+                snake->chomp_cooldown = (S8)(game->settings.chomp_ticks);
             }
         }
     }
@@ -2600,7 +2594,7 @@ void game_update(Game* game, SnakeAction* snake_actions) {
 
             // If no segment is in front of the snake, then it is no longer chomping.
             snake->chomp_state = SNAKE_CHOMP_STATE_NONE;
-            snake->chomp_cooldown = 0;
+            snake->chomp_cooldown = (S8)(game->settings.chomp_ticks);
         }
     }
 

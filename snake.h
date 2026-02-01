@@ -86,10 +86,8 @@ typedef enum {
 
 typedef enum {
     SNAKE_CHOMP_STATE_NONE,
-    SNAKE_CHOMP_STATE_BEGIN,
     SNAKE_CHOMP_STATE_CLAMPING,
     SNAKE_CHOMP_STATE_BITE,
-    SNAKE_CHOMP_STATE_END,
 } SnakeChompState;
 
 typedef struct {
