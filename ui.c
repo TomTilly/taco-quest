@@ -223,7 +223,7 @@ void ui_dropdown(UserInterface* ui,
                  SDL_Renderer* renderer,
                  UIMouseState* mouse_state,
                  UIDropDown* drop_down,
-                 char** options,
+                 const char** options,
                  S32 option_count,
                  S32* selected) {
     assert(*selected >= 0 && *selected < option_count);
