@@ -35,6 +35,16 @@ typedef struct {
     S32 next_y;
 } SnakeSegmentPosition;
 
+typedef struct {
+    S32 segment_index;
+    Direction to_head;
+    Direction to_tail;
+} TrackedCorner;
+
+typedef struct {
+    TrackedCorner corners[2];
+} UnravelableCornerPair;
+
 void _track_snake_segment_position(Snake* snake, S32 segment_index, SnakeSegmentPosition* snake_segment_position) {
     memset(snake_segment_position, 0, sizeof(*snake_segment_position));
     if (segment_index < 0 || segment_index >= snake->length) {
@@ -157,6 +167,92 @@ void _snake_move_all_coiled_segments(Snake* snake, S32 segment_index, S32 new_x,
     }
     original_segment->x = (S16)(new_x);
     original_segment->y = (S16)(new_y);
+}
+
+void _clear_tracked_corner(TrackedCorner* tracked_corner) {
+    tracked_corner->segment_index = -1;
+    tracked_corner->to_head = DIRECTION_NONE;
+    tracked_corner->to_tail = DIRECTION_NONE;
+}
+
+UnravelableCornerPair _search_for_unravelable_corner_pair(Game* game,
+                                                          Snake* snake,
+                                                          S32 start_index,
+                                                          S32 past_end_index) {
+    UnravelableCornerPair result = {0};
+    _clear_tracked_corner(result.corners + 0);
+    _clear_tracked_corner(result.corners + 1);
+
+    S32 dt = (start_index < past_end_index) ? 1 : -1;
+
+    for (S32 i = start_index; i != past_end_index; i += dt) {
+        // TODO: Evaluate if snake_segment_direction_to_head() should do this logic.
+        Direction direction_to_head = (i == 0) ? snake->direction : snake_segment_direction_to_head(snake, i);
+        Direction direction_to_tail = snake_segment_direction_to_tail(snake, i);
+
+        // Check if we are a corner
+        DirectionRelationship segment_direction_relationship =
+            direction_relationship(direction_to_head, direction_to_tail);
+        if (segment_direction_relationship == DIRECTION_RELATIONSHIP_CLOCKWISE ||
+            segment_direction_relationship == DIRECTION_RELATIONSHIP_COUNTER_CLOCKWISE) {
+
+            // Did we find a corner that pairs with the last corner for an unravel ?
+            if (direction_relationship(result.corners[0].to_tail, direction_to_head)
+                    == DIRECTION_RELATIONSHIP_OPPOSITE &&
+                result.corners[0].to_head == direction_to_tail) {
+                // If the final corner has coils, find the last corner by continuing to iterate so
+                // that when we unravel, the range consists of the index first coiled segment of the
+                // first corner to the last coiled index of the last corner.
+                SnakeSegment* next_segment = _snake_adjacent_segment(snake, i, dt);
+                if (next_segment &&
+                    snake->segments[i].x == next_segment->x &&
+                    snake->segments[i].y == next_segment->y) {
+                    continue;
+                }
+
+                result.corners[1].segment_index = i;
+                result.corners[1].to_head = direction_to_head;
+                result.corners[1].to_tail = direction_to_tail;
+                return result;
+            } else {
+                // If this segment is the same as the last segment, skip it so that we always
+                // store the first corner we find.
+                SnakeSegment* prev_segment = _snake_adjacent_segment(snake, i, -dt);
+                if (prev_segment &&
+                    snake->segments[i].x == prev_segment->x &&
+                    snake->segments[i].y == prev_segment->y) {
+                    continue;
+                }
+
+                // Store this corner to see if it matches the next.
+                result.corners[0].segment_index = i;
+                result.corners[0].to_head = direction_to_head;
+                result.corners[0].to_tail = direction_to_tail;
+            }
+        } else if (segment_direction_relationship == DIRECTION_RELATIONSHIP_OPPOSITE) {
+            // If this segment is straight and our last corner is populated, check if the adjacent
+            // square is empty.
+            if (result.corners[0].to_head != DIRECTION_NONE) {
+                S32 check_x = snake->segments[i].x;
+                S32 check_y = snake->segments[i].y;
+                adjacent_cell(result.corners[0].to_head, &check_x, &check_y);
+                QueriedObject queried_object = game_query(game, check_x, check_y);
+                if (queried_object.type != QUERIED_OBJECT_TYPE_NONE) {
+                    // This means something is in the way and we wouldn't be able to use this corner
+                    // to unravel.
+                    _clear_tracked_corner(result.corners + 0);
+                }
+            }
+        } else {
+            assert(!"The snake is broken !");
+            _clear_tracked_corner(result.corners + 0);
+        }
+    }
+
+    // We didn't find anything, so clear the result in case we were tracking anything.
+    _clear_tracked_corner(result.corners + 0);
+    _clear_tracked_corner(result.corners + 1);
+    return result;
 }
 
 void _print_game(Game* game) {
@@ -470,110 +566,51 @@ bool _snake_unravel_clamped(Game* game,
     // [5][4][3][2]
     // [6]      [1][>] -> [6][5][4][3/2/1][>]
     //
-    S32 last_corner_index = -1;
-    Direction last_corner_direction_to_head = DIRECTION_NONE;
-    Direction last_corner_direction_to_tail = DIRECTION_NONE;
 
-    S32 uncoiled_after_origin_index = _snake_next_uncoiled_segment_index(snake, origin_index);
-    for (S32 i = uncoiled_after_origin_index; i < first_clamped_segment_after_origin_index; i++) {
-        // TODO: Evaluate if snake_segment_direction_to_head() should do this logic.
-        Direction direction_to_head = (i == 0) ? snake->direction : snake_segment_direction_to_head(snake, i);
-        Direction direction_to_tail = snake_segment_direction_to_tail(snake, i);
-
-        // Check if we are a corner
-        DirectionRelationship segment_direction_relationship =
-            direction_relationship(direction_to_head, direction_to_tail);
-        if (segment_direction_relationship == DIRECTION_RELATIONSHIP_CLOCKWISE ||
-            segment_direction_relationship == DIRECTION_RELATIONSHIP_COUNTER_CLOCKWISE) {
-
-            // Did we find a corner that pairs with the last corner for an unravel ?
-            if (direction_relationship(last_corner_direction_to_tail, direction_to_head)
-                    == DIRECTION_RELATIONSHIP_OPPOSITE &&
-                last_corner_direction_to_head == direction_to_tail) {
-
-                // If the final corner has coils, find the last corner by continuing to iterate so
-                // that when we unravel, the range consists of the index first coiled segment of the
-                // first corner to the last coiled index of the last corner.
-                SnakeSegment* next_segment = _snake_adjacent_segment(snake, i, 1);
-                if (next_segment &&
-                    snake->segments[i].x == next_segment->x &&
-                    snake->segments[i].y == next_segment->y) {
-                    continue;
-                }
-
-                S32 uncoiled_after_last_corner_index =
-                    _snake_next_uncoiled_segment_index(snake, last_corner_index);
-                if (uncoiled_after_last_corner_index < 0) {
-                    return false;
-                }
-                S32 after_uncoiled_last_corner_index =
-                    _snake_next_uncoiled_segment_index(snake, uncoiled_after_last_corner_index);
-                if (after_uncoiled_last_corner_index < 0) {
-                    return false;
-                }
-
-                // Collapse 2 segments starting from the first corner into the origin segment.
-                // [5][4][3][2]       [5][4]
-                // [6]      [1][>] -> [6]      [3/2/1][>]
-                S32 collapse_index = last_corner_index - 1;
-                _snake_move_all_coiled_segments(snake,
-                                                last_corner_index,
-                                                snake->segments[collapse_index].x,
-                                                snake->segments[collapse_index].y);
-                _snake_move_all_coiled_segments(snake,
-                                                uncoiled_after_last_corner_index,
-                                                snake->segments[collapse_index].x,
-                                                snake->segments[collapse_index].y);
-
-                // Unravel the rest of the segments, by moving them according to the current corner.
-                // [5][4]
-                // [6]      [3/2/1][>] -> [6][5][4][3/2/1][>]
-                for (S32 j = after_uncoiled_last_corner_index; j <= i; j++) {
-                    S32 new_x = snake->segments[j].x;
-                    S32 new_y = snake->segments[j].y;
-                    adjacent_cell(direction_to_head, &new_x, &new_y);
-                    adjacent_cell(direction_to_tail, &new_x, &new_y);
-                    snake->segments[j].x = (S16)(new_x);
-                    snake->segments[j].y = (S16)(new_y);
-                }
-                return true;
-            } else {
-                // If this segment is the same as the last segment, skip it so that we always
-                // store the first corner we find.
-                SnakeSegment* prev_segment = _snake_adjacent_segment(snake, i, -1);
-                if (prev_segment &&
-                    snake->segments[i].x == prev_segment->x &&
-                    snake->segments[i].y == prev_segment->y) {
-                    continue;
-                }
-
-                // Store this corner to see if it matches the next.
-                last_corner_index = i;
-                last_corner_direction_to_head = direction_to_head;
-                last_corner_direction_to_tail = direction_to_tail;
-            }
-        } else if (segment_direction_relationship == DIRECTION_RELATIONSHIP_OPPOSITE) {
-            // If this segment is straight and our last corner is populated, check if the adjacent
-            // square is empty.
-            if (last_corner_direction_to_head != DIRECTION_NONE) {
-                S32 check_x = snake->segments[i].x;
-                S32 check_y = snake->segments[i].y;
-                adjacent_cell(last_corner_direction_to_head, &check_x, &check_y);
-                QueriedObject queried_object = game_query(game, check_x, check_y);
-                if (queried_object.type != QUERIED_OBJECT_TYPE_NONE) {
-                    // This means something is in the way and we wouldn't be able to use this corner
-                    // to unravel.
-                    last_corner_index = -1;
-                    last_corner_direction_to_head = DIRECTION_NONE;
-                    last_corner_direction_to_tail = DIRECTION_NONE;
-                }
-            }
-        } else {
-            assert(!"The snake is broken !");
-            last_corner_index = -1;
-            last_corner_direction_to_head = DIRECTION_NONE;
-            last_corner_direction_to_tail = DIRECTION_NONE;
+    S32 search_start_index = _snake_next_uncoiled_segment_index(snake, origin_index);
+    UnravelableCornerPair corner_pair =
+        _search_for_unravelable_corner_pair(game,
+                                            snake,
+                                            search_start_index,
+                                            first_clamped_segment_after_origin_index);
+    if (corner_pair.corners[0].segment_index > 0) {
+        S32 uncoiled_after_last_corner_index =
+            _snake_next_uncoiled_segment_index(snake, corner_pair.corners[0].segment_index);
+        if (uncoiled_after_last_corner_index < 0) {
+            return false;
         }
+        S32 after_uncoiled_last_corner_index =
+            _snake_next_uncoiled_segment_index(snake, uncoiled_after_last_corner_index);
+        if (after_uncoiled_last_corner_index < 0) {
+            return false;
+        }
+
+        // Collapse 2 segments starting from the first corner into the origin segment.
+        // [5][4][3][2]       [5][4]
+        // [6]      [1][>] -> [6]      [3/2/1][>]
+        S32 collapse_index = corner_pair.corners[0].segment_index - 1;
+        _snake_move_all_coiled_segments(snake,
+                                        corner_pair.corners[0].segment_index,
+                                        snake->segments[collapse_index].x,
+                                        snake->segments[collapse_index].y);
+        _snake_move_all_coiled_segments(snake,
+                                        uncoiled_after_last_corner_index,
+                                        snake->segments[collapse_index].x,
+                                        snake->segments[collapse_index].y);
+
+        // Unravel the rest of the segments, by moving them according to the current corner.
+        // [5][4]
+        // [6]      [3/2/1][>] -> [6][5][4][3/2/1][>]
+        for (S32 i = after_uncoiled_last_corner_index; i <= corner_pair.corners[1].segment_index; i++) {
+            S32 new_x = snake->segments[i].x;
+            S32 new_y = snake->segments[i].y;
+            adjacent_cell(corner_pair.corners[1].to_head, &new_x, &new_y);
+            adjacent_cell(corner_pair.corners[1].to_tail, &new_x, &new_y);
+            snake->segments[i].x = (S16)(new_x);
+            snake->segments[i].y = (S16)(new_y);
+        }
+
+        return true;
     }
 
     return false;
@@ -585,115 +622,51 @@ bool _snake_reverse_unravel_clamped(Game* game,
                                     S16 first_clamped_segment_before_origin_index) {
     assert(origin_index > first_clamped_segment_before_origin_index);
 
-    // An example unravel
+    // An example reverse unravel
     //
-    // [5][4][3][2]
-    // [6]      [1][>] -> [6][5][4][3/2/1][>]
+    //       [5][4][3][2]       [7][6]
+    // [8][7][6]      [1][>] -> [8][5][4/3][2][1][>]
     //
-    S32 last_corner_index = -1;
-    Direction last_corner_direction_to_head = DIRECTION_NONE;
-    Direction last_corner_direction_to_tail = DIRECTION_NONE;
+    S32 search_start_index = _snake_prev_uncoiled_segment_index(snake, origin_index);
+    UnravelableCornerPair corner_pair =
+        _search_for_unravelable_corner_pair(game,
+                                            snake,
+                                            search_start_index,
+                                            first_clamped_segment_before_origin_index);
 
-    S32 uncoiled_before_origin_index = _snake_prev_uncoiled_segment_index(snake, origin_index);
-    for (S32 i = uncoiled_before_origin_index; i > first_clamped_segment_before_origin_index; i--) {
-        // TODO: Evaluate if snake_segment_direction_to_head() should do this logic.
-        Direction direction_to_head = (i == 0) ? snake->direction : snake_segment_direction_to_head(snake, i);
-        Direction direction_to_tail = snake_segment_direction_to_tail(snake, i);
-
-        // Check if we are a corner
-        DirectionRelationship segment_direction_relationship =
-            direction_relationship(direction_to_head, direction_to_tail);
-        if (segment_direction_relationship == DIRECTION_RELATIONSHIP_CLOCKWISE ||
-            segment_direction_relationship == DIRECTION_RELATIONSHIP_COUNTER_CLOCKWISE) {
-
-            // Did we find a corner that pairs with the last corner for an unravel ?
-            if (direction_relationship(last_corner_direction_to_tail, direction_to_head)
-                    == DIRECTION_RELATIONSHIP_OPPOSITE &&
-                last_corner_direction_to_head == direction_to_tail) {
-
-                // If the final corner has coils, find the last corner by continuing to iterate so
-                // that when we unravel, the range consists of the index first coiled segment of the
-                // first corner to the last coiled index of the last corner.
-                SnakeSegment* prev_segment = _snake_adjacent_segment(snake, i, -1);
-                if (prev_segment &&
-                    snake->segments[i].x == prev_segment->x &&
-                    snake->segments[i].y == prev_segment->y) {
-                    continue;
-                }
-
-                S32 uncoiled_before_last_corner_index =
-                    _snake_prev_uncoiled_segment_index(snake, last_corner_index);
-                if (uncoiled_before_last_corner_index < 0) {
-                    return false;
-                }
-                S32 before_uncoiled_last_corner_index =
-                    _snake_prev_uncoiled_segment_index(snake, uncoiled_before_last_corner_index);
-                if (before_uncoiled_last_corner_index < 0) {
-                    return false;
-                }
-
-                // Collapse 2 segments starting from the first corner into the origin segment.
-                // [5][4][3][2]       [5][4]
-                // [6]      [1][>] -> [6]      [3/2/1][>]
-                S32 collapse_index = last_corner_index - 1;
-                _snake_move_all_coiled_segments(snake,
-                                                last_corner_index,
-                                                snake->segments[collapse_index].x,
-                                                snake->segments[collapse_index].y);
-                _snake_move_all_coiled_segments(snake,
-                                                uncoiled_before_last_corner_index,
-                                                snake->segments[collapse_index].x,
-                                                snake->segments[collapse_index].y);
-
-                // Unravel the rest of the segments, by moving them according to the current corner.
-                // [5][4]
-                // [6]      [3/2/1][>] -> [6][5][4][3/2/1][>]
-                for (S32 j = before_uncoiled_last_corner_index; j >= i; j--) {
-                    S32 new_x = snake->segments[j].x;
-                    S32 new_y = snake->segments[j].y;
-                    adjacent_cell(direction_to_head, &new_x, &new_y);
-                    adjacent_cell(direction_to_tail, &new_x, &new_y);
-                    snake->segments[j].x = (S16)(new_x);
-                    snake->segments[j].y = (S16)(new_y);
-                }
-                return true;
-            } else {
-                // If this segment is the same as the last segment, skip it so that we always
-                // store the first corner we find.
-                SnakeSegment* next_segment = _snake_adjacent_segment(snake, i, 1);
-                if (next_segment &&
-                    snake->segments[i].x == next_segment->x &&
-                    snake->segments[i].y == next_segment->y) {
-                    continue;
-                }
-
-                // Store this corner to see if it matches the next.
-                last_corner_index = i;
-                last_corner_direction_to_head = direction_to_head;
-                last_corner_direction_to_tail = direction_to_tail;
-            }
-        } else if (segment_direction_relationship == DIRECTION_RELATIONSHIP_OPPOSITE) {
-            // If this segment is straight and our last corner is populated, check if the adjacent
-            // square is empty.
-            if (last_corner_direction_to_head != DIRECTION_NONE) {
-                S32 check_x = snake->segments[i].x;
-                S32 check_y = snake->segments[i].y;
-                adjacent_cell(last_corner_direction_to_head, &check_x, &check_y);
-                QueriedObject queried_object = game_query(game, check_x, check_y);
-                if (queried_object.type != QUERIED_OBJECT_TYPE_NONE) {
-                    // This means something is in the way and we wouldn't be able to use this corner
-                    // to unravel.
-                    last_corner_index = -1;
-                    last_corner_direction_to_head = DIRECTION_NONE;
-                    last_corner_direction_to_tail = DIRECTION_NONE;
-                }
-            }
-        } else {
-            assert(!"The snake is broken !");
-            last_corner_index = -1;
-            last_corner_direction_to_head = DIRECTION_NONE;
-            last_corner_direction_to_tail = DIRECTION_NONE;
+    if (corner_pair.corners[0].segment_index > 0) {
+        S32 uncoiled_before_last_corner_index =
+            _snake_prev_uncoiled_segment_index(snake, corner_pair.corners[0].segment_index);
+        if (uncoiled_before_last_corner_index < 0) {
+            return false;
         }
+        S32 before_uncoiled_last_corner_index =
+            _snake_prev_uncoiled_segment_index(snake, uncoiled_before_last_corner_index);
+        if (before_uncoiled_last_corner_index < 0) {
+            return false;
+        }
+
+        // Collapse 2 segments starting from the first corner into the origin segment.
+        S32 collapse_index = corner_pair.corners[0].segment_index - 1;
+        _snake_move_all_coiled_segments(snake,
+                                        corner_pair.corners[0].segment_index,
+                                        snake->segments[collapse_index].x,
+                                        snake->segments[collapse_index].y);
+        _snake_move_all_coiled_segments(snake,
+                                        uncoiled_before_last_corner_index,
+                                        snake->segments[collapse_index].x,
+                                        snake->segments[collapse_index].y);
+
+        // Unravel the rest of the segments, by moving them according to the current corner.
+        for (S32 i = before_uncoiled_last_corner_index; i >= corner_pair.corners[1].segment_index; i--) {
+            S32 new_x = snake->segments[i].x;
+            S32 new_y = snake->segments[i].y;
+            adjacent_cell(corner_pair.corners[1].to_head, &new_x, &new_y);
+            adjacent_cell(corner_pair.corners[1].to_tail, &new_x, &new_y);
+            snake->segments[i].x = (S16)(new_x);
+            snake->segments[i].y = (S16)(new_y);
+        }
+        return true;
     }
 
     return false;
@@ -838,155 +811,105 @@ void _snake_move(Snake* snake, Game* game) {
 }
 
 bool _snake_lunge(Snake* snake, Game* game) {
-    bool lunged = false;
+    {
+        S32 next_head_x = snake->segments[0].x;
+        S32 next_head_y = snake->segments[0].y;
+        adjacent_cell(snake->direction, &next_head_x, &next_head_y);
+        QueriedObject queried_object = game_query(game, next_head_x, next_head_y);
+        if (queried_object.type == QUERIED_OBJECT_TYPE_WALL ||
+            queried_object.type == QUERIED_OBJECT_TYPE_SNAKE) {
+            return false;
+        }
+    }
 
-    // TODO: Consolidate with unraveling code.
-    S32 last_corner_index = -1;
-    Direction last_corner_direction_to_head = DIRECTION_NONE;
-    Direction last_corner_direction_to_tail = DIRECTION_NONE;
-
+    S32 first_clamped_segment = snake->length;
     for (S32 i = 0; i < snake->length; i++) {
         if (snake->segments[i].clamped) {
+            first_clamped_segment = i;
             break;
         }
+    }
 
-        // TODO: Evaluate if snake_segment_direction_to_head() should do this logic.
-        Direction direction_to_head = (i == 0) ? snake->direction : snake_segment_direction_to_head(snake, i);
-        Direction direction_to_tail = snake_segment_direction_to_tail(snake, i);
-
-        DirectionRelationship segment_direction_relationship =
-            direction_relationship(direction_to_head, direction_to_tail);
-
-        if (segment_direction_relationship == DIRECTION_RELATIONSHIP_CLOCKWISE ||
-            segment_direction_relationship == DIRECTION_RELATIONSHIP_COUNTER_CLOCKWISE) {
-
-            // Did we find a corner that pairs with the last corner for an unravel ?
-            if (direction_relationship(last_corner_direction_to_tail, direction_to_head)
-                    == DIRECTION_RELATIONSHIP_OPPOSITE &&
-                last_corner_direction_to_head == direction_to_tail) {
-
-                // If the final corner has coils, find the last corner by continuing to iterate so
-                // that when we unravel, the range consists of the index first coiled segment of the
-                // first corner to the last coiled index of the last corner.
-                SnakeSegment* next_segment = _snake_adjacent_segment(snake, i, 1);
-                if (next_segment &&
-                    snake->segments[i].x == next_segment->x &&
-                    snake->segments[i].y == next_segment->y) {
-                    continue;
-                }
-
-                S32 uncoiled_after_last_corner_index =
-                    _snake_next_uncoiled_segment_index(snake, last_corner_index);
-                if (uncoiled_after_last_corner_index < 0) {
-                    break;
-                }
-                S32 after_uncoiled_last_corner_index =
-                    _snake_next_uncoiled_segment_index(snake, uncoiled_after_last_corner_index);
-                if (after_uncoiled_last_corner_index < 0) {
-                    break;
-                }
-
-                // Collapse 2 segments starting from the first corner into the origin segment.
-                // [5][4][3][2]       [5][4]
-                // [6]      [1][>] -> [6]      [3/2/1][>]
-                S32 collapse_index = last_corner_index - 1;
-                _snake_move_all_coiled_segments(snake,
-                                                last_corner_index,
-                                                snake->segments[collapse_index].x,
-                                                snake->segments[collapse_index].y);
-                _snake_move_all_coiled_segments(snake,
-                                                uncoiled_after_last_corner_index,
-                                                snake->segments[collapse_index].x,
-                                                snake->segments[collapse_index].y);
-
-                // Unravel the rest of the segments, by moving them according to the current corner.
-                // [5][4]
-                // [6]      [3/2/1][>] -> [6][5][4][3/2/1][>]
-                for (S32 j = after_uncoiled_last_corner_index; j <= i; j++) {
-                    S32 new_x = snake->segments[j].x;
-                    S32 new_y = snake->segments[j].y;
-                    adjacent_cell(direction_to_head, &new_x, &new_y);
-                    adjacent_cell(direction_to_tail, &new_x, &new_y);
-                    snake->segments[j].x = (S16)(new_x);
-                    snake->segments[j].y = (S16)(new_y);
-                }
-
-                // As long as there is space ahead of the snake, uncoil.
-                bool hit_object = false;
-                for (S32 k = 0; k < 2; k++) {
-                    S32 next_head_x = snake->segments[0].x;
-                    S32 next_head_y = snake->segments[0].y;
-                    adjacent_cell(snake->direction, &next_head_x, &next_head_y);
-
-                    QueriedObject queried_object = game_query(game, next_head_x, next_head_y);
-                    if (queried_object.type == QUERIED_OBJECT_TYPE_ITEM &&
-                        queried_object.item == ITEM_TYPE_TACO) {
-                        _snake_eat_taco(game, snake, next_head_x, next_head_y);
-                    } else if (queried_object.type != QUERIED_OBJECT_TYPE_NONE) {
-                        hit_object = true;
-                        break;
-                    }
-
-                    _snake_uncoil_clamped(snake, 0, (S16)(i), next_head_x, next_head_y);
-                }
-
-                lunged = true;
-
-                if (hit_object) {
-                    break;
-                }
-
-                // Reset the loop to before the original corner to see if we created another corner
-                // at the previous element
-                //
-                // > [4][3]
-                //   [5][2]    ->  > [5][4]
-                //[7][6][1][>]    [7][6][3][2][1][>]
-                //
-                i = last_corner_index - 2;
-                if (i < 0) {
-                    i = -1;
-                }
-
-                last_corner_index = -1;
-                last_corner_direction_to_head = DIRECTION_NONE;
-                last_corner_direction_to_tail = DIRECTION_NONE;
-            } else if (direction_to_tail == opposite_direction(snake->direction)) {
-                // If this segment is the same as the last segment, skip it so that we always
-                // store the first corner we find.
-                SnakeSegment* prev_segment = _snake_adjacent_segment(snake, i, -1);
-                if (prev_segment &&
-                    snake->segments[i].x == prev_segment->x &&
-                    snake->segments[i].y == prev_segment->y) {
-                    continue;
-                }
-
-                // Store this corner to see if it matches the next.
-                last_corner_index = i;
-                last_corner_direction_to_head = direction_to_head;
-                last_corner_direction_to_tail = direction_to_tail;
+    bool lunged = false;
+    S32 search_start_index = 0;
+    UnravelableCornerPair corner_pair = {0};
+    while (true) {
+        corner_pair = _search_for_unravelable_corner_pair(game,
+                                                          snake,
+                                                          search_start_index,
+                                                          first_clamped_segment);
+        if (corner_pair.corners[0].segment_index > 0) {
+            S32 uncoiled_after_last_corner_index =
+                _snake_next_uncoiled_segment_index(snake, corner_pair.corners[0].segment_index);
+            if (uncoiled_after_last_corner_index < 0) {
+                break;
             }
-        } else if(segment_direction_relationship == DIRECTION_RELATIONSHIP_OPPOSITE) {
-            // If this segment is straight and our last corner is populated, check if the adjacent
-            // square is empty.
-            if (last_corner_direction_to_head != DIRECTION_NONE) {
-                S32 check_x = snake->segments[i].x;
-                S32 check_y = snake->segments[i].y;
-                adjacent_cell(last_corner_direction_to_head, &check_x, &check_y);
-                QueriedObject queried_object = game_query(game, check_x, check_y);
-                if (queried_object.type != QUERIED_OBJECT_TYPE_NONE) {
-                    // This means something is in the way and we wouldn't be able to use this corner
-                    // to unravel.
-                    last_corner_index = -1;
-                    last_corner_direction_to_head = DIRECTION_NONE;
-                    last_corner_direction_to_tail = DIRECTION_NONE;
+            S32 after_uncoiled_last_corner_index =
+                _snake_next_uncoiled_segment_index(snake, uncoiled_after_last_corner_index);
+            if (after_uncoiled_last_corner_index < 0) {
+                break;
+            }
+
+            // Collapse 2 segments starting from the first corner into the origin segment.
+            // [5][4][3][2]       [5][4]
+            // [6]      [1][>] -> [6]      [3/2/1][>]
+            S32 collapse_index = corner_pair.corners[0].segment_index - 1;
+            _snake_move_all_coiled_segments(snake,
+                                            corner_pair.corners[0].segment_index,
+                                            snake->segments[collapse_index].x,
+                                            snake->segments[collapse_index].y);
+            _snake_move_all_coiled_segments(snake,
+                                            uncoiled_after_last_corner_index,
+                                            snake->segments[collapse_index].x,
+                                            snake->segments[collapse_index].y);
+
+            // Unravel the rest of the segments, by moving them according to the current corner.
+            // [5][4]
+            // [6]      [3/2/1][>] -> [6][5][4][3/2/1][>]
+            for (S32 i = after_uncoiled_last_corner_index; i <= corner_pair.corners[1].segment_index; i++) {
+                S32 new_x = snake->segments[i].x;
+                S32 new_y = snake->segments[i].y;
+                adjacent_cell(corner_pair.corners[1].to_head, &new_x, &new_y);
+                adjacent_cell(corner_pair.corners[1].to_tail, &new_x, &new_y);
+                snake->segments[i].x = (S16)(new_x);
+                snake->segments[i].y = (S16)(new_y);
+            }
+
+            // As long as there is space ahead of the snake, uncoil.
+            bool hit_object = false;
+            for (S32 k = 0; k < 2; k++) {
+                S32 next_head_x = snake->segments[0].x;
+                S32 next_head_y = snake->segments[0].y;
+                adjacent_cell(snake->direction, &next_head_x, &next_head_y);
+
+                QueriedObject queried_object = game_query(game, next_head_x, next_head_y);
+                if (queried_object.type == QUERIED_OBJECT_TYPE_ITEM &&
+                    queried_object.item == ITEM_TYPE_TACO) {
+                    _snake_eat_taco(game, snake, next_head_x, next_head_y);
+                } else if (queried_object.type != QUERIED_OBJECT_TYPE_NONE) {
+                    hit_object = true;
+                    break;
                 }
+
+                _snake_uncoil_clamped(snake,
+                                      0,
+                                      (S16)(corner_pair.corners[1].segment_index),
+                                      next_head_x,
+                                      next_head_y);
+            }
+
+            lunged = true;
+
+            if (hit_object) {
+                break;
+            }
+
+            search_start_index = corner_pair.corners[0].segment_index - 1;
+            if (search_start_index < 0) {
+                search_start_index = 0;
             }
         } else {
-            assert(!"The snake is broken !");
-            last_corner_index = -1;
-            last_corner_direction_to_head = DIRECTION_NONE;
-            last_corner_direction_to_tail = DIRECTION_NONE;
+            break;
         }
     }
 
