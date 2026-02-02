@@ -5,9 +5,10 @@
     #include <handleapi.h>
 #define WINDOWS_MAP_SUFFIX_MATCHER "*.temap"
 #define strdup _strdup
+#else
+#include <dirent.h>
 #endif
 
-#include <dirent.h>
 #include <string.h>
 #include <assert.h>
 #include <stdlib.h>
