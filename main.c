@@ -40,7 +40,8 @@ typedef enum {
 typedef enum {
     SESSION_TYPE_SINGLE_PLAYER,
     SESSION_TYPE_SERVER,
-    SESSION_TYPE_CLIENT
+    SESSION_TYPE_CLIENT,
+    SESSION_TYPE_DEMO_PLAYBACK,
 } SessionType;
 
 typedef struct {
@@ -83,6 +84,7 @@ FILE* create_demo_file(void) {
         return NULL;
     }
 
+    // TODO: Use snprintf
     // Create demos directory
     char path[PATH_MAX] = {0};
     strcat(path, pref_path);
@@ -659,6 +661,7 @@ int main(S32 argc, char** argv) {
     const char* window_title = NULL;
     const char* player_name = NULL;
     bool record_demo = false;
+    FILE* demo_file;
 
     SessionType session_type = SESSION_TYPE_SINGLE_PLAYER;
     for (int i = 1; i < argc; i++) {
@@ -705,12 +708,30 @@ int main(S32 argc, char** argv) {
         } else if (strcmp(flag, "-r") == 0){
             record_demo = true;
         } else if (strcmp(flag, "-n") == 0) {
-            
             i++;
             if (i < argc) {
                 player_name = argv[i];
             } else {
                 puts("Expected player name argument");
+                return EXIT_FAILURE;
+            }
+        } else if (strcomp(flag, "-p") == 0) {
+            if (session_type != SESSION_TYPE_SINGLE_PLAYER) {
+                puts("Expected one mode argument, but received multiple.");
+                return EXIT_FAILURE;
+            }
+
+            session_type = SESSION_TYPE_DEMO_PLAYBACK;
+
+            i++;
+            if (i < argc) {
+                demo_file = fopen(argv[i], "rb");
+                if (demo_file == NULL) {
+                    fprintf(stderr, "Failed to open demo file: %s\n", strerror(errno));
+                    return NULL;
+                }
+            } else {
+                puts("Expected demo file path argument for playback mode.");
                 return EXIT_FAILURE;
             }
         } else {
@@ -719,11 +740,13 @@ int main(S32 argc, char** argv) {
         }
     }
 
-    if (record_demo && session_type == SESSION_TYPE_CLIENT) {
-        puts("-r argument only compatible in server or single player modes");
-        return EXIT_FAILURE;
+    if (record_demo && (session_type == SESSION_TYPE_CLIENT || session_type == SESSION_TYPE_DEMO_PLAYBACK)) {
+        record_demo = false;
+        puts("-r argument only compatible in server or single player modes. Ignoring");
     }
 
+    
+    
     //
     // Init game and level
     //
