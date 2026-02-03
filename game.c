@@ -419,7 +419,7 @@ void _assert_snake_connected(Snake* original_snake, Snake* final_snake) {
             printf("Detected disconnect snake\n");
             printf("original snake: %d\n", original_snake->length);
             _print_snake_segments(original_snake);
-            printf("final snake: %d\n", final_snake->length);
+            printf("final snake: %d %s\n", final_snake->length, snake_color_string(final_snake->color));
             _print_snake_segments(final_snake);
             assert(check_tail != DIRECTION_NONE && check_head != check_tail);
         }
@@ -559,7 +559,7 @@ bool _snake_unravel_clamped(Game* game,
                             Snake* snake,
                             S16 origin_index,
                             S16 first_clamped_segment_after_origin_index) {
-    assert(origin_index < first_clamped_segment_after_origin_index);
+    assert(origin_index <= first_clamped_segment_after_origin_index);
 
     // An example unravel
     //
@@ -1143,15 +1143,24 @@ MoveResult _game_object_push_impl(Game* game, PushState* push_state, S32 x, S32 
             return _taco_push(game, push_state, x, y, direction);
         }
         break;
-    case QUERIED_OBJECT_TYPE_SNAKE:
+    case QUERIED_OBJECT_TYPE_SNAKE: {
         if (push_state->original_snake_index == queried_object.snake.index) {
             return MOVE_OBJECT_FAIL;
         }
-        return snake_segment_push(game,
-                                  push_state,
-                                  queried_object.snake.index,
-                                  queried_object.snake.segment_index,
-                                  direction);
+
+        Snake original_snake = {0};
+        snake_clone(&original_snake, game->snakes + queried_object.snake.index);
+
+        MoveResult result = snake_segment_push(game,
+                                               push_state,
+                                               queried_object.snake.index,
+                                               queried_object.snake.segment_index,
+                                               direction,
+                                               &original_snake);
+        _assert_snake_connected(&original_snake, game->snakes + queried_object.snake.index);
+        snake_destroy(&original_snake);
+        return result;
+    }
     case QUERIED_OBJECT_TYPE_WALL:
         return MOVE_OBJECT_FAIL;
     default:
@@ -1406,17 +1415,19 @@ MoveResult _snake_segment_slink(Game* game, S32 snake_index, S32 segment_index, 
 
 // Push guarantees that if it returns true, the segment that was pushed moved and there is no
 // segment at that cell.
-MoveResult snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 segment_index, Direction direction) {
+MoveResult snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 segment_index, Direction direction, Snake* original_snake) {
     // The snake head is not pushable, also if the snake is constricting towards the push, then the
     // push has no effect.
     if (segment_index == 0 ||
         snake_segment_is_constricting_towards(game, snake_index, segment_index, direction)) {
+        _assert_snake_connected(original_snake, game->snakes + snake_index);
         return MOVE_OBJECT_FAIL;
     }
 
     Snake* snake = game->snakes + snake_index;
     SnakeSegment* segment_to_move = snake->segments + segment_index;
     if (segment_to_move->clamped) {
+        _assert_snake_connected(original_snake, game->snakes + snake_index);
         return MOVE_OBJECT_FAIL;
     }
 
@@ -1442,18 +1453,23 @@ MoveResult snake_segment_push(Game* game, PushState* push_state, S32 snake_index
     //
     if (segment_index == 0) {
         if (direction == direction_to_head) {
+            _assert_snake_connected(original_snake, game->snakes + snake_index);
             return MOVE_OBJECT_FAIL;
         }
         if (direction == direction_to_tail) {
-            return _snake_segment_slink(game, snake_index, segment_index, false);
+            MoveResult result = _snake_segment_slink(game, snake_index, segment_index, false);
+            _assert_snake_connected(original_snake, game->snakes + snake_index);
+            return result;
         }
 
         if (!directions_are_perpendicular(direction, direction_to_tail)) {
-            return _pass_along_game_object_push(game,
+            MoveResult result = _pass_along_game_object_push(game,
                                                 push_state,
                                                 segment_to_move->x,
                                                 segment_to_move->y,
                                                 direction);
+            _assert_snake_connected(original_snake, game->snakes + snake_index);
+            return result;
         }
 
         S32 first_cell_to_check_x = segment_to_move->x;
@@ -1468,13 +1484,16 @@ MoveResult snake_segment_push(Game* game, PushState* push_state, S32 snake_index
                                                                        direction_to_tail);
 
         if (push_result == MOVE_OBJECT_FAIL || push_result == MOVE_OBJECT_PROGRESS) {
+            _assert_snake_connected(original_snake, game->snakes + snake_index);
             return push_result;
         }
 
         SnakeSegmentPosition updated_segment_pos = {0};
         _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
         if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
-            return game_empty_push_result(game, original_segment_pos.current_x, original_segment_pos.current_y);
+            MoveResult result = game_empty_push_result(game, original_segment_pos.current_x, original_segment_pos.current_y);
+            _assert_snake_connected(original_snake, game->snakes + snake_index);
+            return result;
         }
 
         S32 final_cell_move_x = first_cell_to_check_x;
@@ -1490,20 +1509,25 @@ MoveResult snake_segment_push(Game* game, PushState* push_state, S32 snake_index
 
         // Since the first push succeeded, even if we failed, return that we made progress.
         if (push_result == MOVE_OBJECT_FAIL || push_result == MOVE_OBJECT_PROGRESS) {
+            _assert_snake_connected(original_snake, game->snakes + snake_index);
             return MOVE_OBJECT_PROGRESS;
         }
 
         _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
         if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
-            return game_empty_push_result(game, original_segment_pos.current_x, original_segment_pos.current_y);
+            MoveResult result = game_empty_push_result(game, original_segment_pos.current_x, original_segment_pos.current_y);
+            _assert_snake_connected(original_snake, game->snakes + snake_index);
+            return result;
         }
 
         if (!game_empty_at(game, final_cell_move_x, final_cell_move_y)) {
+            _assert_snake_connected(original_snake, game->snakes + snake_index);
             return MOVE_OBJECT_PROGRESS;
         }
 
         segment_to_move->x = (S16)(final_cell_move_x);
         segment_to_move->y = (S16)(final_cell_move_y);
+        _assert_snake_connected(original_snake, game->snakes + snake_index);
         return MOVE_OBJECT_SUCCESS;
     }
 
@@ -1517,11 +1541,13 @@ MoveResult snake_segment_push(Game* game, PushState* push_state, S32 snake_index
     if (segment_is_corner) {
         if (direction == opposite_direction(direction_to_head) ||
             direction == opposite_direction(direction_to_tail)) {
-            return _pass_along_game_object_push(game,
+            MoveResult result = _pass_along_game_object_push(game,
                                                 push_state,
                                                 segment_to_move->x,
                                                 segment_to_move->y,
                                                 direction);
+            _assert_snake_connected(original_snake, game->snakes + snake_index);
+            return result;
         }
 
         S32 first_cell_to_check_x = segment_to_move->x;
@@ -1540,18 +1566,23 @@ MoveResult snake_segment_push(Game* game, PushState* push_state, S32 snake_index
                                                                        direction_to_head);
 
         if (push_result == MOVE_OBJECT_FAIL) {
-            return _snake_segment_slink(game,
-                                        snake_index,
-                                        segment_index,
-                                        direction == direction_to_head);
+            MoveResult result = _snake_segment_slink(game,
+                                                     snake_index,
+                                                     segment_index,
+                                                     direction == direction_to_head);
+            _assert_snake_connected(original_snake, game->snakes + snake_index);
+            return result;
         } else if (push_result == MOVE_OBJECT_PROGRESS) {
+            _assert_snake_connected(original_snake, game->snakes + snake_index);
             return push_result;
         }
 
         SnakeSegmentPosition updated_segment_pos = {0};
         _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
         if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
-            return game_empty_push_result(game, original_segment_pos.current_x, original_segment_pos.current_y);
+            MoveResult result = game_empty_push_result(game, original_segment_pos.current_x, original_segment_pos.current_y);
+            _assert_snake_connected(original_snake, game->snakes + snake_index);
+            return result;
         }
 
         if ((segment_index + 1) < snake->length) {
@@ -1559,11 +1590,13 @@ MoveResult snake_segment_push(Game* game, PushState* push_state, S32 snake_index
             if (next_segment->x == first_cell_to_check_x &&
                 next_segment->y == first_cell_to_check_y) {
                 if (!game_empty_at(game, final_cell_move_x, final_cell_move_y)) {
+                    _assert_snake_connected(original_snake, game->snakes + snake_index);
                     return MOVE_OBJECT_PROGRESS;
                 }
 
                 segment_to_move->x = (S16)(final_cell_move_x);
                 segment_to_move->y = (S16)(final_cell_move_y);
+                _assert_snake_connected(original_snake, game->snakes + snake_index);
                 return MOVE_OBJECT_SUCCESS;
             }
         }
@@ -1578,15 +1611,19 @@ MoveResult snake_segment_push(Game* game, PushState* push_state, S32 snake_index
     //
     if (segment_index == (snake->length - 1)) {
         if (direction == direction_to_tail) {
-            return _pass_along_game_object_push(game,
+            MoveResult result = _pass_along_game_object_push(game,
                                                 push_state,
                                                 segment_to_move->x,
                                                 segment_to_move->y,
                                                 direction);
+            _assert_snake_connected(original_snake, game->snakes + snake_index);
+            return result;
         }
 
         if (direction == direction_to_head) {
-            return _snake_segment_slink(game, snake_index, segment_index, true);
+            MoveResult result = _snake_segment_slink(game, snake_index, segment_index, true);
+            _assert_snake_connected(original_snake, game->snakes + snake_index);
+            return result;
         }
 
         S32 first_cell_to_check_x = segment_to_move->x;
@@ -1600,13 +1637,16 @@ MoveResult snake_segment_push(Game* game, PushState* push_state, S32 snake_index
                                                                        direction,
                                                                        direction_to_head);
         if (push_result == MOVE_OBJECT_FAIL || push_result == MOVE_OBJECT_PROGRESS) {
+            _assert_snake_connected(original_snake, game->snakes + snake_index);
             return push_result;
         }
 
         SnakeSegmentPosition updated_segment_pos = {0};
         _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
         if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
-            return game_empty_push_result(game, original_segment_pos.current_x, original_segment_pos.current_y);
+            MoveResult result = game_empty_push_result(game, original_segment_pos.current_x, original_segment_pos.current_y);
+            _assert_snake_connected(original_snake, game->snakes + snake_index);
+            return result;
         }
 
         S32 final_cell_move_x = first_cell_to_check_x;
@@ -1621,20 +1661,25 @@ MoveResult snake_segment_push(Game* game, PushState* push_state, S32 snake_index
 
         // Even if this push failed, since the first push succeed, return that we made progress.
         if (push_result == MOVE_OBJECT_FAIL || push_result == MOVE_OBJECT_PROGRESS) {
+            _assert_snake_connected(original_snake, game->snakes + snake_index);
             return MOVE_OBJECT_PROGRESS;
         }
 
         _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
         if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
-            return game_empty_push_result(game, original_segment_pos.current_x, original_segment_pos.current_y);
+            MoveResult result = game_empty_push_result(game, original_segment_pos.current_x, original_segment_pos.current_y);
+            _assert_snake_connected(original_snake, game->snakes + snake_index);
+            return result;
         }
 
         if (!game_empty_at(game, final_cell_move_x, final_cell_move_y)) {
+            _assert_snake_connected(original_snake, game->snakes + snake_index);
             return MOVE_OBJECT_PROGRESS;
         }
 
         segment_to_move->x = (S16)(final_cell_move_x);
         segment_to_move->y = (S16)(final_cell_move_y);
+        _assert_snake_connected(original_snake, game->snakes + snake_index);
         return MOVE_OBJECT_SUCCESS;
     }
 
@@ -1648,11 +1693,13 @@ MoveResult snake_segment_push(Game* game, PushState* push_state, S32 snake_index
     if (!segment_is_corner) {
         // Handling exiting early for case 3.
         if (direction == direction_to_head || direction == direction_to_tail) {
-            return _pass_along_game_object_push(game,
+            MoveResult result = _pass_along_game_object_push(game,
                                                 push_state,
                                                 segment_to_move->x,
                                                 segment_to_move->y,
                                                 direction);
+            _assert_snake_connected(original_snake, game->snakes + snake_index);
+            return result;
         }
     }
 
@@ -1667,13 +1714,16 @@ MoveResult snake_segment_push(Game* game, PushState* push_state, S32 snake_index
                                                                    direction,
                                                                    direction_to_head);
     if (push_result == MOVE_OBJECT_FAIL || push_result == MOVE_OBJECT_PROGRESS) {
+        _assert_snake_connected(original_snake, game->snakes + snake_index);
         return push_result;
     }
 
     SnakeSegmentPosition updated_segment_pos = {0};
     _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
     if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
-        return game_empty_push_result(game, original_segment_pos.current_x, original_segment_pos.current_y);
+        MoveResult result = game_empty_push_result(game, original_segment_pos.current_x, original_segment_pos.current_y);
+        _assert_snake_connected(original_snake, game->snakes + snake_index);
+        return result;
     }
 
     S32 second_cell_to_check_x = first_cell_to_check_x;
@@ -1689,12 +1739,15 @@ MoveResult snake_segment_push(Game* game, PushState* push_state, S32 snake_index
 
     // Even if this push failed, since the first push succeed, return that we made progress.
     if (push_result == MOVE_OBJECT_FAIL || push_result == MOVE_OBJECT_PROGRESS) {
+        _assert_snake_connected(original_snake, game->snakes + snake_index);
         return MOVE_OBJECT_PROGRESS;
     }
 
     _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
     if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
-        return game_empty_push_result(game, original_segment_pos.current_x, original_segment_pos.current_y);
+        MoveResult result = game_empty_push_result(game, original_segment_pos.current_x, original_segment_pos.current_y);
+        _assert_snake_connected(original_snake, game->snakes + snake_index);
+        return result;
     }
 
     S32 final_cell_move_x = first_cell_to_check_x;
@@ -1710,17 +1763,21 @@ MoveResult snake_segment_push(Game* game, PushState* push_state, S32 snake_index
 
     // Even if this push failed, since the first push succeed, return that we made progress.
     if (push_result == MOVE_OBJECT_FAIL || push_result == MOVE_OBJECT_PROGRESS) {
+        _assert_snake_connected(original_snake, game->snakes + snake_index);
         return MOVE_OBJECT_PROGRESS;
     }
 
     _track_snake_segment_position(snake, segment_index, &updated_segment_pos);
     if (!_snake_segment_positions_equal(&original_segment_pos, &updated_segment_pos)) {
-        return game_empty_push_result(game, original_segment_pos.current_x, original_segment_pos.current_y);
+        MoveResult result = game_empty_push_result(game, original_segment_pos.current_x, original_segment_pos.current_y);
+        _assert_snake_connected(original_snake, game->snakes + snake_index);
+        return result;
     }
 
     if (!game_empty_at(game, first_cell_to_check_x, first_cell_to_check_y) ||
         !game_empty_at(game, second_cell_to_check_x, second_cell_to_check_y) ||
         !game_empty_at(game, final_cell_move_x, final_cell_move_y)) {
+        _assert_snake_connected(original_snake, game->snakes + snake_index);
         return MOVE_OBJECT_PROGRESS;
     }
 
@@ -1735,8 +1792,6 @@ MoveResult snake_segment_push(Game* game, PushState* push_state, S32 snake_index
                                    snake,
                                    (S16)(segment_index),
                                    (S16)(clamped_segment_index_after))) {
-            segment_to_move->x = (S16)(second_cell_to_check_x);
-            segment_to_move->y = (S16)(second_cell_to_check_y);
             _snake_uncoil_clamped(snake,
                                   (S16)(segment_index),
                                   (S16)(clamped_segment_index_after),
@@ -1745,12 +1800,14 @@ MoveResult snake_segment_push(Game* game, PushState* push_state, S32 snake_index
             _snake_uncoil_clamped(snake,
                                   (S16)(segment_index),
                                   (S16)(clamped_segment_index_after),
-                                  second_cell_to_check_x,
-                                  second_cell_to_check_y);
+                                  final_cell_move_x,
+                                  final_cell_move_y);
+            _assert_snake_connected(original_snake, game->snakes + snake_index);
             return MOVE_OBJECT_SUCCESS;
         }
         // TODO: Do we also _snake_reverse_unravel_clamped() ?
 
+        _assert_snake_connected(original_snake, game->snakes + snake_index);
         return MOVE_OBJECT_FAIL;
     }
 
@@ -1758,6 +1815,7 @@ MoveResult snake_segment_push(Game* game, PushState* push_state, S32 snake_index
     segment_to_move->y = (S16)(second_cell_to_check_y);
     _snake_drag_segments(snake, segment_index, first_cell_to_check_x, first_cell_to_check_y);
     _snake_drag_segments(snake, segment_index, final_cell_move_x, final_cell_move_y);
+    _assert_snake_connected(original_snake, game->snakes + snake_index);
     return MOVE_OBJECT_SUCCESS;
 }
 

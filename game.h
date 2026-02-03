@@ -97,7 +97,7 @@ size_t game_deserialize(void * buffer, size_t size, Game * out);
 
 void snake_constrict(Game* game, S32 snake_index);
 
-MoveResult snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 segment_index, Direction direction);
+MoveResult snake_segment_push(Game* game, PushState* push_state, S32 snake_index, S32 segment_index, Direction direction, Snake* original_snake);
 MoveResult snake_segment_constrict(Game* game, S32 snake_index, S32 segment_index, bool left);
 
 bool snake_segment_is_constricting_towards(Game* game, S32 snake_index, S32 segment_index, Direction from);
