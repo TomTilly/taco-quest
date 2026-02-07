@@ -319,15 +319,17 @@ void _print_game(Game* game) {
 }
 
 void _snake_eat_taco(Game* game, Snake* snake, S32 new_x, S32 new_y) {
+    assert(snake->length < snake->capacity);
     // Grow the snake length by consuming the taco.
     items_set_cell(&game->items, new_x, new_y, ITEM_TYPE_EMPTY);
+
     snake->length++;
+
     // Shift all segments one over toward the tail. The new segment is added where the head is.
-    for ( int i = snake->length - 1; i >= 1; i-- ) {
+    for ( int i = (snake->length - 1); i >= 1; i-- ) {
         snake->segments[i] = snake->segments[i - 1];
     }
-    // The new segment has max health.
-    snake->segments[1].health = snake->segments[0].health;
+
     // The head is moved into the position where the taco was.
     snake->segments[0].x = (S16)(new_x);
     snake->segments[0].y = (S16)(new_y);
@@ -932,7 +934,7 @@ bool game_init(Game* game, const char* map_filepath) {
         return false;
     }
 
-    int32_t snake_capacity = game->map.width * game->map.height;
+    S32 snake_capacity = game->map.width * game->map.height;
     for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
         if (!snake_init(game->snakes + s, snake_capacity)) {
             return false;
@@ -2698,9 +2700,9 @@ void game_update(Game* game, SnakeAction* snake_actions) {
     }
 
     S32 taco_count = game_count_tacos(game);
-    if ((game->settings.zero_tacos_respawn && taco_count == 0) || !game->settings.zero_tacos_respawn) {
-        for (size_t i = taco_count; i < (size_t)game->settings.taco_count; i++) {
-            game_spawn_taco(game);
+    if (taco_count == 0) {
+        for (size_t i = 0; i < (size_t)game->settings.taco_group_count; i++) {
+            game_spawn_taco_group(game);
         }
     }
 
@@ -2716,47 +2718,62 @@ void game_destroy(Game* game) {
     }
 }
 
-void game_spawn_taco(Game* game) {
-    // If there are no tacos on the map, generate one in an empty cell.
-    int32_t attempts = 0;
-    while (attempts < 10) {
-        int taco_x = (int)(rand() % game->map.width);
-        int taco_y = (int)(rand() % game->map.height);
+void game_spawn_taco_group(Game* game) {
+    S32 min_max_delta = game->settings.max_tacos_per_group - game->settings.min_tacos_per_group;
+    S32 tacos_per_group = game->settings.min_tacos_per_group;
+    if (min_max_delta > 0) {
+        tacos_per_group += (S32)(rand() % min_max_delta);
+    }
 
-        ItemType item_type = items_get_cell(&game->items, taco_x, taco_y);
-        if (item_type == ITEM_TYPE_TACO) {
+    // This can be improved by building an array of available cells around the spot we found that
+    // is at least tacos_per_group in size and letting rand() pick from them.
+
+    // If there are no tacos on the map, generate one in an empty cell.
+    S32 attempts = 0;
+    while (attempts < 10) {
+        S32 starting_x = (S32)(rand() % game->map.width);
+        S32 starting_y = (S32)(rand() % game->map.height);
+
+        QueriedObject queried_object = game_query(game, starting_x, starting_y);
+        if (queried_object.type != QUERIED_OBJECT_TYPE_NONE) {
             attempts++;
             continue;
         }
 
-        GID ground_tile_gid = GetMapTile(&game->map, taco_x, taco_y, MAP_GROUND_LAYER);
+        GID ground_tile_gid = GetMapTile(&game->map, starting_x, starting_y, MAP_GROUND_LAYER);
         if (ground_tile_gid == 0) {
             attempts++;
             continue;
         }
 
-        GID solid_tile_gid = GetMapTile(&game->map, taco_x, taco_y, MAP_SOLID_LAYER);
-        if (solid_tile_gid != 0) {
-            attempts++;
-            continue;
-        }
+        S32 group_spawn_attempts = 0;
+        S32 spawned_tacos = 1;
+        items_set_cell(&game->items, starting_x, starting_y, ITEM_TYPE_TACO);
 
-        bool spawned_on_snake = false;
-        for (S32 s = 0; s < MAX_SNAKE_COUNT && !spawned_on_snake; s++) {
-            for (S32 e = 0; e < game->snakes[s].length; e++) {
-                if (game->snakes[s].segments[e].x == taco_x &&
-                    game->snakes[s].segments[e].y == taco_y) {
-                    spawned_on_snake = true;
-                    break;
-                }
+        while (spawned_tacos < tacos_per_group &&
+               group_spawn_attempts < 10) {
+            S32 try_delta_x = (S32)(rand() % 5) - 2;
+            S32 try_delta_y = (S32)(rand() % 5) - 2;
+
+            S32 try_x = starting_x + try_delta_x;
+            S32 try_y = starting_y + try_delta_y;
+
+            queried_object = game_query(game, try_x, try_y);
+            if (queried_object.type != QUERIED_OBJECT_TYPE_NONE) {
+                group_spawn_attempts++;
+                continue;
             }
-        }
-        if (spawned_on_snake) {
-            attempts++;
-            continue;
+
+            ground_tile_gid = GetMapTile(&game->map, try_x, try_y, MAP_GROUND_LAYER);
+            if (ground_tile_gid == 0) {
+                group_spawn_attempts++;
+                continue;
+            }
+
+            items_set_cell(&game->items, try_x, try_y, ITEM_TYPE_TACO);
+            spawned_tacos++;
         }
 
-        items_set_cell(&game->items, taco_x, taco_y, ITEM_TYPE_TACO);
         break;
     }
 }

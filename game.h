@@ -56,10 +56,11 @@ typedef struct {
     bool enable_chomping;
     bool enable_constricting;
     bool head_invincible;
-    bool zero_tacos_respawn;
     S32 segment_health;
     S32 starting_length;
-    S32 taco_count;
+    S32 taco_group_count;
+    S32 min_tacos_per_group;
+    S32 max_tacos_per_group;
     S32 chomp_ticks;
     S32 tick_ms;
     S32 wait_to_start_ms;
@@ -89,7 +90,7 @@ S32 game_query_for_snake_at(Game* game, S32 x, S32 y);
 void game_update(Game* game, SnakeAction* snake_actions);
 void game_destroy(Game* game);
 
-void game_spawn_taco(Game* game);
+void game_spawn_taco_group(Game* game);
 S32 game_count_tacos(Game* game);
 
 size_t game_serialize(const Game* game, void* buffer, size_t buffer_size);
