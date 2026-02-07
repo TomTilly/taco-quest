@@ -108,21 +108,24 @@ bool packet_send(NetSocket* socket, const Packet* packet) {
     memcpy(buf + sizeof(packet->header), packet->payload, packet->header.payload_size);
 
     const char* timestamp_str = get_timestamp();
-    int bytes_sent = net_send(socket, buf, buf_size);
-
-    if (bytes_sent > 0) {
-        net_action_log(timestamp_str,
-                       "SEND",
-                       buf_size,
-                       bytes_sent,
-                       packet->header.sequence,
-                       packet_type_description(packet->header.type));
-    } else if (bytes_sent == -1) {
-        free(buf);
-        return false;
+    int total_bytes_sent = 0;
+    while (total_bytes_sent < buf_size) {
+        int bytes_sent = net_send(socket, buf, buf_size);
+        if (bytes_sent > 0) {
+            net_action_log(timestamp_str,
+                           "SEND",
+                           buf_size,
+                           bytes_sent,
+                           packet->header.sequence,
+                           packet_type_description(packet->header.type));
+            total_bytes_sent += bytes_sent;
+        } else if (bytes_sent == -1) {
+            free(buf);
+            return false;
+        }
     }
 
-    assert(bytes_sent == buf_size);
+    assert(total_bytes_sent == buf_size);
 
     free(buf);
     return true;
