@@ -839,10 +839,10 @@ bool _snake_lunge(Snake* snake, Game* game) {
                                                           search_start_index,
                                                           first_clamped_segment);
         if (corner_pair.corners[0].segment_index > 0) {
-            // Skip matches that are not towards the direction we're facing.
+            // Stop iterating when we reach a corner pair that goes away from our direction.
             if (corner_pair.corners[1].to_head != snake->direction) {
                 search_start_index = corner_pair.corners[1].segment_index;
-                continue;
+                break;
             }
 
             S32 uncoiled_after_last_corner_index =
