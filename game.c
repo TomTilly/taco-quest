@@ -1566,12 +1566,31 @@ MoveResult snake_segment_push(Game* game, PushState* push_state, S32 snake_index
                                                                        direction_to_head);
 
         if (push_result == MOVE_OBJECT_FAIL) {
-            MoveResult result = _snake_segment_slink(game,
-                                                     snake_index,
-                                                     segment_index,
-                                                     direction == direction_to_head);
-            _assert_snake_connected(original_snake, game->snakes + snake_index);
-            return result;
+            // Attempt to slink towards either the head or tail based on the push direction.
+            if (direction == direction_to_head) {
+                //
+                // ..14.
+                // ..23.
+                // ..^..
+                MoveResult result = _snake_segment_slink(game,
+                                                         snake_index,
+                                                         segment_index,
+                                                         true);
+                _assert_snake_connected(original_snake, game->snakes + snake_index);
+                return result;
+            } else if (direction == direction_to_tail) {
+                //
+                // ..14.
+                // ..23.
+                // ...^.
+                MoveResult result = _snake_segment_slink(game,
+                                                         snake_index,
+                                                         segment_index,
+                                                         false);
+                _assert_snake_connected(original_snake, game->snakes + snake_index);
+                return result;
+            }
+            return push_result;
         } else if (push_result == MOVE_OBJECT_PROGRESS) {
             _assert_snake_connected(original_snake, game->snakes + snake_index);
             return push_result;
