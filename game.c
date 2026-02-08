@@ -1357,8 +1357,8 @@ MoveResult _snake_segment_slink(Game* game, S32 snake_index, S32 segment_index, 
     S32 current_index = segment_index + iter;
     // We intentionally use 0 so that the head does not get slinked since we do not want the head
     // being pushed around.
-    S32 past_last_index = towards_head ? 0 : snake->length;
-    while (current_index != past_last_index) {
+    S32 last_index = towards_head ? 0 : (snake->length - 1);
+    while (current_index != last_index) {
         SnakeSegment* current_segment = snake->segments + current_index;
         SnakeSegment* next_segment = snake->segments + current_index + iter;
 
