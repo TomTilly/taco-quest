@@ -61,7 +61,9 @@ typedef struct {
     S32 taco_group_count;
     S32 min_tacos_per_group;
     S32 max_tacos_per_group;
-    S32 chomp_ticks;
+    S32 chomp_cooldown_ticks;
+    S32 tacos_per_chomp;
+    S32 max_chomps;
     S32 tick_ms;
     S32 wait_to_start_ms;
 } GameSettings;

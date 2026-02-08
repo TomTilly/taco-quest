@@ -97,8 +97,11 @@ typedef struct {
     S32 length;
     S32 capacity; // I hate STL
     Direction direction;
+    S8 tacos_for_chomp;
+    S8 chomp_count;
     SnakeChompState chomp_state;
     S8 chomp_cooldown;
+    bool chomp_canceled;
     S8 kill_damage_cooldown;
     SnakeLifeState life_state;
     SnakeConstrictState constrict_state;
@@ -108,6 +111,7 @@ typedef struct {
 typedef struct {
     int count;
     SnakeAction actions[ACTION_BUF_SIZE];
+    bool chomp_reset;
 } ActionBuffer;
 
 bool snake_init(Snake* snake, S32 capacity);
@@ -127,14 +131,16 @@ void snake_draw_head(SDL_Renderer* renderer,
                      S32 cell_size,
                      S32 camera_offset_x,
                      S32 camera_offset_y,
-                     S32 max_segment_health);
+                     S32 max_segment_health,
+                     S32 frame_tick);
 void snake_draw_body(SDL_Renderer* renderer,
                      SDL_Texture* texture,
                      Snake* snake,
                      S32 cell_size,
                      S32 camera_offset_x,
                      S32 camera_offset_y,
-                     S32 max_segment_health);
+                     S32 max_segment_health,
+                     S32 frame_tick);
 
 size_t snake_serialize(const Snake* snake, void * buffer, size_t buffer_size);
 size_t snake_deserialize(void * buffer, size_t size, Snake* out);

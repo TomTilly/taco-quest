@@ -49,6 +49,7 @@ typedef struct {
     Game game;
     SnakeActionKeyState prev_action_key_state;
     SnakeAction snake_actions;
+    SnakeAction prev_snake_actions;
 } AppStateGameClient;
 
 static int __tick;
@@ -211,7 +212,8 @@ bool draw_game(Game* game,
                SDL_Texture* tileset_texture,
                S32 cell_size,
                S32 camera_offset_x,
-               S32 camera_offset_y) {
+               S32 camera_offset_y,
+               S32 frame_tick) {
 
     // Draw level
     for (Uint8 l = 0; l < game->map.num_layers; l++) {
@@ -282,7 +284,8 @@ bool draw_game(Game* game,
                         cell_size,
                         camera_offset_x,
                         camera_offset_y,
-                        game->settings.segment_health);
+                        game->settings.segment_health,
+                        frame_tick);
     }
 
     for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
@@ -296,7 +299,8 @@ bool draw_game(Game* game,
                         cell_size,
                         camera_offset_x,
                         camera_offset_y,
-                        game->settings.segment_health);
+                        game->settings.segment_health,
+                        frame_tick);
     }
 
     return true;
@@ -343,6 +347,12 @@ void app_game_server_update(AppStateGameServer* app_game_server,
         if (app_game_server->snake_actions[i] != SNAKE_ACTION_NONE) {
             action_buffer_add(app_game_server->action_buffers + i, app_game_server->snake_actions[i]);
         }
+
+        // Special case, where we need to detect when chomping is let go within a tick.
+        if (app_game_server->game.snakes[i].chomp_state != SNAKE_CHOMP_STATE_NONE &&
+            (app_game_server->snake_actions[i] & SNAKE_ACTION_CHOMP) == 0) {
+            app_game_server->game.snakes[i].chomp_canceled = true;
+        }
     }
 
     if (app_game_server->game.state == GAME_STATE_WAITING) {
@@ -359,6 +369,7 @@ void app_game_server_update(AppStateGameServer* app_game_server,
             if (!app_game_server->game.settings.enable_chomping) {
                 snake_actions[i] &= ~SNAKE_ACTION_CHOMP;
             }
+
             if (!app_game_server->game.settings.enable_constricting) {
                 snake_actions[i] &= ~(SNAKE_ACTION_CONSTRICT_LEFT | SNAKE_ACTION_CONSTRICT_RIGHT);
             }
@@ -669,7 +680,6 @@ int main(S32 argc, char** argv) {
         } else if (strcmp(flag, "-r") == 0){
             record_demo = true;
         } else if (strcmp(flag, "-n") == 0) {
-            
             i++;
             if (i < argc) {
                 player_name = argv[i];
@@ -782,7 +792,9 @@ int main(S32 argc, char** argv) {
     game->settings.min_tacos_per_group = 4;
     game->settings.max_tacos_per_group = 6;
     game->settings.tick_ms = 175;
-    game->settings.chomp_ticks = 5;
+    game->settings.tacos_per_chomp = 0;
+    game->settings.max_chomps = 0;
+    game->settings.chomp_cooldown_ticks = 10;
 
     // Create the server player in the lobby.
     if (session_type == SESSION_TYPE_SINGLE_PLAYER || session_type == SESSION_TYPE_SERVER) {
@@ -915,7 +927,7 @@ int main(S32 argc, char** argv) {
     UICheckBox ui_enable_constricting_checkbox = {15, 60};
     UICheckBox ui_head_invincible_checkbox = {15, 85};
     UISlider ui_segment_health_slider = {
-        .x = 260,
+        .x = 290,
         .y = 60,
         .pixel_width = 150,
         .min = 1,
@@ -923,7 +935,7 @@ int main(S32 argc, char** argv) {
     };
 
     UISlider ui_snake_length_slider = {
-        .x = 500,
+        .x = 530,
         .y = 60,
         .pixel_width = 150,
         .min = 1,
@@ -931,7 +943,7 @@ int main(S32 argc, char** argv) {
     };
 
     UISlider ui_taco_count_slider = {
-        .x = 740,
+        .x = 770,
         .y = 60,
         .pixel_width = 150,
         .min = 1,
@@ -939,34 +951,50 @@ int main(S32 argc, char** argv) {
     };
 
     UISlider ui_tick_ms_slider = {
-        .x = 500,
+        .x = 530,
         .y = 110,
         .pixel_width = 150,
         .min = 10,
         .max = 500
     };
 
-    UISlider ui_chomp_ticks_slider = {
-        .x = 740,
-        .y = 110,
+    UISlider ui_chomp_cooldown_ticks_slider = {
+        .x = 530,
+        .y = 170,
         .pixel_width = 150,
         .min = 1,
         .max = 40
     };
 
     UISlider ui_min_tacos_per_group_slider = {
-        .x = 500,
-        .y = 170,
+        .x = 770,
+        .y = 110,
         .pixel_width = 150,
         .min = 1,
         .max = 10
     };
 
     UISlider ui_max_tacos_per_group_slider = {
-        .x = 740,
+        .x = 770,
         .y = 170,
         .pixel_width = 150,
         .min = 1,
+        .max = 10
+    };
+
+    UISlider ui_tacos_per_chomp_slider = {
+        .x = 290,
+        .y = 110,
+        .pixel_width = 150,
+        .min = 0,
+        .max = 50
+    };
+
+    UISlider ui_max_chomps_slider = {
+        .x = 290,
+        .y = 170,
+        .pixel_width = 150,
+        .min = 0,
         .max = 10
     };
 
@@ -988,7 +1016,8 @@ int main(S32 argc, char** argv) {
 
     S32 cell_size = cell_pixel_size;
 
-    int64_t time_since_tick_us = 0;
+    U32 frame_tick = 0;
+    S64 time_since_tick_us = 0;
 
     size_t net_msg_buffer_size = 1024 * 1024;
     char* net_msg_buffer = (char*)malloc(net_msg_buffer_size);
@@ -1004,7 +1033,7 @@ int main(S32 argc, char** argv) {
         // Calculate how much time has elapsed (in microseconds).
         struct timespec current_frame_timestamp = {0};
         timespec_get(&current_frame_timestamp, TIME_UTC);
-        int64_t time_since_last_frame_us = microseconds_between_timestamps(&last_frame_timestamp, &current_frame_timestamp);
+        S64 time_since_last_frame_us = microseconds_between_timestamps(&last_frame_timestamp, &current_frame_timestamp);
         time_since_tick_us += time_since_last_frame_us;
         last_frame_timestamp = current_frame_timestamp;
 
@@ -1175,7 +1204,7 @@ int main(S32 argc, char** argv) {
                 lobby_state.actions[0] = LOBBY_ACTION_NONE;
             }
 
-            if (client_game_state.snake_actions != SNAKE_ACTION_NONE) {
+            if (client_game_state.snake_actions != client_game_state.prev_snake_actions) {
                 Packet packet = {
                     .header = {
                         .type = PACKET_TYPE_SNAKE_ACTION,
@@ -1188,6 +1217,8 @@ int main(S32 argc, char** argv) {
                 if (!packet_send(client_socket, &packet)) {
                     fprintf(stderr, "failed to send entire header for snake action\n");
                 }
+
+                client_game_state.prev_snake_actions = client_game_state.snake_actions;
             }
 
             packet_receive(client_socket,
@@ -1415,14 +1446,16 @@ int main(S32 argc, char** argv) {
             PF_RenderString(font, 3, 6, "Settings");
             PF_RenderString(font, 42, 38, "Chomping");
             PF_RenderString(font, 42, 64, "Constricting");
-            PF_RenderString(font, 42, 90, "Head Invincible");
-            PF_RenderString(font, 240, 38, "Segment HP: %d", game->settings.segment_health);
-            PF_RenderString(font, 480, 38, "Start Len: %d", game->settings.starting_length);
-            PF_RenderString(font, 720, 38, "Taco Groups: %d", game->settings.taco_group_count);
-            PF_RenderString(font, 480, 90, "Tick MS: %d", game->settings.tick_ms);
-            PF_RenderString(font, 720, 90, "Chomp ticks: %d", game->settings.chomp_ticks);
-            PF_RenderString(font, 440, 143, "Min Grp Tacos: %d", game->settings.min_tacos_per_group);
-            PF_RenderString(font, 720, 143, "Max Grp Tacos: %d", game->settings.max_tacos_per_group);
+            PF_RenderString(font, 42, 90, "Head Invul");
+            PF_RenderString(font, 260, 38, "Segment HP:%d", game->settings.segment_health);
+            PF_RenderString(font, 260, 90, "Taco/Chomp:%d", game->settings.tacos_per_chomp);
+            PF_RenderString(font, 260, 143, "Max chomps:%d", game->settings.max_chomps);
+            PF_RenderString(font, 510, 38, "Start Len:%d", game->settings.starting_length);
+            PF_RenderString(font, 750, 38, "Taco Groups:%d", game->settings.taco_group_count);
+            PF_RenderString(font, 510, 90, "Tick MS:%d", game->settings.tick_ms);
+            PF_RenderString(font, 510, 143, "Chomp CD:%d", game->settings.chomp_cooldown_ticks);
+            PF_RenderString(font, 730, 90, "Min Grp Taco:%d", game->settings.min_tacos_per_group);
+            PF_RenderString(font, 730, 143, "Max Grp Taco:%d", game->settings.max_tacos_per_group);
             PF_RenderString(font, 500, 210, "Map");
 
             {
@@ -1474,8 +1507,8 @@ int main(S32 argc, char** argv) {
                 ui_slider(&ui,
                           renderer,
                           mouse_state,
-                          &ui_chomp_ticks_slider,
-                          &game->settings.chomp_ticks);
+                          &ui_chomp_cooldown_ticks_slider,
+                          &game->settings.chomp_cooldown_ticks);
 
                 ui_slider(&ui,
                           renderer,
@@ -1488,6 +1521,18 @@ int main(S32 argc, char** argv) {
                           mouse_state,
                           &ui_max_tacos_per_group_slider,
                           &game->settings.max_tacos_per_group);
+
+                ui_slider(&ui,
+                          renderer,
+                          mouse_state,
+                          &ui_tacos_per_chomp_slider,
+                          &game->settings.tacos_per_chomp);
+
+                ui_slider(&ui,
+                          renderer,
+                          mouse_state,
+                          &ui_max_chomps_slider,
+                          &game->settings.max_chomps);
 
                 ui_dropdown(&ui,
                             renderer,
@@ -1538,8 +1583,8 @@ int main(S32 argc, char** argv) {
                         snake.segments[e].y = (S16)(7 + (i * 2));
                         snake.segments[e].health = 3;
                     }
-                    snake_draw_body(renderer, snake_texture, &snake, lobby_cell_size, 0, 0, 3);
-                    snake_draw_head(renderer, snake_texture, &snake, lobby_cell_size, 0, 0, 3);
+                    snake_draw_body(renderer, snake_texture, &snake, lobby_cell_size, 0, 0, 3, frame_tick);
+                    snake_draw_head(renderer, snake_texture, &snake, lobby_cell_size, 0, 0, 3, frame_tick);
                     snake_destroy(&snake);
                 }
             }
@@ -1550,7 +1595,8 @@ int main(S32 argc, char** argv) {
                            tileset_texture,
                            cell_size,
                            camera_offset_x,
-                           camera_offset_y)) {
+                           camera_offset_y,
+                           frame_tick)) {
                 return EXIT_FAILURE;
             }
 
@@ -1596,6 +1642,8 @@ int main(S32 argc, char** argv) {
 
         // Allow process to go to sleep so we don't use 100% of CPU
         SDL_Delay(1);
+
+        frame_tick++;
     }
 
     switch(session_type) {

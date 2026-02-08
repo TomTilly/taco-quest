@@ -334,6 +334,14 @@ void _snake_eat_taco(Game* game, Snake* snake, S32 new_x, S32 new_y) {
     snake->segments[0].x = (S16)(new_x);
     snake->segments[0].y = (S16)(new_y);
     snake->segments[0].health = (S8)(game->settings.segment_health);
+
+    if (game->settings.tacos_per_chomp > 0) {
+        snake->tacos_for_chomp++;
+        if (snake->tacos_for_chomp >= game->settings.tacos_per_chomp) {
+            snake->tacos_for_chomp = 0;
+            snake->chomp_count++;
+        }
+    }
 }
 
 void _print_snake_segments(Snake* snake) {
@@ -463,6 +471,7 @@ void _snake_chomp_segment(Game* game, SnakeCollision* snake_collision) {
 
 void _snake_chomp(Snake* snake, Game* game) {
     assert(snake->chomp_state == SNAKE_CHOMP_STATE_NONE);
+
     //
     // xxx
     //  a
@@ -512,8 +521,9 @@ void _snake_chomp(Snake* snake, Game* game) {
         }
 
         if (snake_collision.snake_index >= 0 && snake_collision.snake_index >= 0) {
-            // The middle segment gets clamped.
-            _snake_chomp_segment(game, &snake_collision);
+            if (game->settings.max_chomps == 0 || snake->chomp_count > 0) {
+                _snake_chomp_segment(game, &snake_collision);
+            }
             did_chomp = true;
         }
     }
@@ -526,6 +536,10 @@ void _snake_chomp(Snake* snake, Game* game) {
             snake->chomp_state = SNAKE_CHOMP_STATE_CLAMPING;
         } else {
             snake->chomp_state = SNAKE_CHOMP_STATE_BITE;
+        }
+
+        if (game->settings.max_chomps > 0) {
+            snake->chomp_count--;
         }
     }
 }
@@ -1289,7 +1303,7 @@ MoveResult _pass_along_game_object_push(Game* game,
 }
 
 // TODO: Better name ? lol
-MoveResult _snake_segment_slink(Game* game, S32 snake_index, S32 segment_index, bool towards_head) {
+MoveResult _snake_segment_slink(Game* game, S32 snake_index, S32 segment_index, bool towards_head, Snake* original_snake) {
     // Case 1:
     //
     // ..1..    ..1..
@@ -1408,6 +1422,7 @@ MoveResult _snake_segment_slink(Game* game, S32 snake_index, S32 segment_index, 
                                   first_segment_to_drag,
                                   next_adjacent_current_x,
                                   next_adjacent_current_y);
+        _assert_snake_connected(original_snake, game->snakes + snake_index);
         return MOVE_OBJECT_SUCCESS;
     }
 
@@ -1459,8 +1474,11 @@ MoveResult snake_segment_push(Game* game, PushState* push_state, S32 snake_index
             return MOVE_OBJECT_FAIL;
         }
         if (direction == direction_to_tail) {
-            MoveResult result = _snake_segment_slink(game, snake_index, segment_index, false);
-            _assert_snake_connected(original_snake, game->snakes + snake_index);
+            MoveResult result = _snake_segment_slink(game,
+                                                     snake_index,
+                                                     segment_index,
+                                                     false,
+                                                     original_snake);
             return result;
         }
 
@@ -1577,8 +1595,8 @@ MoveResult snake_segment_push(Game* game, PushState* push_state, S32 snake_index
                 MoveResult result = _snake_segment_slink(game,
                                                          snake_index,
                                                          segment_index,
-                                                         true);
-                _assert_snake_connected(original_snake, game->snakes + snake_index);
+                                                         true,
+                                                         original_snake);
                 return result;
             } else if (direction == direction_to_tail) {
                 //
@@ -1588,8 +1606,8 @@ MoveResult snake_segment_push(Game* game, PushState* push_state, S32 snake_index
                 MoveResult result = _snake_segment_slink(game,
                                                          snake_index,
                                                          segment_index,
-                                                         false);
-                _assert_snake_connected(original_snake, game->snakes + snake_index);
+                                                         false,
+                                                         original_snake);
                 return result;
             }
             return push_result;
@@ -1642,8 +1660,11 @@ MoveResult snake_segment_push(Game* game, PushState* push_state, S32 snake_index
         }
 
         if (direction == direction_to_head) {
-            MoveResult result = _snake_segment_slink(game, snake_index, segment_index, true);
-            _assert_snake_connected(original_snake, game->snakes + snake_index);
+            MoveResult result = _snake_segment_slink(game,
+                                                     snake_index,
+                                                     segment_index,
+                                                     true,
+                                                     original_snake);
             return result;
         }
 
@@ -2584,11 +2605,13 @@ void game_update(Game* game, SnakeAction* snake_actions) {
             }
         } else if (snake->chomp_state == SNAKE_CHOMP_STATE_BITE) {
             snake->chomp_state = SNAKE_CHOMP_STATE_NONE;
-            snake->chomp_cooldown = (S8)(game->settings.chomp_ticks);
+            snake->chomp_cooldown = (S8)(game->settings.chomp_cooldown_ticks);
         } else if (snake->chomp_state == SNAKE_CHOMP_STATE_CLAMPING) {
-            if ((snake_action & SNAKE_ACTION_CHOMP) == 0) {
+            if ((snake_action & SNAKE_ACTION_CHOMP) == 0 ||
+                snake->chomp_canceled) {
                 snake->chomp_state = SNAKE_CHOMP_STATE_NONE;
-                snake->chomp_cooldown = (S8)(game->settings.chomp_ticks);
+                snake->chomp_cooldown = (S8)(game->settings.chomp_cooldown_ticks);
+                snake->chomp_canceled = false;
             }
         }
     }
@@ -2617,7 +2640,7 @@ void game_update(Game* game, SnakeAction* snake_actions) {
 
             // If no segment is in front of the snake, then it is no longer chomping.
             snake->chomp_state = SNAKE_CHOMP_STATE_NONE;
-            snake->chomp_cooldown = (S8)(game->settings.chomp_ticks);
+            snake->chomp_cooldown = (S8)(game->settings.chomp_cooldown_ticks);
         }
     }
 

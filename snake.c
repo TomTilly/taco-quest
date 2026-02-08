@@ -31,9 +31,10 @@ void snake_clone(Snake* new_snake, Snake* to_be_cloned) {
     new_snake->life_state = to_be_cloned->life_state;
     new_snake->constrict_state = to_be_cloned->constrict_state;
     new_snake->color = to_be_cloned->color;
+    new_snake->chomp_count = to_be_cloned->chomp_count;
     // This check should help us detect if more fields need to be added here.
     S32 snake_size = sizeof(Snake);
-    assert(snake_size == 40);
+    assert(snake_size == 48);
 }
 
 SnakeSegment snake_init_segment(S16 x, S16 y, S8 segment_health) {
@@ -54,6 +55,7 @@ void snake_spawn(Snake* snake,
     snake->direction = direction;
     snake->chomp_state = SNAKE_CHOMP_STATE_NONE;
     snake->chomp_cooldown = 0;
+    snake->chomp_count = 0;
     snake->kill_damage_cooldown = 0;
     snake->life_state = SNAKE_LIFE_STATE_ALIVE;
 
@@ -71,27 +73,34 @@ void snake_turn(Snake* snake, Direction direction) {
     snake->direction = direction;
 }
 
-void _set_snake_texture_color_mod(Snake* snake, SDL_Texture* texture) {
-    U8 hue = snake->chomp_cooldown ? 128 : 255;
+void _set_snake_texture_color_mod(Snake* snake, SDL_Texture* texture, S32 frame_tick) {
+    U8 hue = 255;
+    U8 flash = 0;
+
+    if (snake->chomp_cooldown > 0) {
+        hue = 128;
+    } else if (snake->chomp_count > 0) {
+        flash = (frame_tick % 128) * 2;
+    }
 
     switch (snake->color) {
     case SNAKE_COLOR_RED:
-        SDL_SetTextureColorMod(texture, hue, 0, 0);
+        SDL_SetTextureColorMod(texture, hue, flash, flash);
         break;
     case SNAKE_COLOR_YELLOW:
-        SDL_SetTextureColorMod(texture, hue, hue, 0);
+        SDL_SetTextureColorMod(texture, hue, hue, flash);
         break;
     case SNAKE_COLOR_GREEN:
-        SDL_SetTextureColorMod(texture, 0, hue, 0);
+        SDL_SetTextureColorMod(texture, flash, hue, flash);
         break;
     case SNAKE_COLOR_CYAN:
-        SDL_SetTextureColorMod(texture, 0, hue, hue);
+        SDL_SetTextureColorMod(texture, flash, hue, hue);
         break;
     case SNAKE_COLOR_BLUE:
-        SDL_SetTextureColorMod(texture, 0, 0, hue);
+        SDL_SetTextureColorMod(texture, flash, flash, hue);
         break;
     case SNAKE_COLOR_PURPLE:
-        SDL_SetTextureColorMod(texture, hue, 0, hue);
+        SDL_SetTextureColorMod(texture, hue, flash, hue);
         break;
     default:
         break;
@@ -116,7 +125,8 @@ void snake_draw_head(SDL_Renderer* renderer,
                      S32 cell_size,
                      S32 camera_offset_x,
                      S32 camera_offset_y,
-                     S32 max_segment_health) {
+                     S32 max_segment_health,
+                     S32 frame_tick) {
     SDL_FRect dest_rect = {
         .x = (float)(camera_offset_x + snake->segments[0].x * cell_size),
         .y = (float)(camera_offset_y + snake->segments[0].y * cell_size),
@@ -149,7 +159,7 @@ void snake_draw_head(SDL_Renderer* renderer,
         texture_center.y = (float)(cell_size) * 1.5f;
     }
 
-    _set_snake_texture_color_mod(snake, texture);
+    _set_snake_texture_color_mod(snake, texture, frame_tick);
 
     bool result = SDL_RenderTextureRotated(renderer,
                                            texture,
@@ -170,7 +180,8 @@ void snake_draw_body(SDL_Renderer* renderer,
                      S32 cell_size,
                      S32 camera_offset_x,
                      S32 camera_offset_y,
-                     S32 max_segment_health) {
+                     S32 max_segment_health,
+                     S32 frame_tick) {
     int tail_index = snake->length - 1;
     for (int i = 1; i < snake->length; i++) {
         SDL_FRect dest_rect = {
@@ -250,7 +261,7 @@ void snake_draw_body(SDL_Renderer* renderer,
 
         source_rect.y += _calculate_snake_health_source_y_offset(snake, i, max_segment_health, source_rect.h);
 
-        _set_snake_texture_color_mod(snake, texture);
+        _set_snake_texture_color_mod(snake, texture, frame_tick);
 
         bool result = SDL_RenderTextureRotated(renderer,
                                           texture,
