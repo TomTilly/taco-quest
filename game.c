@@ -518,6 +518,7 @@ void _snake_chomp(Snake* snake, Game* game) {
                   chomp_check_x + 2,
                   chomp_check_y + 2);
 
+    S32 current_snake_index = (S32)(snake - game->snakes);
     bool did_chomp = false;
     for (S32 i = 0; i < CHOMP_POINT_CHECK_COUNT; i++) {
         // Check if collided with other snake
@@ -540,7 +541,8 @@ void _snake_chomp(Snake* snake, Game* game) {
         }
 
         if (snake_collision.snake_index >= 0 && snake_collision.snake_index >= 0) {
-            if (game->settings.max_chomps == 0 || snake->chomp_count > 0) {
+            if ((game->settings.max_chomps == 0 || snake->chomp_count > 0) &&
+                (i == 1 || snake_collision.snake_index != current_snake_index)) {
                 _snake_chomp_segment(game, &snake_collision);
             }
             did_chomp = true;

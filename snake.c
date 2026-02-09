@@ -73,7 +73,7 @@ void snake_turn(Snake* snake, Direction direction) {
     snake->direction = direction;
 }
 
-void _set_snake_texture_color_mod(Snake* snake, SDL_Texture* texture, S32 frame_tick) {
+void _set_snake_texture_color_mod(Snake* snake, SDL_Texture* texture, bool segment_lunge_able, S32 frame_tick) {
     U8 hue = 255;
     U8 flash = 0;
 
@@ -81,6 +81,12 @@ void _set_snake_texture_color_mod(Snake* snake, SDL_Texture* texture, S32 frame_
         hue = 128;
     } else if (snake->chomp_count > 0) {
         flash = (frame_tick % 128) * 2;
+    }
+
+    if (segment_lunge_able) {
+        if (flash < 176) {
+            flash = 176;
+        }
     }
 
     switch (snake->color) {
@@ -159,7 +165,7 @@ void snake_draw_head(SDL_Renderer* renderer,
         texture_center.y = (float)(cell_size) * 1.5f;
     }
 
-    _set_snake_texture_color_mod(snake, texture, frame_tick);
+    _set_snake_texture_color_mod(snake, texture, false, frame_tick);
 
     bool result = SDL_RenderTextureRotated(renderer,
                                            texture,
@@ -261,11 +267,7 @@ void snake_draw_body(SDL_Renderer* renderer,
 
         source_rect.y += _calculate_snake_health_source_y_offset(snake, i, max_segment_health, source_rect.h);
 
-        if (snake->segments[i].lunge_able) {
-            SDL_SetTextureColorMod(texture, 255, 255, 255);
-        } else {
-            _set_snake_texture_color_mod(snake, texture, frame_tick);
-        }
+        _set_snake_texture_color_mod(snake, texture, snake->segments[i].lunge_able, frame_tick);
 
         bool result = SDL_RenderTextureRotated(renderer,
                                           texture,
