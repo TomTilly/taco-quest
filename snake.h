@@ -63,6 +63,7 @@ typedef struct {
     S16 y;
     S8 health;
     bool clamped;
+    bool lunge_able;
 } SnakeSegment;
 
 typedef enum {

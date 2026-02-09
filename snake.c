@@ -261,7 +261,11 @@ void snake_draw_body(SDL_Renderer* renderer,
 
         source_rect.y += _calculate_snake_health_source_y_offset(snake, i, max_segment_health, source_rect.h);
 
-        _set_snake_texture_color_mod(snake, texture, frame_tick);
+        if (snake->segments[i].lunge_able) {
+            SDL_SetTextureColorMod(texture, 255, 255, 255);
+        } else {
+            _set_snake_texture_color_mod(snake, texture, frame_tick);
+        }
 
         bool result = SDL_RenderTextureRotated(renderer,
                                           texture,
@@ -316,6 +320,9 @@ size_t snake_serialize(const Snake* snake, void* buffer, size_t buffer_size) {
     *ptr = snake->chomp_cooldown;
     ptr += sizeof(snake->chomp_cooldown);
 
+    *ptr = snake->chomp_count;
+    ptr += sizeof(snake->chomp_count);
+
     *ptr = snake->color;
     ptr += sizeof(snake->color);
 
@@ -356,6 +363,9 @@ size_t snake_deserialize(void * buffer, size_t size, Snake* out) {
     ptr += sizeof(out->chomp_state);
 
     out->chomp_cooldown = *ptr;
+    ptr++;
+
+    out->chomp_count = *ptr;
     ptr++;
 
     out->color = *ptr;

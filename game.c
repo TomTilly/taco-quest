@@ -175,13 +175,35 @@ void _clear_tracked_corner(TrackedCorner* tracked_corner) {
     tracked_corner->to_tail = DIRECTION_NONE;
 }
 
+S32 _snake_segment_search_for_corner(Snake* snake, S32 start_index, bool towards_tail) {
+    S32 last_index = towards_tail ? (snake->length - 1) : 0;
+    S32 itr = towards_tail ? 1 : -1;
+    for (S32 i = start_index + itr; i != last_index; i += itr) {
+        Direction direction_to_head = (i == 0) ? snake->direction : snake_segment_direction_to_head(snake, i);
+        Direction direction_to_tail = snake_segment_direction_to_tail(snake, i);
+
+        if (directions_are_perpendicular(direction_to_head, direction_to_tail)) {
+            return i;
+        }
+    }
+
+    return -1;
+}
+
 UnravelableCornerPair _search_for_unravelable_corner_pair(Game* game,
                                                           Snake* snake,
                                                           S32 start_index,
                                                           S32 past_end_index) {
+
     UnravelableCornerPair result = {0};
     _clear_tracked_corner(result.corners + 0);
     _clear_tracked_corner(result.corners + 1);
+
+    if (snake->length == 0 ||
+        (snake->segments[0].x == snake->segments[snake->length - 1].x &&
+         snake->segments[0].y == snake->segments[snake->length - 1].y)) {
+        return result;
+    }
 
     S32 dt = (start_index < past_end_index) ? 1 : -1;
 
@@ -243,9 +265,6 @@ UnravelableCornerPair _search_for_unravelable_corner_pair(Game* game,
                     _clear_tracked_corner(result.corners + 0);
                 }
             }
-        } else {
-            assert(!"The snake is broken !");
-            _clear_tracked_corner(result.corners + 0);
         }
     }
 
@@ -936,6 +955,48 @@ bool _snake_lunge(Snake* snake, Game* game) {
     }
 
     return lunged;
+}
+
+void _snake_mark_lunge_able_segments(Game* game, Snake* snake) {
+    S32 first_clamped_segment = snake->length;
+    for (S32 i = 0; i < snake->length; i++) {
+        if (snake->segments[i].clamped &&
+            first_clamped_segment == snake->length) {
+            first_clamped_segment = i;
+        }
+
+        snake->segments[i].lunge_able = false;
+    }
+
+    S32 search_start_index = 0;
+    UnravelableCornerPair corner_pair = {0};
+    while (true) {
+        corner_pair = _search_for_unravelable_corner_pair(game,
+                                                          snake,
+                                                          search_start_index,
+                                                          first_clamped_segment);
+        if (corner_pair.corners[0].segment_index > 0) {
+            // Stop iterating when we reach a corner pair that goes away from our direction.
+            if (corner_pair.corners[1].to_head != snake->direction) {
+                search_start_index = corner_pair.corners[1].segment_index;
+                break;
+            }
+
+            S32 previous_corner = _snake_segment_search_for_corner(snake, corner_pair.corners[0].segment_index, false);
+            S32 next_corner = _snake_segment_search_for_corner(snake, corner_pair.corners[1].segment_index, true);
+
+            for (S32 i = previous_corner + 1; i < next_corner; i++) {
+                snake->segments[i].lunge_able = true;
+            }
+
+            search_start_index = corner_pair.corners[1].segment_index + 1;
+            if (search_start_index < 0) {
+                search_start_index = 0;
+            }
+        } else {
+            break;
+        }
+    }
 }
 
 bool game_init(Game* game, const char* map_filepath) {
@@ -2673,6 +2734,10 @@ void game_update(Game* game, SnakeAction* snake_actions) {
             SnakeSegment* segment = snake->segments + e;
             segment->clamped = true;
         }
+
+        // if (snake->chomp_state != SNAKE_CHOMP_STATE_NONE) {
+        //     snake->chomp_canceled = true;
+        // }
     }
 
     for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
@@ -2720,6 +2785,12 @@ void game_update(Game* game, SnakeAction* snake_actions) {
         if (!lunged) {
             _snake_move(game->snakes + s, game);
         }
+    }
+
+    // Calculate and mark lunge-able segments
+    for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
+        Snake* snake = game->snakes + s;
+        _snake_mark_lunge_able_segments(game, snake);
     }
 
     S32 taco_count = game_count_tacos(game);
