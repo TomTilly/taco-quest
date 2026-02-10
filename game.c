@@ -1475,6 +1475,10 @@ MoveResult _snake_segment_slink(Game* game, S32 snake_index, S32 segment_index, 
             first_segment_to_drag = snake->length - 1;
         }
 
+        if (snake->segments[first_segment_to_drag].clamped) {
+            break;
+        }
+
         _snake_drag_segment_range(snake,
                                   current_index,
                                   first_segment_to_drag,
@@ -2091,7 +2095,6 @@ MoveResult snake_segment_constrict(Game* game, S32 snake_index, S32 segment_inde
 
     if (first_push_first_result == MOVE_OBJECT_SUCCESS && first_push_second_result == MOVE_OBJECT_SUCCESS) {
         game_clone(&first_cloned_game, game);
-        game_destroy(&first_cloned_game);
     } else {
         // If either of the first attempts fail, try reversing the order of the pushes. We found
         // scenarios where this retry works and keeps our rules simple.
@@ -2117,8 +2120,6 @@ MoveResult snake_segment_constrict(Game* game, S32 snake_index, S32 segment_inde
         if (second_push_first_result == MOVE_OBJECT_SUCCESS && second_push_second_result == MOVE_OBJECT_SUCCESS) {
             // If the second succeeded in both use that, since we know the first did not succeed in both.
             game_clone(&second_cloned_game, game);
-            game_destroy(&first_cloned_game);
-            game_destroy(&second_cloned_game);
         } else {
             bool first_pair_has_fail =
                 (first_push_first_result == MOVE_OBJECT_FAIL || first_push_second_result == MOVE_OBJECT_FAIL);
@@ -2153,10 +2154,12 @@ MoveResult snake_segment_constrict(Game* game, S32 snake_index, S32 segment_inde
                 }
             }
 
-            game_destroy(&first_cloned_game);
-            game_destroy(&second_cloned_game);
         }
+
+        game_destroy(&second_cloned_game);
     }
+
+    game_destroy(&first_cloned_game);
 
     // Update snake pointer after game pointer changed.
     snake = game->snakes + snake_index;
