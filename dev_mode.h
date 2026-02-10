@@ -18,6 +18,7 @@ typedef struct {
     bool toggle_step_mode;
     bool step_forward;
     bool place_taco;
+    bool place_segment;
 } DevModeKeyState;
 
 typedef struct {
@@ -39,9 +40,11 @@ void dev_mode_draw(DevMode* dev_mode,
                    S32 camera_offset_y);
 void dev_mode_handle_keystate(DevMode* dev_mode,
                               Game* game,
-                              S32 cell_size,
                               const bool* keyboard_state,
-                              UIMouseState* ui_mouse_state);
+                              UIMouseState* ui_mouse_state,
+                              S32 cell_size,
+                              S32 camera_offset_x,
+                              S32 camera_offset_y);
 void dev_mode_handle_mouse(DevMode* dev_mode,
                            Game* game,
                            UIMouseState* ui_mouse_state,

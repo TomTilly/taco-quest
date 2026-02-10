@@ -308,9 +308,11 @@ bool draw_game(Game* game,
 
 bool app_game_server_handle_keystate(AppStateGameServer* app_game_server,
                                      const bool* keyboard_state,
-                                     S32 cell_size,
                                      bool use_keyboard_for_snake_actions,
-                                     UIMouseState* ui_mouse_state) {
+                                     UIMouseState* ui_mouse_state,
+                                     S32 cell_size,
+                                     S32 camera_offset_x,
+                                     S32 camera_offset_y) {
     switch (app_game_server->game.state) {
     case GAME_STATE_PLAYING: {
         if (use_keyboard_for_snake_actions) {
@@ -321,9 +323,11 @@ bool app_game_server_handle_keystate(AppStateGameServer* app_game_server,
 
         dev_mode_handle_keystate(&app_game_server->dev_mode,
                                  &app_game_server->game,
-                                 cell_size,
                                  keyboard_state,
-                                 ui_mouse_state);
+                                 ui_mouse_state,
+                                 cell_size,
+                                 camera_offset_x,
+                                 camera_offset_y);
         break;
     }
     case GAME_STATE_WAITING:
@@ -1138,9 +1142,11 @@ int main(S32 argc, char** argv) {
                 case SESSION_TYPE_SINGLE_PLAYER: {
                     if (app_game_server_handle_keystate(&server_game_state,
                                                         keyboard_state,
-                                                        cell_size,
                                                         lobby_state.players[0].type == LOBBY_PLAYER_TYPE_LOCAL_KEYBOARD,
-                                                        &ui_mouse_state)) {
+                                                        &ui_mouse_state,
+                                                        cell_size,
+                                                        camera_offset_x,
+                                                        camera_offset_y)) {
                         for (S32 p = 0; p < MAX_SNAKE_COUNT; p++) {
                             if (lobby_state.players[p].state == LOBBY_PLAYER_STATE_READY) {
                                 lobby_state.players[p].state = LOBBY_PLAYER_STATE_NOT_READY;

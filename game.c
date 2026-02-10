@@ -1916,10 +1916,15 @@ MoveResult snake_segment_push(Game* game, PushState* push_state, S32 snake_index
         return MOVE_OBJECT_FAIL;
     }
 
-    segment_to_move->x = (S16)(second_cell_to_check_x);
-    segment_to_move->y = (S16)(second_cell_to_check_y);
-    _snake_drag_segments(snake, segment_index, first_cell_to_check_x, first_cell_to_check_y);
-    _snake_drag_segments(snake, segment_index, final_cell_move_x, final_cell_move_y);
+    S32 first_coiled_index = segment_index;
+    S32 last_coiled_index = segment_index;
+    _snake_segment_coiled_index_range(snake, segment_index, &first_coiled_index, &last_coiled_index);
+    for (S32 i = first_coiled_index; i <= last_coiled_index; i++) {
+        snake->segments[i].x = (S16)(second_cell_to_check_x);
+        snake->segments[i].y = (S16)(second_cell_to_check_y);
+    }
+    _snake_drag_segments(snake, first_coiled_index, first_cell_to_check_x, first_cell_to_check_y);
+    _snake_drag_segments(snake, first_coiled_index, final_cell_move_x, final_cell_move_y);
     _assert_snake_connected(original_snake, game->snakes + snake_index);
     return MOVE_OBJECT_SUCCESS;
 }

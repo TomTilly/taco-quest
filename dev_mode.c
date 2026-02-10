@@ -44,14 +44,17 @@ void dev_mode_draw(DevMode* dev_mode,
 
 void dev_mode_handle_keystate(DevMode* dev_mode,
                               Game* game,
-                              S32 cell_size,
                               const bool* keyboard_state,
-                              UIMouseState* ui_mouse_state) {
+                              UIMouseState* ui_mouse_state,
+                              S32 cell_size,
+                              S32 camera_offset_x,
+                              S32 camera_offset_y) {
     DevModeKeyState current_dev_key_state = {0};
     current_dev_key_state.toggle_enabled = keyboard_state[SDL_SCANCODE_GRAVE];
     current_dev_key_state.toggle_step_mode = keyboard_state[SDL_SCANCODE_TAB];
     current_dev_key_state.step_forward = keyboard_state[SDL_SCANCODE_RETURN];
     current_dev_key_state.place_taco = keyboard_state[SDL_SCANCODE_T];
+    current_dev_key_state.place_segment = keyboard_state[SDL_SCANCODE_N];
 
     if (!dev_mode->prev_key_state.toggle_enabled &&
         current_dev_key_state.toggle_enabled) {
@@ -76,10 +79,31 @@ void dev_mode_handle_keystate(DevMode* dev_mode,
 
         if (!dev_mode->prev_key_state.place_taco &&
             current_dev_key_state.place_taco) {
-            S32 cell_x = (S32)(ui_mouse_state->x) / cell_size;
-            S32 cell_y = (S32)(ui_mouse_state->y) / cell_size;
+            S32 cell_x = (S32)(ui_mouse_state->x - camera_offset_x) / cell_size;
+            S32 cell_y = (S32)(ui_mouse_state->y - camera_offset_y) / cell_size;
             if (game_empty_at(game, cell_x, cell_y)) {
                 items_set_cell(&game->items, cell_x, cell_y, ITEM_TYPE_TACO);
+            }
+        }
+
+        if (!dev_mode->prev_key_state.place_segment &&
+            current_dev_key_state.place_segment) {
+
+            switch (dev_mode->snake_selection_state) {
+            case SNAKE_SELECTION_STATE_PLACING: {
+                Snake* snake = game->snakes + dev_mode->snake_selection_index;
+
+                S32 cell_x = (S32)(ui_mouse_state->x - camera_offset_x) / cell_size;
+                S32 cell_y = (S32)(ui_mouse_state->y - camera_offset_y) / cell_size;
+
+                S32 new_index = snake->length;
+
+                snake->length++;
+                snake->segments[new_index].x = (S16)(cell_x);
+                snake->segments[new_index].y = (S16)(cell_y);
+                snake->segments[new_index].health = snake->segments[0].health;
+            }
+            break;
             }
         }
     }
