@@ -24,6 +24,7 @@
 #include "packet.h"
 #include "pixelfont.h"
 #include "ui.h"
+#include "demo.h"
 
 #define MS_TO_US(ms) ((ms) * 1000)
 #define SERVER_ACCEPT_QUEUE_LIMIT 5
@@ -75,55 +76,6 @@ char* get_timestamp(void) {
     snprintf(buff + length, sizeof(buff) - length, ".%03ld", ms);
     return buff;
 }
-
-FILE* create_demo_file(void) {
-    // Get application preferences path
-    const char * pref_path = SDL_GetPrefPath("three_guys", "taco_quest");
-    if (pref_path == NULL) {
-        fprintf(stderr, "Failed to get pref path");
-        return NULL;
-    }
-
-    // TODO: Use snprintf
-    // Create demos directory
-    char path[PATH_MAX] = {0};
-    strcat(path, pref_path);
-    SDL_free((void *)pref_path); // idaho lives
-    strcat(path, "demos/");
-    bool dir_created = SDL_CreateDirectory(path);
-    if (!dir_created) {
-        fprintf(stderr, "Failed to create demos directory: %s\n", SDL_GetError());
-        return NULL;
-    }
-
-    // Append demo filename
-    char filename[64];
-    time_t now = time(NULL);
-    struct tm *tm_info = localtime(&now);
-    strftime(
-        filename,
-        sizeof(filename),
-        "demo_%y_%m_%d_%H%M%S.sgd",
-        tm_info
-    );
-    strcat(path, filename);
-
-    printf("Creating demo file: %s\n", path);
-
-    // Open demos file
-    FILE *file = fopen(path, "wb");
-    if (file == NULL) {
-        fprintf(stderr, "Failed to create demo file: %s\n", strerror(errno));
-        return NULL;
-    }
-
-    return file;
-}
-
-// TODO
-// bool write_demo_file(FILE *file) {
-
-// }
 
 void pick_snake_spawn(Game* game,
                       S16 start_x,
@@ -431,9 +383,18 @@ void app_server_update(AppState* app_state,
             
             if (server_game_state->game.settings.record_demo) {
                 server_game_state->demo_file = create_demo_file();
+
+                // TODO: Add Header
+                DemoHeader demo_header = {0};
+                demo_header.version = 1;
+                strcpy(demo_header.map_name, map_file_name);
+                if (demo_write_header(&demo_header, server_game_state->demo_file) != 0) {
+                    printf("Failed to write demo header\n");
+                }
             }
         }
     } else if (*app_state == APP_STATE_GAME) {
+        // TODO: Add Body tick
         app_game_server_update(server_game_state,
                                should_tick,
                                time_since_last_frame_us);
@@ -715,7 +676,7 @@ int main(S32 argc, char** argv) {
                 puts("Expected player name argument");
                 return EXIT_FAILURE;
             }
-        } else if (strcomp(flag, "-p") == 0) {
+        } else if (strcmp(flag, "-p") == 0) {
             if (session_type != SESSION_TYPE_SINGLE_PLAYER) {
                 puts("Expected one mode argument, but received multiple.");
                 return EXIT_FAILURE;
@@ -728,7 +689,7 @@ int main(S32 argc, char** argv) {
                 demo_file = fopen(argv[i], "rb");
                 if (demo_file == NULL) {
                     fprintf(stderr, "Failed to open demo file: %s\n", strerror(errno));
-                    return NULL;
+                    return EXIT_FAILURE;
                 }
             } else {
                 puts("Expected demo file path argument for playback mode.");
@@ -745,8 +706,22 @@ int main(S32 argc, char** argv) {
         puts("-r argument only compatible in server or single player modes. Ignoring");
     }
 
-    
-    
+    if (session_type == SESSION_TYPE_DEMO_PLAYBACK) {
+        DemoHeader* demo_header = demo_read_header(demo_file);
+        if (demo_header == NULL) {
+            printf("Failed to read demo header\n");
+            fclose(demo_file);
+            return EXIT_FAILURE;
+        }
+
+        printf("Version: %u\n", demo_header->version);
+        printf("Map name: %s\n", demo_header->map_name);
+
+        free(demo_header);
+        fclose(demo_file);
+        return 0;
+    }
+
     //
     // Init game and level
     //
@@ -827,6 +802,9 @@ int main(S32 argc, char** argv) {
         }
 
         game = &server_game_state.game;
+        break;
+    }
+    case SESSION_TYPE_DEMO_PLAYBACK: {
         break;
     }
     }
@@ -1162,6 +1140,9 @@ int main(S32 argc, char** argv) {
                                           cell_size);
                     break;
                 }
+                case SESSION_TYPE_DEMO_PLAYBACK: {
+                    break;
+                }
                 }
             }
         }
@@ -1428,6 +1409,9 @@ int main(S32 argc, char** argv) {
                               map_filename);
             break;
         }
+        case SESSION_TYPE_DEMO_PLAYBACK: {
+            break;
+        }
         }
 
         //
@@ -1631,6 +1615,9 @@ int main(S32 argc, char** argv) {
                     PF_RenderString(font, 0, 0, "Game Over!");
                 }
                 break;
+            case SESSION_TYPE_DEMO_PLAYBACK: {
+                break;
+            }
             }
         }
 
@@ -1668,7 +1655,11 @@ int main(S32 argc, char** argv) {
         }
 
         break;
+    case SESSION_TYPE_DEMO_PLAYBACK: {
+        break;
     }
+    }
+    
 
     for (S32 c = 0; c < MAX_GAME_CONTROLLERS; c++) {
         if (game_pads[c] != NULL) {
