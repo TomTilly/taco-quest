@@ -295,15 +295,16 @@ size_t snake_serialize(const Snake* snake, void* buffer, size_t buffer_size) {
     size_t segments_size = (snake->length * sizeof(*snake->segments));
 
     // Total size of snake buffer as sent over network.
-    size_t total_size = 0;
-    total_size += sizeof(snake->length);
-    total_size += segments_size;
-    total_size += sizeof(U8); // direction
-    total_size += sizeof(SnakeChompState); // chomp state
-    total_size += sizeof(U8); // chomp cooldown
-    total_size += sizeof(SnakeColor);
+    size_t expected_size = 0;
+    expected_size += sizeof(snake->length);
+    expected_size += segments_size;
+    expected_size += sizeof(U8); // direction
+    expected_size += sizeof(snake->chomp_state); // chomp state
+    expected_size += sizeof(snake->chomp_cooldown);
+    expected_size += sizeof(snake->chomp_count);
+    expected_size += sizeof(SnakeColor);
 
-    assert(total_size <= buffer_size && "buffer too small!");
+    assert(expected_size <= buffer_size && "buffer too small!");
 
     U8 * ptr = buffer;
 
@@ -328,7 +329,7 @@ size_t snake_serialize(const Snake* snake, void* buffer, size_t buffer_size) {
     *ptr = snake->color;
     ptr += sizeof(snake->color);
 
-    return total_size;
+    return ptr - (U8*)buffer;
 }
 
 size_t snake_deserialize(void * buffer, size_t size, Snake* out) {
@@ -337,9 +338,11 @@ size_t snake_deserialize(void * buffer, size_t size, Snake* out) {
     assert(size >= sizeof(out->length)
            && "buffer size too smol for snake segment length!");
 
+    printf("reading at %zd length size %zd: ", (size_t)(ptr - (U8*)(buffer)), sizeof(out->length));
     S32 length = *(S32 *)ptr;
     ptr += sizeof(out->length);
     size -= sizeof(out->length);
+    printf("%d\n", length);
 
     if ( out->length != length) {
         // TODO: a proper snake function to set the length.
@@ -356,19 +359,18 @@ size_t snake_deserialize(void * buffer, size_t size, Snake* out) {
 
     memcpy(out->segments, ptr, segments_size);
     ptr += segments_size;
-    size -= segments_size;
 
     out->direction = (Direction)*ptr;
-    ptr++;
+    ptr += sizeof(U8);
 
     out->chomp_state = *ptr;
     ptr += sizeof(out->chomp_state);
 
     out->chomp_cooldown = *ptr;
-    ptr++;
+    ptr += sizeof(out->chomp_cooldown);
 
     out->chomp_count = *ptr;
-    ptr++;
+    ptr += sizeof(out->chomp_count);
 
     out->color = *ptr;
     ptr += sizeof(out->color);
