@@ -89,8 +89,7 @@ void dev_mode_handle_keystate(DevMode* dev_mode,
         if (!dev_mode->prev_key_state.place_segment &&
             current_dev_key_state.place_segment) {
 
-            switch (dev_mode->snake_selection_state) {
-            case SNAKE_SELECTION_STATE_PLACING: {
+            if (dev_mode->snake_selection_state == SNAKE_SELECTION_STATE_PLACING) {
                 Snake* snake = game->snakes + dev_mode->snake_selection_index;
 
                 S32 cell_x = (S32)(ui_mouse_state->x - camera_offset_x) / cell_size;
@@ -102,8 +101,6 @@ void dev_mode_handle_keystate(DevMode* dev_mode,
                 snake->segments[new_index].x = (S16)(cell_x);
                 snake->segments[new_index].y = (S16)(cell_y);
                 snake->segments[new_index].health = snake->segments[0].health;
-            }
-            break;
             }
         }
     }
