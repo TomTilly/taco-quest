@@ -388,6 +388,16 @@ void app_server_update(AppState* app_state,
                 DemoHeader demo_header = {0};
                 demo_header.version = 1;
                 strcpy(demo_header.map_name, map_file_name);
+                
+                U8 snakes_count = 0;
+                for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
+                    Snake* snake = server_game_state->game.snakes + s;
+                    if (snake->life_state != SNAKE_LIFE_STATE_DEAD) {
+                        snakes_count++;
+                    }
+                }
+                demo_header.num_players = snakes_count;
+                
                 if (demo_write_header(&demo_header, server_game_state->demo_file) != 0) {
                     printf("Failed to write demo header\n");
                 }
@@ -716,6 +726,7 @@ int main(S32 argc, char** argv) {
 
         printf("Version: %u\n", demo_header->version);
         printf("Map name: %s\n", demo_header->map_name);
+        printf("Num players: %d\n", demo_header->num_players);
 
         free(demo_header);
         fclose(demo_file);

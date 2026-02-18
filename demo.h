@@ -3,11 +3,24 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include "snake.h"
+#include "game.h"
 #include "ints.h"
+
+typedef struct {
+    SnakeColor snake_color;
+    U32 x;
+    U32 y;
+    Direction direction;
+    S32 length;
+} SnakeInfo;
 
 typedef struct {
     U32 version;
     char map_name[64];
+    U8 num_players;
+    // SnakeInfo snakes[MAX_SNAKE_COUNT];
+    // GameSettings settings;
 } DemoHeader;
 
 FILE* create_demo_file(void);
