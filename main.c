@@ -12,6 +12,7 @@
 #include <SDL3/SDL.h>
 
 #include "dev_mode.h"
+#include "lcd.h"
 #include "lobby.h"
 #include "map.h"
 #include "network.h"
@@ -841,6 +842,33 @@ int main(S32 argc, char** argv) {
     // Seed random with time.
     srand((U32)(time(NULL)));
 
+    LCD_Info info = {
+        .renderer = renderer,
+        .border_size = 8,
+        .pixels_per_row = 96,
+        .pixels_per_col = 65,
+        .pixel_size = 8,
+        .pixel_gap = 1,
+        .shadow_alpha = 32,
+        .shadow_offset = 1
+    };
+    LCD_Screen * screen = lcd_create_screen(&info);
+    if ( screen == NULL ) {
+        fprintf(stderr, "Could not create LCD screen: %s\n", SDL_GetError());
+        return EXIT_FAILURE;
+    }
+
+    SDL_Surface * test_surface = SDL_LoadBMP("assets/lcd_test.bmp");
+    if ( test_surface == NULL ) {
+        fprintf(stderr, "Could not load lcd test surface: %s\n", SDL_GetError());
+        return EXIT_FAILURE;
+    }
+
+    Uint32 key = SDL_MapSurfaceRGB(test_surface, 0, 0, 0);
+    SDL_SetSurfaceColorKey(test_surface, true, key);
+
+    lcd_render_surface(screen, test_surface, NULL, 0, 0);
+
     const char* snake_bitmap_filepath = "assets/sprite-sheet.bmp";
     SDL_Surface* snake_surface = SDL_LoadBMP(snake_bitmap_filepath);
     if (snake_surface == NULL) {
@@ -1533,6 +1561,8 @@ int main(S32 argc, char** argv) {
                 break;
             }
         }
+
+        lcd_render_screen(screen, 0, 0, 4);
 
         // Render updates
         SDL_RenderPresent(renderer);
