@@ -391,6 +391,7 @@ void app_server_update(AppState* app_state,
                 demo_header.version = 1;
                 strcpy(demo_header.map_name, map_file_name);
                 demo_header.num_players = num_players;
+                demo_header.settings = server_game_state->game.settings;
                 
                 if (demo_write_header(&demo_header, server_game_state->demo_file) != 0) {
                     printf("Failed to write demo header\n");
@@ -727,6 +728,14 @@ int main(S32 argc, char** argv) {
         printf("Version: %u\n", demo_header->version);
         printf("Map name: %s\n", demo_header->map_name);
         printf("Num players: %d\n", demo_header->num_players);
+        printf("Enable Chomping: %s\n", demo_header->settings.enable_chomping ? "On" : "Off");
+        printf("Enable Constricting: %s\n", demo_header->settings.enable_constricting ? "On" : "Off");
+        printf("Head Invicible: %s\n", demo_header->settings.head_invincible ? "On" : "Off");
+        printf("Zero Tacos Respawn: %s\n", demo_header->settings.zero_tacos_respawn ? "On" : "Off");
+        printf("Segment Health: %d\n", demo_header->settings.segment_health);
+        printf("Taco Count: %d\n", demo_header->settings.taco_count);
+        printf("Chomp Cooldown Ticks: %d\n", demo_header->settings.chomp_cooldown_ticks);
+        printf("Tick MS: %d\n", demo_header->settings.tick_ms);
 
         free(demo_header);
         fclose(demo_file);

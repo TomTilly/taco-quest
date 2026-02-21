@@ -20,7 +20,7 @@ typedef struct {
     char map_name[64];
     U8 num_players;
     // SnakeInfo snakes[MAX_SNAKE_COUNT];
-    // GameSettings settings;
+    GameSettings settings;
 } DemoHeader;
 
 FILE* create_demo_file(void);
