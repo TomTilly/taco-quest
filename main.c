@@ -372,7 +372,9 @@ void app_server_update(AppState* app_state,
                        AppStateGameServer* server_game_state,
                        bool should_tick,
                        S64 time_since_last_frame_us,
-                       const char* map_file_name) {
+                       const char* map_file_name,
+                       S8 num_players
+                    ) {
     if (*app_state == APP_STATE_LOBBY) {
         if (app_lobby_update(lobby_state)) {
             *app_state = APP_STATE_GAME;
@@ -388,15 +390,7 @@ void app_server_update(AppState* app_state,
                 DemoHeader demo_header = {0};
                 demo_header.version = 1;
                 strcpy(demo_header.map_name, map_file_name);
-                
-                U8 snakes_count = 0;
-                for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
-                    Snake* snake = server_game_state->game.snakes + s;
-                    if (snake->life_state != SNAKE_LIFE_STATE_DEAD) {
-                        snakes_count++;
-                    }
-                }
-                demo_header.num_players = snakes_count;
+                demo_header.num_players = num_players;
                 
                 if (demo_write_header(&demo_header, server_game_state->demo_file) != 0) {
                     printf("Failed to write demo header\n");
@@ -414,7 +408,8 @@ void app_server_update(AppState* app_state,
 void init_controller_for_player(SDL_Gamepad* game_pads[MAX_GAME_CONTROLLERS],
                                 U32 joystick_index,
                                 AppStateLobby* lobby_state,
-                                SessionType session_type) {
+                                SessionType session_type,
+                                S8* num_players) {
     for (S32 c = 0; c < MAX_GAME_CONTROLLERS; c++) {
         if (game_pads[c] != NULL) {
             if (SDL_GetJoystickID(
@@ -437,6 +432,7 @@ void init_controller_for_player(SDL_Gamepad* game_pads[MAX_GAME_CONTROLLERS],
                 }
             }
             if (next_available_lobby_player >= 0) {
+                (*num_players)++;
                 lobby_state->players[next_available_lobby_player].state = LOBBY_PLAYER_STATE_NOT_READY;
                 lobby_state->players[next_available_lobby_player].type = LOBBY_PLAYER_TYPE_LOCAL_CONTROLLER;
                 lobby_state->players[next_available_lobby_player].snake_color =
@@ -462,7 +458,8 @@ void init_controller_for_player(SDL_Gamepad* game_pads[MAX_GAME_CONTROLLERS],
 void close_controller_for_player(SDL_Gamepad* game_pads[MAX_GAME_CONTROLLERS],
                                  U32 joystick_index,
                                  AppStateLobby* lobby_state,
-                                 SessionType session_type) {
+                                 SessionType session_type,
+                                 S8* num_players) {
     for (S32 c = 0; c < MAX_GAME_CONTROLLERS; c++) {
         if (game_pads[c] == NULL) {
             continue;
@@ -483,6 +480,7 @@ void close_controller_for_player(SDL_Gamepad* game_pads[MAX_GAME_CONTROLLERS],
                         lobby_state->players[p].type = LOBBY_PLAYER_TYPE_LOCAL_KEYBOARD;
                         lobby_state->players[p].input_index = -1;
                     } else {
+                        (*num_players)--;
                         lobby_remove_player(lobby_state, p);
                     }
                     break;
@@ -616,7 +614,8 @@ void net_action_log(const char* timestamp_str,
 
 void handle_client_disconnect(NetSocket** server_client_sockets,
                               AppStateLobby* lobby_state,
-                              S32 socket_index) {
+                              S32 socket_index,
+                              S8* num_players ) {
     S32 lobby_player_index = lobby_find_network_player(lobby_state, socket_index);
     if (lobby_player_index >= 0) {
         lobby_remove_player(lobby_state, lobby_player_index);
@@ -624,6 +623,7 @@ void handle_client_disconnect(NetSocket** server_client_sockets,
 
     net_destroy_socket(server_client_sockets[socket_index]);
     server_client_sockets[socket_index] = NULL;
+    (*num_players)--;
 }
 
 int main(S32 argc, char** argv) {
@@ -631,7 +631,7 @@ int main(S32 argc, char** argv) {
     const char* ip = NULL;
     const char* window_title = NULL;
     const char* player_name = NULL;
-    bool record_demo = false;
+    bool record_demo = true;
     FILE* demo_file;
 
     SessionType session_type = SESSION_TYPE_SINGLE_PLAYER;
@@ -740,6 +740,7 @@ int main(S32 argc, char** argv) {
     AppStateGameClient client_game_state = {0};
     AppStateGameServer server_game_state = {0};
     AppStateLobby lobby_state = {0};
+    S8 num_players = 1; // start at 1 for server player
 
     NetSocket* server_socket = NULL; // Used by server to listen for client connections.
     NetSocket* client_socket = NULL; // Used by client to send and receive.
@@ -1066,7 +1067,8 @@ int main(S32 argc, char** argv) {
                     init_controller_for_player(game_pads,
                                                event.cdevice.which,
                                                &lobby_state,
-                                               session_type);
+                                               session_type,
+                                               &num_players);
                 }
                 // TODO: support connecting a controller during game ?
                 break;
@@ -1075,7 +1077,8 @@ int main(S32 argc, char** argv) {
                     close_controller_for_player(game_pads,
                                                event.cdevice.which,
                                                &lobby_state,
-                                               session_type);
+                                               session_type,
+                                               &num_players);
                 }
                 break;
             case SDL_EVENT_MOUSE_MOTION:
@@ -1325,7 +1328,7 @@ int main(S32 argc, char** argv) {
                     memset(&server_receive_packets[i], 0, sizeof(server_receive_packets[i]));
                     memset(&recv_snake_action_states[i], 0, sizeof(recv_snake_action_states[i]));
                     fputs(net_get_error(), stderr);
-                    handle_client_disconnect(server_client_sockets, &lobby_state, i);
+                    handle_client_disconnect(server_client_sockets, &lobby_state, i, &num_players);
                 }
             }
 
@@ -1336,7 +1339,8 @@ int main(S32 argc, char** argv) {
                               &server_game_state,
                               should_tick,
                               time_since_last_frame_us,
-                              map_filename);
+                              map_filename,
+                              num_players);
             if (!should_send_state) {
                 break;
             }
@@ -1344,9 +1348,10 @@ int main(S32 argc, char** argv) {
             // Listen for client connections
             for (S32 i = 0; i < MAX_SERVER_CLIENT_COUNT; i++) {
                 if (server_client_sockets[i] == NULL) {
-                    bool result = net_accept(server_socket, &server_client_sockets[i]);
-                    if (result) {
+                    bool success = net_accept(server_socket, &server_client_sockets[i]);
+                    if (success) {
                         if (server_client_sockets[i] != NULL) {
+                            num_players++;
                             for (S32 p = 0; p < MAX_SNAKE_COUNT; p++) {
                                 if (lobby_state.players[p].state == LOBBY_PLAYER_STATE_NONE) {
                                     lobby_state.players[p].state = LOBBY_PLAYER_STATE_NOT_READY;
@@ -1383,7 +1388,7 @@ int main(S32 argc, char** argv) {
 
                     if (!packet_send(server_client_sockets[i], &packet)) {
                         printf("failed to send lobby state for tick: %d\n", __tick);
-                        handle_client_disconnect(server_client_sockets, &lobby_state, i);
+                        handle_client_disconnect(server_client_sockets, &lobby_state, i, &num_players);
                     }
                 } else if (app_state == APP_STATE_GAME) {
                     // Serialize game state
@@ -1403,7 +1408,7 @@ int main(S32 argc, char** argv) {
 
                     if (!packet_send(server_client_sockets[i], &packet)) {
                         printf("failed to send game state for tick: %d\n", __tick);
-                        handle_client_disconnect(server_client_sockets, &lobby_state, i);
+                        handle_client_disconnect(server_client_sockets, &lobby_state, i, &num_players);
                     }
                 }
             }
@@ -1417,7 +1422,8 @@ int main(S32 argc, char** argv) {
                               &server_game_state,
                               should_tick,
                               time_since_last_frame_us,
-                              map_filename);
+                              map_filename,
+                              num_players);
             break;
         }
         case SESSION_TYPE_DEMO_PLAYBACK: {
