@@ -1,0 +1,8 @@
+version: 1
+tile_size: 4
+tile_set: "lcd_walls"
+background_color: 0xFEFEFE
+default_map_size: 40 29
+layer 0: "Walls"
+layer 1: "Info"
+map: lcd1
