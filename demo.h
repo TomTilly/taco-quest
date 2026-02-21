@@ -9,8 +9,8 @@
 
 typedef struct {
     SnakeColor snake_color;
-    U32 x;
-    U32 y;
+    S16 initial_x;
+    S16 initial_y;
     Direction direction;
     S32 length;
 } SnakeInfo;
@@ -19,7 +19,7 @@ typedef struct {
     U32 version;
     char map_name[64];
     U8 num_players;
-    // SnakeInfo snakes[MAX_SNAKE_COUNT];
+    SnakeInfo snakes[MAX_SNAKE_COUNT];
     GameSettings settings;
 } DemoHeader;
 

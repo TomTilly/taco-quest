@@ -392,6 +392,16 @@ void app_server_update(AppState* app_state,
                 strcpy(demo_header.map_name, map_file_name);
                 demo_header.num_players = num_players;
                 demo_header.settings = server_game_state->game.settings;
+                for (U8 i = 0; i < num_players; i++) {
+                    Snake snake = server_game_state->game.snakes[i];
+                    demo_header.snakes[i] = (SnakeInfo){
+                        .snake_color = snake.color,
+                        .initial_x = snake.segments[0].x,
+                        .initial_y = snake.segments[0].y,
+                        .direction = snake.direction,
+                        .length = snake.length
+                    };
+                }
                 
                 if (demo_write_header(&demo_header, server_game_state->demo_file) != 0) {
                     printf("Failed to write demo header\n");
@@ -735,7 +745,16 @@ int main(S32 argc, char** argv) {
         printf("Segment Health: %d\n", demo_header->settings.segment_health);
         printf("Taco Count: %d\n", demo_header->settings.taco_count);
         printf("Chomp Cooldown Ticks: %d\n", demo_header->settings.chomp_cooldown_ticks);
-        printf("Tick MS: %d\n", demo_header->settings.tick_ms);
+        printf("Tick MS: %d\n\n", demo_header->settings.tick_ms);
+        for (U8 i = 0; i < demo_header->num_players; i++) {
+            SnakeInfo snake_info = demo_header->snakes[i];
+            printf("======\n");
+            printf("Player %d \n", i + 1);
+            printf("Color: %s\n", snake_color_string(snake_info.snake_color));
+            printf("Initial Coordinates: %d,%d\n", snake_info.initial_x, snake_info.initial_y);
+            printf("Direction: %s\n", snake_direction_string(snake_info.direction));
+            printf("Length: %d\n", snake_info.length);
+        }
 
         free(demo_header);
         fclose(demo_file);

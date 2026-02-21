@@ -127,6 +127,7 @@ void snake_action_handle_keystate(const bool* keyboard_state,
                                   SnakeAction* actions);
 
 const char* snake_color_string(SnakeColor color);
+const char* snake_direction_string(Direction direction);
 
 void action_buffer_add(ActionBuffer * buf, SnakeAction action);
 SnakeAction action_buffer_remove(ActionBuffer * buf);
