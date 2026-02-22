@@ -33,6 +33,106 @@ typedef struct {
     S32 next_y;
 } SnakeSegmentPosition;
 
+typedef struct {
+    S16 x, y;
+    bool occupied;
+} BoardTile;
+
+/// Get a random, unoccupied map coord from the current game map within the
+/// range, start to end (inclusive).
+bool game_get_random_unoccupied_tile_in_region(Game* game,
+                                               S16 start_x,
+                                               S16 start_y,
+                                               S16 end_x,
+                                               S16 end_y,
+                                               S16* out_x,
+                                               S16* out_y) {
+    S16 width = (end_x - start_x) + 1;
+    S16 height = (end_y - start_y) + 1;
+    S16 size = width * height;
+
+    BoardTile * board = calloc(size, sizeof(*board));
+    if ( board == NULL ) {
+        fprintf(stderr, "%s: calloc failed\n", __func__);
+        return false;
+    }
+
+    // Block off spots with tacos, walls, or solid things.
+    for ( S16 y = start_y; y < start_y + height; y++ ) {
+        for ( S16 x = start_x; x < start_x + width; x++ ) {
+            int region_x = x - start_x;
+            int region_y = y - start_y;
+            BoardTile * tile = &board[region_y * width + region_x];
+            tile->x = x;
+            tile->y = y;
+            tile->occupied = false;
+
+            // Taco in the way?
+            ItemType item = items_get_cell(&game->items, x, y);
+            if ( item == ITEM_TYPE_TACO) {
+                tile->occupied = true;
+                continue;
+            }
+
+            GID ground_tile_gid = GetMapTile(&game->map, x, y, MAP_GROUND_LAYER);
+            if (ground_tile_gid == 0) {
+                tile->occupied = true; // No ground here
+                continue;
+            }
+
+            GID solid_tile_gid = GetMapTile(&game->map, x, y, MAP_SOLID_LAYER);
+            if (solid_tile_gid != 0 && !tile->occupied) {
+                tile->occupied = true; // Something solid here
+                continue;
+            }
+        }
+    }
+
+    // Any snakes in the way?
+    for (S32 s = 0; s < MAX_SNAKE_COUNT; s++) {
+        for (S32 e = 0; e < game->snakes[s].length; e++) {
+            SnakeSegment * seg = &game->snakes[s].segments[e];
+            int region_x = seg->x - start_x;
+            int region_y = seg->y - start_y;
+            board[region_y * width + region_x].occupied = true;
+        }
+    }
+
+    *out_x = -1;
+    *out_y = -1;
+    int seen = 0;
+
+    // Reservoir sampling:
+    for ( S16 i = 0; i < size; i++ ) {
+        if ( !board[i].occupied ) {
+            seen++;
+            if ( rand() % seen == 0 ) {
+                *out_x = board[i].x;
+                *out_y = board[i].y;
+            }
+        }
+    }
+
+    free(board);
+    return seen != 0;
+}
+
+/// Get a random, unoccupied map coord from the current game map.
+bool game_get_random_unoccupied_tile(Game* game, S16* out_x, S16* out_y)
+{
+    int start_x = 0;
+    int start_y = 0;
+    int end_x = game->map.width - 1;
+    int end_y = game->map.height - 1;
+    return game_get_random_unoccupied_tile_in_region(game,
+                                                     start_x,
+                                                     start_y,
+                                                     end_x,
+                                                     end_y,
+                                                     out_x,
+                                                     out_y);
+}
+
 void _track_snake_segment_position(Snake* snake, S32 segment_index, SnakeSegmentPosition* snake_segment_position) {
     memset(snake_segment_position, 0, sizeof(*snake_segment_position));
     if (segment_index < 0 || segment_index >= snake->length) {
@@ -1746,48 +1846,9 @@ void game_destroy(Game* game) {
 }
 
 void game_spawn_taco(Game* game) {
-    // If there are no tacos on the map, generate one in an empty cell.
-    int32_t attempts = 0;
-    while (attempts < 10) {
-        int taco_x = (int)(rand() % game->map.width);
-        int taco_y = (int)(rand() % game->map.height);
-
-        ItemType item_type = items_get_cell(&game->items, taco_x, taco_y);
-        if (item_type == ITEM_TYPE_TACO) {
-            attempts++;
-            continue;
-        }
-
-        GID ground_tile_gid = GetMapTile(&game->map, taco_x, taco_y, MAP_GROUND_LAYER);
-        if (ground_tile_gid == 0) {
-            attempts++;
-            continue;
-        }
-
-        GID solid_tile_gid = GetMapTile(&game->map, taco_x, taco_y, MAP_SOLID_LAYER);
-        if (solid_tile_gid != 0) {
-            attempts++;
-            continue;
-        }
-
-        bool spawned_on_snake = false;
-        for (S32 s = 0; s < MAX_SNAKE_COUNT && !spawned_on_snake; s++) {
-            for (S32 e = 0; e < game->snakes[s].length; e++) {
-                if (game->snakes[s].segments[e].x == taco_x &&
-                    game->snakes[s].segments[e].y == taco_y) {
-                    spawned_on_snake = true;
-                    break;
-                }
-            }
-        }
-        if (spawned_on_snake) {
-            attempts++;
-            continue;
-        }
-
-        items_set_cell(&game->items, taco_x, taco_y, ITEM_TYPE_TACO);
-        break;
-    }
+    S16 x, y;
+    game_get_random_unoccupied_tile(game, &x, &y);
+    items_set_cell(&game->items, x, y, ITEM_TYPE_TACO);
 }
 
 S32 game_count_tacos(Game* game) {

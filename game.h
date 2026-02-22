@@ -89,6 +89,19 @@ S32 game_query_for_snake_at(Game* game, S32 x, S32 y);
 void game_update(Game* game, SnakeAction* snake_actions);
 void game_destroy(Game* game);
 
+/// Get a random, unoccupied map coord from the current game map.
+bool game_get_random_unoccupied_tile(Game* game, S16* out_x, S16* out_y);
+
+/// Get a random, unoccupied map coord from the current game map within the
+/// range, start to end (inclusive).
+bool game_get_random_unoccupied_tile_in_region(Game* game,
+                                               S16 start_x,
+                                               S16 start_y,
+                                               S16 end_x,
+                                               S16 end_y,
+                                               S16* out_x,
+                                               S16* out_y);
+
 void game_spawn_taco(Game* game);
 S32 game_count_tacos(Game* game);
 
