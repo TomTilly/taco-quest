@@ -338,11 +338,9 @@ size_t snake_deserialize(void * buffer, size_t size, Snake* out) {
     assert(size >= sizeof(out->length)
            && "buffer size too smol for snake segment length!");
 
-    printf("reading at %zd length size %zd: ", (size_t)(ptr - (U8*)(buffer)), sizeof(out->length));
     S32 length = *(S32 *)ptr;
     ptr += sizeof(out->length);
     size -= sizeof(out->length);
-    printf("%d\n", length);
 
     if ( out->length != length) {
         // TODO: a proper snake function to set the length.

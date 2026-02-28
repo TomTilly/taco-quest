@@ -351,12 +351,6 @@ void app_game_server_update(AppStateGameServer* app_game_server,
         if (app_game_server->snake_actions[i] != SNAKE_ACTION_NONE) {
             action_buffer_add(app_game_server->action_buffers + i, app_game_server->snake_actions[i]);
         }
-
-        // Special case, where we need to detect when chomping is let go within a tick.
-        if (app_game_server->game.snakes[i].chomp_state != SNAKE_CHOMP_STATE_NONE &&
-            (app_game_server->snake_actions[i] & SNAKE_ACTION_CHOMP) == 0) {
-            app_game_server->game.snakes[i].chomp_canceled = true;
-        }
     }
 
     if (app_game_server->game.state == GAME_STATE_WAITING) {
@@ -376,6 +370,12 @@ void app_game_server_update(AppStateGameServer* app_game_server,
 
             if (!app_game_server->game.settings.enable_constricting) {
                 snake_actions[i] &= ~(SNAKE_ACTION_CONSTRICT_LEFT | SNAKE_ACTION_CONSTRICT_RIGHT);
+            }
+
+            // Special case, where we need to detect when chomping is let go within a tick.
+            if (app_game_server->game.snakes[i].chomp_state != SNAKE_CHOMP_STATE_NONE &&
+                (snake_actions[i] & SNAKE_ACTION_CHOMP) == 0) {
+                app_game_server->game.snakes[i].chomp_canceled = true;
             }
         }
         game_update(&app_game_server->game, snake_actions);
@@ -1210,7 +1210,7 @@ int main(S32 argc, char** argv) {
                 lobby_state.actions[0] = LOBBY_ACTION_NONE;
             }
 
-            if (client_game_state.snake_actions != client_game_state.prev_snake_actions) {
+            if (client_game_state.snake_actions != SNAKE_ACTION_NONE) {
                 Packet packet = {
                     .header = {
                         .type = PACKET_TYPE_SNAKE_ACTION,

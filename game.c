@@ -358,7 +358,9 @@ void _snake_eat_taco(Game* game, Snake* snake, S32 new_x, S32 new_y) {
         snake->tacos_for_chomp++;
         if (snake->tacos_for_chomp >= game->settings.tacos_per_chomp) {
             snake->tacos_for_chomp = 0;
-            snake->chomp_count++;
+            if (snake->chomp_count < game->settings.max_chomps) {
+                snake->chomp_count++;
+            }
         }
     }
 }
@@ -455,10 +457,11 @@ void _assert_snake_connected(Snake* original_snake, Snake* final_snake) {
     }
 }
 
-void _snake_chomp_segment(Game* game, SnakeCollision* snake_collision) {
+// returns whether or not damage was done
+bool _snake_chomp_segment(Game* game, SnakeCollision* snake_collision, bool kill_chomp) {
     // The head is invincible ! Constricting is the only way to kill.
     if (game->settings.head_invincible && snake_collision->segment_index == 0) {
-        return;
+        return false;
     }
 
     Snake* snake = game->snakes + snake_collision->snake_index;
@@ -473,7 +476,11 @@ void _snake_chomp_segment(Game* game, SnakeCollision* snake_collision) {
                                       &last_segment_index);
     for (S32 i = first_segment_index; i <= last_segment_index; i++) {
         SnakeSegment* chomped_segment = snake->segments + i;
-        chomped_segment->health--;
+        if (kill_chomp) {
+            chomped_segment->health = 0;
+        } else {
+            chomped_segment->health--;
+        }
         if (chomped_segment->health <= 0) {
             for (S32 e = snake_collision->segment_index; e < snake->length; e++) {
                 SnakeSegment* segment = snake->segments + e;
@@ -486,6 +493,7 @@ void _snake_chomp_segment(Game* game, SnakeCollision* snake_collision) {
             break;
         }
     }
+    return true;
 }
 
 void _snake_chomp(Snake* snake, Game* game) {
@@ -520,6 +528,7 @@ void _snake_chomp(Snake* snake, Game* game) {
 
     S32 current_snake_index = (S32)(snake - game->snakes);
     bool did_chomp = false;
+    bool did_damage = false;
     for (S32 i = 0; i < CHOMP_POINT_CHECK_COUNT; i++) {
         // Check if collided with other snake
         // TODO: This simplifies when we have an array of snakes.
@@ -543,7 +552,9 @@ void _snake_chomp(Snake* snake, Game* game) {
         if (snake_collision.snake_index >= 0 && snake_collision.snake_index >= 0) {
             if ((game->settings.max_chomps == 0 || snake->chomp_count > 0) &&
                 (i == 1 || snake_collision.snake_index != current_snake_index)) {
-                _snake_chomp_segment(game, &snake_collision);
+                did_damage = _snake_chomp_segment(game,
+                                                  &snake_collision,
+                                                  game->settings.tacos_per_chomp > 0);
             }
             did_chomp = true;
         }
@@ -559,7 +570,7 @@ void _snake_chomp(Snake* snake, Game* game) {
             snake->chomp_state = SNAKE_CHOMP_STATE_BITE;
         }
 
-        if (game->settings.max_chomps > 0) {
+        if (game->settings.max_chomps > 0 && did_damage && snake->chomp_count > 0) {
             snake->chomp_count--;
         }
     }
@@ -2592,7 +2603,7 @@ void snake_constrict(Game* game, S32 snake_index) {
                             .segment_index = (S16)(e)
                         };
 
-                        _snake_chomp_segment(game, &snake_collision);
+                        _snake_chomp_segment(game, &snake_collision, false);
                     }
 
                     check_snake->segments[0].health--;
