@@ -422,6 +422,23 @@ const char* snake_color_string(SnakeColor color) {
     return "unknown";
 }
 
+const char* snake_direction_string(Direction direction) {
+    switch (direction) {
+    case DIRECTION_NORTH:
+        return "North";
+    case DIRECTION_EAST:
+        return "East";
+    case DIRECTION_SOUTH:
+        return "South";
+    case DIRECTION_WEST:
+        return "West";
+    case DIRECTION_COUNT:
+        return "Invalid Direction: DIRECTION_COUNT";
+    case DIRECTION_NONE:
+        return "Invalid Direction: DIRECTION_NONE";
+    }
+}
+
 SnakeAction action_buffer_remove(ActionBuffer * buf) {
     SnakeAction action = SNAKE_ACTION_NONE;
     if ( buf->count > 0 ) {

@@ -17,6 +17,7 @@ typedef enum {
     DIRECTION_EAST,
     DIRECTION_SOUTH,
     DIRECTION_WEST,
+
     DIRECTION_COUNT,
     DIRECTION_NONE,
 } Direction;

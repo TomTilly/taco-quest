@@ -8,6 +8,12 @@
 #include <string.h>
 #include <assert.h>
 #include <math.h>
+#include <limits.h>
+#ifdef PLATFORM_WINDOWS
+  #include <direct.h>
+#else
+  #include <sys/stat.h>
+#endif
 
 #include <SDL3/SDL.h>
 
@@ -18,6 +24,7 @@
 #include "packet.h"
 #include "pixelfont.h"
 #include "ui.h"
+#include "demo.h"
 
 #define MS_TO_US(ms) ((ms) * 1000)
 #define SERVER_ACCEPT_QUEUE_LIMIT 5
@@ -34,7 +41,8 @@ typedef enum {
 typedef enum {
     SESSION_TYPE_SINGLE_PLAYER,
     SESSION_TYPE_SERVER,
-    SESSION_TYPE_CLIENT
+    SESSION_TYPE_CLIENT,
+    SESSION_TYPE_DEMO_PLAYBACK,
 } SessionType;
 
 typedef struct {
@@ -43,6 +51,7 @@ typedef struct {
     SnakeAction snake_actions[MAX_SNAKE_COUNT];
     ActionBuffer action_buffers[MAX_SNAKE_COUNT];
     DevMode dev_mode;
+    FILE *demo_file;
 } AppStateGameServer;
 
 typedef struct {
@@ -284,6 +293,7 @@ bool draw_game(Game* game,
     return true;
 }
 
+// Return true on game over
 bool app_game_server_handle_keystate(AppStateGameServer* app_game_server,
                                      const bool* keyboard_state,
                                      S32 cell_size,
@@ -362,7 +372,9 @@ void app_server_update(AppState* app_state,
                        AppStateGameServer* server_game_state,
                        bool should_tick,
                        S64 time_since_last_frame_us,
-                       const char* map_file_name) {
+                       const char* map_file_name,
+                       S8 num_players
+                    ) {
     if (*app_state == APP_STATE_LOBBY) {
         if (app_lobby_update(lobby_state)) {
             *app_state = APP_STATE_GAME;
@@ -370,8 +382,34 @@ void app_server_update(AppState* app_state,
             reset_game(&server_game_state->game,
                        lobby_state,
                        map_file_name);
+            
+            if (server_game_state->game.settings.record_demo) {
+                server_game_state->demo_file = create_demo_file();
+
+                // TODO: Add Header
+                DemoHeader demo_header = {0};
+                demo_header.version = 1;
+                strcpy(demo_header.map_name, map_file_name);
+                demo_header.num_players = num_players;
+                demo_header.settings = server_game_state->game.settings;
+                for (U8 i = 0; i < num_players; i++) {
+                    Snake snake = server_game_state->game.snakes[i];
+                    demo_header.snakes[i] = (SnakeInfo){
+                        .snake_color = snake.color,
+                        .initial_x = snake.segments[0].x,
+                        .initial_y = snake.segments[0].y,
+                        .direction = snake.direction,
+                        .length = snake.length
+                    };
+                }
+                
+                if (demo_write_header(&demo_header, server_game_state->demo_file) != 0) {
+                    printf("Failed to write demo header\n");
+                }
+            }
         }
     } else if (*app_state == APP_STATE_GAME) {
+        // TODO: Add Body tick
         app_game_server_update(server_game_state,
                                should_tick,
                                time_since_last_frame_us);
@@ -381,7 +419,8 @@ void app_server_update(AppState* app_state,
 void init_controller_for_player(SDL_Gamepad* game_pads[MAX_GAME_CONTROLLERS],
                                 U32 joystick_index,
                                 AppStateLobby* lobby_state,
-                                SessionType session_type) {
+                                SessionType session_type,
+                                S8* num_players) {
     for (S32 c = 0; c < MAX_GAME_CONTROLLERS; c++) {
         if (game_pads[c] != NULL) {
             if (SDL_GetJoystickID(
@@ -404,6 +443,7 @@ void init_controller_for_player(SDL_Gamepad* game_pads[MAX_GAME_CONTROLLERS],
                 }
             }
             if (next_available_lobby_player >= 0) {
+                (*num_players)++;
                 lobby_state->players[next_available_lobby_player].state = LOBBY_PLAYER_STATE_NOT_READY;
                 lobby_state->players[next_available_lobby_player].type = LOBBY_PLAYER_TYPE_LOCAL_CONTROLLER;
                 lobby_state->players[next_available_lobby_player].snake_color =
@@ -429,7 +469,8 @@ void init_controller_for_player(SDL_Gamepad* game_pads[MAX_GAME_CONTROLLERS],
 void close_controller_for_player(SDL_Gamepad* game_pads[MAX_GAME_CONTROLLERS],
                                  U32 joystick_index,
                                  AppStateLobby* lobby_state,
-                                 SessionType session_type) {
+                                 SessionType session_type,
+                                 S8* num_players) {
     for (S32 c = 0; c < MAX_GAME_CONTROLLERS; c++) {
         if (game_pads[c] == NULL) {
             continue;
@@ -450,6 +491,7 @@ void close_controller_for_player(SDL_Gamepad* game_pads[MAX_GAME_CONTROLLERS],
                         lobby_state->players[p].type = LOBBY_PLAYER_TYPE_LOCAL_KEYBOARD;
                         lobby_state->players[p].input_index = -1;
                     } else {
+                        (*num_players)--;
                         lobby_remove_player(lobby_state, p);
                     }
                     break;
@@ -583,7 +625,8 @@ void net_action_log(const char* timestamp_str,
 
 void handle_client_disconnect(NetSocket** server_client_sockets,
                               AppStateLobby* lobby_state,
-                              S32 socket_index) {
+                              S32 socket_index,
+                              S8* num_players ) {
     S32 lobby_player_index = lobby_find_network_player(lobby_state, socket_index);
     if (lobby_player_index >= 0) {
         lobby_remove_player(lobby_state, lobby_player_index);
@@ -591,6 +634,7 @@ void handle_client_disconnect(NetSocket** server_client_sockets,
 
     net_destroy_socket(server_client_sockets[socket_index]);
     server_client_sockets[socket_index] = NULL;
+    (*num_players)--;
 }
 
 int main(S32 argc, char** argv) {
@@ -598,7 +642,8 @@ int main(S32 argc, char** argv) {
     const char* ip = NULL;
     const char* window_title = NULL;
     const char* player_name = NULL;
-    bool record_demo = false;
+    bool record_demo = true;
+    FILE* demo_file;
 
     SessionType session_type = SESSION_TYPE_SINGLE_PLAYER;
     for (int i = 1; i < argc; i++) {
@@ -645,12 +690,30 @@ int main(S32 argc, char** argv) {
         } else if (strcmp(flag, "-r") == 0){
             record_demo = true;
         } else if (strcmp(flag, "-n") == 0) {
-            
             i++;
             if (i < argc) {
                 player_name = argv[i];
             } else {
                 puts("Expected player name argument");
+                return EXIT_FAILURE;
+            }
+        } else if (strcmp(flag, "-p") == 0) {
+            if (session_type != SESSION_TYPE_SINGLE_PLAYER) {
+                puts("Expected one mode argument, but received multiple.");
+                return EXIT_FAILURE;
+            }
+
+            session_type = SESSION_TYPE_DEMO_PLAYBACK;
+
+            i++;
+            if (i < argc) {
+                demo_file = fopen(argv[i], "rb");
+                if (demo_file == NULL) {
+                    fprintf(stderr, "Failed to open demo file: %s\n", strerror(errno));
+                    return EXIT_FAILURE;
+                }
+            } else {
+                puts("Expected demo file path argument for playback mode.");
                 return EXIT_FAILURE;
             }
         } else {
@@ -659,11 +722,44 @@ int main(S32 argc, char** argv) {
         }
     }
 
-    if (record_demo && session_type == SESSION_TYPE_CLIENT) {
-        puts("-r argument only compatible in server or single player modes");
-        return EXIT_FAILURE;
+    if (record_demo && (session_type == SESSION_TYPE_CLIENT || session_type == SESSION_TYPE_DEMO_PLAYBACK)) {
+        record_demo = false;
+        puts("-r argument only compatible in server or single player modes. Ignoring");
     }
-    (void)record_demo;
+
+    if (session_type == SESSION_TYPE_DEMO_PLAYBACK) {
+        DemoHeader* demo_header = demo_read_header(demo_file);
+        if (demo_header == NULL) {
+            printf("Failed to read demo header\n");
+            fclose(demo_file);
+            return EXIT_FAILURE;
+        }
+
+        printf("Version: %u\n", demo_header->version);
+        printf("Map name: %s\n", demo_header->map_name);
+        printf("Num players: %d\n", demo_header->num_players);
+        printf("Enable Chomping: %s\n", demo_header->settings.enable_chomping ? "On" : "Off");
+        printf("Enable Constricting: %s\n", demo_header->settings.enable_constricting ? "On" : "Off");
+        printf("Head Invicible: %s\n", demo_header->settings.head_invincible ? "On" : "Off");
+        printf("Zero Tacos Respawn: %s\n", demo_header->settings.zero_tacos_respawn ? "On" : "Off");
+        printf("Segment Health: %d\n", demo_header->settings.segment_health);
+        printf("Taco Count: %d\n", demo_header->settings.taco_count);
+        printf("Chomp Cooldown Ticks: %d\n", demo_header->settings.chomp_cooldown_ticks);
+        printf("Tick MS: %d\n\n", demo_header->settings.tick_ms);
+        for (U8 i = 0; i < demo_header->num_players; i++) {
+            SnakeInfo snake_info = demo_header->snakes[i];
+            printf("======\n");
+            printf("Player %d \n", i + 1);
+            printf("Color: %s\n", snake_color_string(snake_info.snake_color));
+            printf("Initial Coordinates: %d,%d\n", snake_info.initial_x, snake_info.initial_y);
+            printf("Direction: %s\n", snake_direction_string(snake_info.direction));
+            printf("Length: %d\n", snake_info.length);
+        }
+
+        free(demo_header);
+        fclose(demo_file);
+        return 0;
+    }
 
     //
     // Init game and level
@@ -672,6 +768,7 @@ int main(S32 argc, char** argv) {
     AppStateGameClient client_game_state = {0};
     AppStateGameServer server_game_state = {0};
     AppStateLobby lobby_state = {0};
+    S8 num_players = 1; // start at 1 for server player
 
     NetSocket* server_socket = NULL; // Used by server to listen for client connections.
     NetSocket* client_socket = NULL; // Used by client to send and receive.
@@ -747,12 +844,16 @@ int main(S32 argc, char** argv) {
         game = &server_game_state.game;
         break;
     }
+    case SESSION_TYPE_DEMO_PLAYBACK: {
+        break;
+    }
     }
 
     game->settings.enable_chomping = true;
     game->settings.enable_constricting = true;
     game->settings.head_invincible = true;
     game->settings.zero_tacos_respawn = false;
+    game->settings.record_demo = record_demo;
     game->settings.segment_health = 3;
     game->settings.starting_length = 5;
     game->settings.taco_count = 5;
@@ -839,7 +940,8 @@ int main(S32 argc, char** argv) {
     timespec_get(&last_frame_timestamp, TIME_UTC);
 
     // Seed random with time.
-    srand((U32)(time(NULL)));
+    U32 seed = (U32)time(NULL);
+    srand(seed);
 
     const char* snake_bitmap_filepath = "assets/sprite-sheet.bmp";
     SDL_Surface* snake_surface = SDL_LoadBMP(snake_bitmap_filepath);
@@ -890,6 +992,7 @@ int main(S32 argc, char** argv) {
     UICheckBox ui_enable_constricting_checkbox = {15, 60};
     UICheckBox ui_head_invincible_checkbox = {15, 85};
     UICheckBox ui_zero_tacos_respawn_checkbox = {15, 110};
+    UICheckBox ui_record_demo_checkbox = {15, 135};
     UISlider ui_segment_health_slider = {
         .x = 260,
         .y = 60,
@@ -932,7 +1035,7 @@ int main(S32 argc, char** argv) {
 
     UIDropDown ui_maps_drop_down = {
         .x = 520,
-        .y = 170,
+        .y = 206,
         .dropped = false
     };
 
@@ -992,7 +1095,8 @@ int main(S32 argc, char** argv) {
                     init_controller_for_player(game_pads,
                                                event.cdevice.which,
                                                &lobby_state,
-                                               session_type);
+                                               session_type,
+                                               &num_players);
                 }
                 // TODO: support connecting a controller during game ?
                 break;
@@ -1001,7 +1105,8 @@ int main(S32 argc, char** argv) {
                     close_controller_for_player(game_pads,
                                                event.cdevice.which,
                                                &lobby_state,
-                                               session_type);
+                                               session_type,
+                                               &num_players);
                 }
                 break;
             case SDL_EVENT_MOUSE_MOTION:
@@ -1065,11 +1170,19 @@ int main(S32 argc, char** argv) {
                             }
                         }
                         app_state = APP_STATE_LOBBY;
+                        
+                        if (server_game_state.game.settings.record_demo) {
+                            fclose(server_game_state.demo_file);
+                            server_game_state.demo_file = NULL;
+                        }
                     }
                     dev_mode_handle_mouse(&server_game_state.dev_mode,
                                           &server_game_state.game,
                                           &ui_mouse_state,
                                           cell_size);
+                    break;
+                }
+                case SESSION_TYPE_DEMO_PLAYBACK: {
                     break;
                 }
                 }
@@ -1243,7 +1356,7 @@ int main(S32 argc, char** argv) {
                     memset(&server_receive_packets[i], 0, sizeof(server_receive_packets[i]));
                     memset(&recv_snake_action_states[i], 0, sizeof(recv_snake_action_states[i]));
                     fputs(net_get_error(), stderr);
-                    handle_client_disconnect(server_client_sockets, &lobby_state, i);
+                    handle_client_disconnect(server_client_sockets, &lobby_state, i, &num_players);
                 }
             }
 
@@ -1254,7 +1367,8 @@ int main(S32 argc, char** argv) {
                               &server_game_state,
                               should_tick,
                               time_since_last_frame_us,
-                              map_filename);
+                              map_filename,
+                              num_players);
             if (!should_send_state) {
                 break;
             }
@@ -1262,9 +1376,10 @@ int main(S32 argc, char** argv) {
             // Listen for client connections
             for (S32 i = 0; i < MAX_SERVER_CLIENT_COUNT; i++) {
                 if (server_client_sockets[i] == NULL) {
-                    bool result = net_accept(server_socket, &server_client_sockets[i]);
-                    if (result) {
+                    bool success = net_accept(server_socket, &server_client_sockets[i]);
+                    if (success) {
                         if (server_client_sockets[i] != NULL) {
+                            num_players++;
                             for (S32 p = 0; p < MAX_SNAKE_COUNT; p++) {
                                 if (lobby_state.players[p].state == LOBBY_PLAYER_STATE_NONE) {
                                     lobby_state.players[p].state = LOBBY_PLAYER_STATE_NOT_READY;
@@ -1301,7 +1416,7 @@ int main(S32 argc, char** argv) {
 
                     if (!packet_send(server_client_sockets[i], &packet)) {
                         printf("failed to send lobby state for tick: %d\n", __tick);
-                        handle_client_disconnect(server_client_sockets, &lobby_state, i);
+                        handle_client_disconnect(server_client_sockets, &lobby_state, i, &num_players);
                     }
                 } else if (app_state == APP_STATE_GAME) {
                     // Serialize game state
@@ -1321,7 +1436,7 @@ int main(S32 argc, char** argv) {
 
                     if (!packet_send(server_client_sockets[i], &packet)) {
                         printf("failed to send game state for tick: %d\n", __tick);
-                        handle_client_disconnect(server_client_sockets, &lobby_state, i);
+                        handle_client_disconnect(server_client_sockets, &lobby_state, i, &num_players);
                     }
                 }
             }
@@ -1335,7 +1450,11 @@ int main(S32 argc, char** argv) {
                               &server_game_state,
                               should_tick,
                               time_since_last_frame_us,
-                              map_filename);
+                              map_filename,
+                              num_players);
+            break;
+        }
+        case SESSION_TYPE_DEMO_PLAYBACK: {
             break;
         }
         }
@@ -1362,12 +1481,15 @@ int main(S32 argc, char** argv) {
             PF_RenderString(font, 42, 64, "Constricting");
             PF_RenderString(font, 42, 90, "Head Invincible");
             PF_RenderString(font, 42, 116, "Zero Tacos Respawn");
+            if (session_type != SESSION_TYPE_CLIENT) {
+                PF_RenderString(font, 42, 142, "Record Demo");
+            }
             PF_RenderString(font, 240, 38, "Segment HP: %d", game->settings.segment_health);
             PF_RenderString(font, 480, 38, "Start Len: %d", game->settings.starting_length);
             PF_RenderString(font, 720, 38, "Tacos: %d", game->settings.taco_count);
             PF_RenderString(font, 480, 90, "Tick MS: %d", game->settings.tick_ms);
             PF_RenderString(font, 720, 90, "Chomp CD ticks: %d", game->settings.chomp_cooldown_ticks);
-            PF_RenderString(font, 500, 148, "Map");
+            PF_RenderString(font, 500, 184, "Map");
 
             {
                 UIMouseState* mouse_state = &ui_mouse_state;
@@ -1399,6 +1521,13 @@ int main(S32 argc, char** argv) {
                             mouse_state,
                             &ui_zero_tacos_respawn_checkbox,
                             &game->settings.zero_tacos_respawn);
+                if (session_type != SESSION_TYPE_CLIENT) {
+                    ui_checkbox(&ui,
+                                renderer,
+                                mouse_state,
+                                &ui_record_demo_checkbox,
+                                &game->settings.record_demo);
+                }
                 ui_slider(&ui,
                           renderer,
                           mouse_state,
@@ -1436,7 +1565,7 @@ int main(S32 argc, char** argv) {
             }
 
             S32 lobby_cell_size = 40;
-            S32 players_start_y = 148;
+            S32 players_start_y = 184;
             S32 players_offset = 30;
 
             PF_RenderString(font, 3, players_start_y, "Players");
@@ -1472,7 +1601,7 @@ int main(S32 argc, char** argv) {
                     snake.color = lobby_state.players[i].snake_color;
                     for (S32 e = 0; e < 4; e++) {
                         snake.segments[e].x = (S16)(4 - e);
-                        snake.segments[e].y = (S16)(5 + (i * 2));
+                        snake.segments[e].y = (S16)(6 + (i * 2));
                         snake.segments[e].health = 3;
                     }
                     snake_draw(renderer, snake_texture, &snake, lobby_cell_size, 0, 0, 3);
@@ -1531,6 +1660,9 @@ int main(S32 argc, char** argv) {
                     PF_RenderString(font, 0, 0, "Game Over!");
                 }
                 break;
+            case SESSION_TYPE_DEMO_PLAYBACK: {
+                break;
+            }
             }
         }
 
@@ -1554,10 +1686,25 @@ int main(S32 argc, char** argv) {
                 net_destroy_socket(server_client_sockets[i]);
             }
         }
+
+        if (server_game_state.game.settings.record_demo) {
+            fclose(server_game_state.demo_file);
+            server_game_state.demo_file = NULL;
+        }
+
         break;
     case SESSION_TYPE_SINGLE_PLAYER:
+        if (server_game_state.game.settings.record_demo) {
+            fclose(server_game_state.demo_file);
+            server_game_state.demo_file = NULL;
+        }
+
+        break;
+    case SESSION_TYPE_DEMO_PLAYBACK: {
         break;
     }
+    }
+    
 
     for (S32 c = 0; c < MAX_GAME_CONTROLLERS; c++) {
         if (game_pads[c] != NULL) {
@@ -1565,6 +1712,7 @@ int main(S32 argc, char** argv) {
             game_pads[c] = NULL;
         }
     }
+
 
     list_dir_destroy(&lobby_state.map_list);
     net_shutdown();
